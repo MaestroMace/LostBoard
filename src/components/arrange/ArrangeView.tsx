@@ -3,8 +3,8 @@ import { useStore } from '../../state/store';
 import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
-const TRACK_HEAD_W = 196;
 const ROW_H = 64;
 const BEAT_W = 24;
 
@@ -12,6 +12,8 @@ export function ArrangeView() {
   const tracks = useStore((s) => s.project.tracks);
   const totalBeats = useStore((s) => s.project.lengthBars * s.project.numerator);
   const addTrack = useStore((s) => s.addTrack);
+  const isMobile = useIsMobile();
+  const headW = isMobile ? 144 : 196;
 
   const timelineW = totalBeats * BEAT_W;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -23,7 +25,8 @@ export function ArrangeView() {
         {/* Track headers */}
         <div
           style={{
-            width: TRACK_HEAD_W,
+            width: headW,
+            flexShrink: 0,
             background: 'rgba(0,0,0,0.7)',
             borderRight: '1px solid rgba(255,106,0,0.4)',
             display: 'flex',
@@ -34,29 +37,45 @@ export function ArrangeView() {
           <div
             style={{
               height: 32,
-              padding: '4px 8px',
+              padding: '4px 6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: 4,
               borderBottom: '1px solid rgba(255,106,0,0.4)',
             }}
           >
-            <span className="hud-label">TRACKS</span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button className="nerv-btn nerv-btn--icon" onClick={() => addTrack('synth')} title="Add synth track">
+            {!isMobile && <span className="hud-label">TRACKS</span>}
+            <div style={{ display: 'flex', gap: 3 }}>
+              <button
+                className="nerv-btn nerv-btn--icon"
+                onClick={() => addTrack('synth')}
+                title="Add synth track"
+                style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
+              >
                 +SYN
               </button>
-              <button className="nerv-btn nerv-btn--icon" onClick={() => addTrack('drum')} title="Add drum track">
+              <button
+                className="nerv-btn nerv-btn--icon"
+                onClick={() => addTrack('drum')}
+                title="Add drum track"
+                style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
+              >
                 +DRM
               </button>
-              <button className="nerv-btn nerv-btn--icon" onClick={() => addTrack('audio')} title="Add audio track">
+              <button
+                className="nerv-btn nerv-btn--icon"
+                onClick={() => addTrack('audio')}
+                title="Add audio track"
+                style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
+              >
                 +AUD
               </button>
             </div>
           </div>
           <div style={{ overflow: 'auto', flex: 1 }}>
             {tracks.map((t) => (
-              <TrackHeader key={t.id} track={t} />
+              <TrackHeader key={t.id} track={t} compact={isMobile} />
             ))}
           </div>
         </div>
@@ -121,7 +140,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
 });
 
 /** Memoized track header — only re-renders when ITS track object changes. */
-const TrackHeader = memo(function TrackHeader({ track }: { track: Track }) {
+const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track; compact: boolean }) {
   const selected = useStore((s) => s.selectedTrackId === track.id);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateTrack = useStore((s) => s.updateTrack);
@@ -227,11 +246,14 @@ const TrackHeader = memo(function TrackHeader({ track }: { track: Track }) {
           value={track.volume}
           onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
           onClick={(e) => e.stopPropagation()}
-          style={{ flex: 1, height: 4 }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ flex: 1, height: 6 }}
         />
-        <span className="hud-readout" style={{ fontSize: 8, width: 28, textAlign: 'right' }}>
-          {track.volume.toFixed(0)}
-        </span>
+        {!compact && (
+          <span className="hud-readout" style={{ fontSize: 8, width: 28, textAlign: 'right' }}>
+            {track.volume.toFixed(0)}
+          </span>
+        )}
       </div>
     </div>
   );

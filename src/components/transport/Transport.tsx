@@ -3,6 +3,7 @@ import { shallow } from 'zustand/shallow';
 import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export function Transport() {
   const playing = useStore((s) => s.isPlaying);
@@ -117,14 +118,16 @@ export function Transport() {
   }
 
   const [showBpmEdit, setShowBpmEdit] = useState(false);
+  const isMobile = useIsMobile();
+  const lbl = (full: string) => (isMobile ? '' : ` ${full}`);
 
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '8px 12px',
+        gap: isMobile ? 4 : 8,
+        padding: isMobile ? '6px 8px' : '8px 12px',
         background: 'rgba(0,0,0,0.6)',
         borderBottom: '1px solid rgba(255,106,0,0.4)',
         flexWrap: 'wrap',
@@ -141,10 +144,10 @@ export function Transport() {
           aria-pressed={playing}
           title="Play / Pause"
         >
-          {playing ? '⏸ PAUSE' : '▶ PLAY'}
+          {playing ? `⏸${lbl('PAUSE')}` : `▶${lbl('PLAY')}`}
         </button>
-        <button className="nerv-btn touch-target" onClick={stop}>
-          ■ STOP
+        <button className="nerv-btn touch-target" onClick={stop} title="Stop">
+          ■{lbl('STOP')}
         </button>
         <button
           className={`nerv-btn nerv-btn--rec touch-target ${micRecording ? 'is-active' : ''}`}
@@ -152,7 +155,7 @@ export function Transport() {
           aria-pressed={micRecording}
           title="Record from microphone into an audio track"
         >
-          ● {micRecording ? 'STOP REC' : 'MIC REC'}
+          ●{lbl(micRecording ? 'STOP REC' : 'MIC REC')}
         </button>
         <button
           className={`nerv-btn nerv-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
@@ -160,32 +163,42 @@ export function Transport() {
           aria-pressed={bouncing}
           title="Bounce the master output to an audio file"
         >
-          ⭳ {bouncing ? 'STOP BOUNCE' : 'BOUNCE'}
+          ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
         </button>
         <button
           className={`nerv-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
           onClick={() => setLoop(!loopEnabled)}
           aria-pressed={loopEnabled}
+          title="Loop"
         >
-          ↻ LOOP
+          ↻{lbl('LOOP')}
         </button>
         <button
           className={`nerv-btn touch-target ${metronome ? 'is-active' : ''}`}
           onClick={() => setMetronome(!metronome)}
           aria-pressed={metronome}
+          title="Metronome"
         >
-          ⛬ CLICK
+          ⛬{lbl('CLICK')}
+        </button>
+        <button
+          className="nerv-btn nerv-btn--ghost touch-target"
+          onClick={() => saveProjectToStorage()}
+          title="Save current project to local storage"
+        >
+          💾{lbl('SAVE')}
         </button>
       </div>
 
-      <div style={{ flex: 1 }} />
+      {!isMobile && <div style={{ flex: 1 }} />}
 
       <button
         className="nerv-btn touch-target"
         onClick={() => setShowBpmEdit((v) => !v)}
-        style={{ minWidth: 100 }}
+        style={{ minWidth: isMobile ? 64 : 100 }}
+        title="Tempo"
       >
-        TEMPO {bpm.toFixed(1)}
+        {isMobile ? bpm.toFixed(0) : `TEMPO ${bpm.toFixed(1)}`}
       </button>
       {showBpmEdit && (
         <input
@@ -208,16 +221,8 @@ export function Transport() {
         step={0.5}
         value={bpm}
         onChange={(e) => setBpm(parseFloat(e.target.value))}
-        style={{ width: 160 }}
+        style={{ width: isMobile ? 100 : 160, flex: isMobile ? 1 : undefined }}
       />
-
-      <button
-        className="nerv-btn nerv-btn--ghost touch-target"
-        onClick={() => saveProjectToStorage()}
-        title="Save current project to local storage"
-      >
-        💾 SAVE
-      </button>
 
       <PositionBar />
     </div>
@@ -242,11 +247,14 @@ const PositionBar = memo(function PositionBar() {
       onPointerDown={(e) => jumpFromX(e.clientX)}
       style={{
         position: 'relative',
-        width: 220,
-        height: 22,
+        flex: 1,
+        minWidth: 140,
+        maxWidth: 280,
+        height: 24,
         background: 'rgba(0,0,0,0.6)',
         border: '1px solid rgba(255,106,0,0.4)',
         cursor: 'pointer',
+        touchAction: 'none',
         contain: 'strict',
       }}
     >

@@ -76,7 +76,7 @@ export default function App() {
       <StatusBar />
       <Transport />
 
-      <div className="nerv-tabs" style={{ flexWrap: 'wrap' }}>
+      <div className="nerv-tabs">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -87,7 +87,9 @@ export default function App() {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center' }}>VER 0.1.0 // LOSTBOARD</span>
+        <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}>
+          VER 0.1.0
+        </span>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

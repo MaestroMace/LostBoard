@@ -1,9 +1,15 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { useStore } from '../../state/store';
 import { DRUM_LABELS, DRUM_PADS, type DrumPad, type Step } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
+
+function cellBg(on: boolean, vel: number) {
+  return on
+    ? `linear-gradient(180deg, rgba(255,106,0,${0.4 + vel * 0.5}), rgba(255,106,0,${0.15 + vel * 0.3}))`
+    : 'rgba(0,0,0,0.55)';
+}
 
 export function StepSequencer() {
   const tracks = useStore((s) => s.project.tracks);
@@ -190,6 +196,12 @@ const PadRow = memo(function PadRow({
   );
 });
 
+/**
+ * StepCell — tap to toggle, drag UP/DOWN to set velocity (works on mouse and
+ * touch). Velocity changes are painted directly to the DOM during the drag
+ * and committed to the store only on release, so dragging never re-schedules
+ * the transport mid-gesture.
+ */
 const StepCell = memo(function StepCell({
   on,
   velocity,
@@ -209,43 +221,77 @@ const StepCell = memo(function StepCell({
 }) {
   const toggleStep = useStore((s) => s.toggleStep);
   const setStepVelocity = useStore((s) => s.setStepVelocity);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const barRef = useRef<HTMLSpanElement>(null);
+  const drag = useRef<{ startY: number; startVel: number; vel: number; moved: boolean } | null>(null);
+
+  function down(e: React.PointerEvent) {
+    btnRef.current?.setPointerCapture(e.pointerId);
+    drag.current = { startY: e.clientY, startVel: velocity, vel: velocity, moved: false };
+  }
+  function move(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d || !on) return;
+    const dy = d.startY - e.clientY;
+    if (Math.abs(dy) > 5) d.moved = true;
+    if (!d.moved) return;
+    d.vel = Math.max(0.05, Math.min(1, d.startVel + dy / 140));
+    if (barRef.current) barRef.current.style.transform = `scaleX(${d.vel})`;
+    if (btnRef.current) btnRef.current.style.background = cellBg(true, d.vel);
+  }
+  function up(e: React.PointerEvent) {
+    const d = drag.current;
+    drag.current = null;
+    btnRef.current?.releasePointerCapture(e.pointerId);
+    if (!d) return;
+    if (!d.moved) {
+      toggleStep(trackId, clipId, pad, index);
+    } else if (on && d.vel !== d.startVel) {
+      setStepVelocity(trackId, clipId, pad, index, d.vel);
+    }
+  }
 
   return (
     <button
-      onClick={() => toggleStep(trackId, clipId, pad, index)}
+      ref={btnRef}
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={up}
       onWheel={(e) => {
+        if (!on) return;
         e.preventDefault();
         const v = Math.max(0.05, Math.min(1, velocity - Math.sign(e.deltaY) * 0.05));
         setStepVelocity(trackId, clipId, pad, index, v);
       }}
       style={{
-        height: 36,
-        background: on
-          ? `linear-gradient(180deg, rgba(255,106,0,${0.4 + velocity * 0.5}), rgba(255,106,0,${0.15 + velocity * 0.3}))`
-          : 'rgba(0,0,0,0.55)',
+        height: 38,
+        background: cellBg(on, velocity),
         border: on
           ? '1px solid var(--nerv-orange)'
           : `1px solid ${quarter ? 'rgba(255,106,0,0.45)' : 'rgba(255,106,0,0.18)'}`,
         boxShadow: on ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
         position: 'relative',
         clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+        touchAction: 'none',
       }}
       aria-pressed={on}
+      title="Tap to toggle · drag up/down for velocity"
     >
-      {on && (
-        <span
-          style={{
-            position: 'absolute',
-            left: 2,
-            right: 2,
-            bottom: 2,
-            height: 3,
-            background: 'rgba(255,255,255,0.55)',
-            transform: `scaleX(${velocity})`,
-            transformOrigin: '0 0',
-          }}
-        />
-      )}
+      <span
+        ref={barRef}
+        style={{
+          position: 'absolute',
+          left: 2,
+          right: 2,
+          bottom: 2,
+          height: 3,
+          background: 'rgba(255,255,255,0.55)',
+          transform: `scaleX(${velocity})`,
+          transformOrigin: '0 0',
+          opacity: on ? 1 : 0,
+        }}
+      />
     </button>
   );
 });

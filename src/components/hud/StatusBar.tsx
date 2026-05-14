@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { shallow } from 'zustand/shallow';
 import { useStore } from '../../state/store';
 import { usePlayhead } from '../../state/transportClock';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { Scope } from './Scope';
 
 const MESSAGES = [
@@ -30,6 +31,38 @@ export function StatusBar() {
   const micRecording = useStore((s) => s.micRecording);
   const bouncing = useStore((s) => s.bouncing);
   const recording = micRecording || bouncing;
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '5px 8px',
+          background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
+          borderBottom: '1px solid rgba(255,106,0,0.5)',
+          contain: 'layout style',
+        }}
+      >
+        <NervMark />
+        <span
+          className="hud-value"
+          style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {name}
+        </span>
+        <Indicator label="PL" on={playing} color="green" />
+        <Indicator label="REC" on={recording} color="red" />
+        <PositionReadout numerator={numerator} />
+        <div className="display" style={{ fontSize: 10 }}>
+          <span style={{ color: 'var(--nerv-orange-bright)' }}>{bpm.toFixed(0)}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

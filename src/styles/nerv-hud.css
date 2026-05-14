@@ -314,6 +314,7 @@
 /* Tabs */
 .nerv-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 4px 8px;
   border-bottom: 1px solid rgba(255, 106, 0, 0.4);
@@ -418,3 +419,85 @@
 /* iPhone-friendly touch */
 button, .nerv-btn { touch-action: manipulation; }
 .touch-target { min-width: 44px; min-height: 44px; }
+
+/* ---------------- MOBILE / PHONE LAYOUT ---------------- */
+@media (max-width: 720px) {
+  html {
+    font-size: 13px;
+  }
+
+  /* Tabs become a single swipeable row instead of wrapping */
+  .nerv-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 6px;
+  }
+  .nerv-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .nerv-tab {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    font-size: 9px;
+  }
+
+  /* Tighter chrome */
+  .nerv-btn {
+    padding: 7px 9px;
+    letter-spacing: 0.12em;
+    min-height: 38px;
+  }
+  .nerv-btn--icon {
+    padding: 6px 7px;
+    min-width: 38px;
+  }
+  .touch-target {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .hex-frame {
+    padding: 7px 8px;
+  }
+  .hex-frame__title {
+    font-size: 8px;
+    letter-spacing: 0.18em;
+  }
+  .display--big {
+    font-size: 18px;
+    min-height: 34px;
+  }
+  .hud-big {
+    font-size: 20px;
+  }
+
+  /* Knobs stay generously sized for fingers */
+  .knob {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  /* Crosshair corners are decorative — drop on small screens to reclaim space */
+  .crosshair-corner {
+    display: none;
+  }
+
+  /* Slightly thicker scrollbars so panels can still be grabbed */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+}
+
+/* Coarse-pointer (touch) tuning regardless of width */
+@media (pointer: coarse) {
+  .nerv-slider::-webkit-slider-thumb {
+    width: 22px;
+    height: 24px;
+  }
+  .nerv-slider::-moz-range-thumb {
+    width: 22px;
+    height: 24px;
+  }
+}

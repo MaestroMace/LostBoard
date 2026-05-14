@@ -39,6 +39,11 @@ intended to be reachable from an iPhone over Tailscale.
   time signature / song length editor, raw-data editor
 - **PWA-ready** manifest + iOS web-app meta + safe-area inset padding so the
   notch doesn't eat your UI when added to the iPhone home screen
+- **Responsive + touch-native** — a phone breakpoint compacts the HUD and
+  transport, makes the tab bar swipeable, and narrows the arrange headers;
+  step-sequencer cells take a tap-to-toggle / drag-for-velocity gesture and
+  the piano roll has a DRAW/ERASE tool, so velocity and note-delete work
+  without a mouse wheel or modifier keys
 - **NERV aesthetic** everywhere: scan lines, CRT flicker, hex panels,
   warning stripes, MAGI status ticker, glowing orange CRT type
 

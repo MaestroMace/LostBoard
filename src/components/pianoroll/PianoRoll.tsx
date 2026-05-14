@@ -30,7 +30,7 @@ export function PianoRoll() {
     | Extract<(typeof midiClips)[number], { kind: 'midi' }>
     | undefined;
 
-  const [tool, setTool] = useState<'draw' | 'select'>('draw');
+  const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [snap, setSnap] = useState<0.25 | 0.5 | 1>(0.25);
 
   if (!activeTrack) {
@@ -102,8 +102,11 @@ export function PianoRoll() {
         <button className={`nerv-btn ${tool === 'draw' ? 'is-active' : ''}`} onClick={() => setTool('draw')}>
           DRAW
         </button>
-        <button className={`nerv-btn ${tool === 'select' ? 'is-active' : ''}`} onClick={() => setTool('select')}>
-          SELECT
+        <button
+          className={`nerv-btn nerv-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
+          onClick={() => setTool('erase')}
+        >
+          ERASE
         </button>
         <span className="hud-readout">SNAP</span>
         <select className="display" value={snap} onChange={(e) => setSnap(parseFloat(e.target.value) as any)}>
@@ -139,6 +142,7 @@ export function PianoRoll() {
               clipId={activeClip.id}
               color={activeTrack.color}
               snap={snap}
+              tool={tool}
             />
           ))}
           <PianoRollPlayhead clipStart={activeClip.start} />
@@ -152,7 +156,7 @@ export function PianoRoll() {
           borderTop: '1px solid rgba(255,106,0,0.3)',
         }}
       >
-        TIP: click empty grid to draw — drag notes to move — shift-click to delete — drag right-edge to resize
+        TIP: DRAW mode — tap grid to add, drag notes to move, drag right-edge to resize · ERASE mode — tap a note to delete
       </div>
     </div>
   );
@@ -233,12 +237,14 @@ const NoteEl = memo(function NoteEl({
   clipId,
   color,
   snap,
+  tool,
 }: {
   note: Note;
   trackId: string;
   clipId: string;
   color: string;
   snap: number;
+  tool: 'draw' | 'erase';
 }) {
   const updateNote = useStore((s) => s.updateNote);
   const removeNote = useStore((s) => s.removeNote);
@@ -257,7 +263,7 @@ const NoteEl = memo(function NoteEl({
 
   function down(e: React.PointerEvent, resizing: boolean) {
     e.stopPropagation();
-    if (e.shiftKey || e.button === 2) {
+    if (tool === 'erase' || e.shiftKey || e.button === 2) {
       removeNote(trackId, clipId, note.id);
       return;
     }
