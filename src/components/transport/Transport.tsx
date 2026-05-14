@@ -6,15 +6,23 @@ import { saveProjectToStorage } from '../../state/store';
 export function Transport() {
   const project = useStore((s) => s.project);
   const playing = useStore((s) => s.isPlaying);
-  const recording = useStore((s) => s.isRecording);
+  const micRecording = useStore((s) => s.micRecording);
+  const bouncing = useStore((s) => s.bouncing);
   const metronome = useStore((s) => s.metronome);
   const setMetronome = useStore((s) => s.setMetronome);
   const setBpm = useStore((s) => s.setBpm);
   const setPlaying = useStore((s) => s.setPlaying);
   const setRecording = useStore((s) => s.setRecording);
+  const setMicRecording = useStore((s) => s.setMicRecording);
+  const setBouncing = useStore((s) => s.setBouncing);
   const setLoop = useStore((s) => s.setLoop);
   const setPosition = useStore((s) => s.setPosition);
   const positionBeats = useStore((s) => s.positionBeats);
+  const addTrack = useStore((s) => s.addTrack);
+  const addAudioClip = useStore((s) => s.addAudioClip);
+
+  const recStartBeat = useRef(0);
+  const recTrackId = useRef<string | null>(null);
 
   // sync engine state from store
   useEffect(() => {
@@ -60,8 +68,59 @@ export function Transport() {
     setRecording(false);
     setPosition(0);
   }
-  function rec() {
-    setRecording(!recording);
+
+  async function toggleMicRec() {
+    if (micRecording) {
+      // stop recording → decode → drop an audio clip
+      const result = await audioEngine.stopMicRecording();
+      setMicRecording(false);
+      if (result) {
+        const trackId = recTrackId.current;
+        if (trackId) {
+          addAudioClip(trackId, recStartBeat.current, result.id, result.duration, 'MIC TAKE');
+        }
+      }
+    } else {
+      const ok = await audioEngine.armMic();
+      if (!ok) {
+        alert('Microphone access denied or unavailable.');
+        return;
+      }
+      // ensure an audio track to host the take
+      let audioTrack = useStore.getState().project.tracks.find((t) => t.kind === 'audio');
+      if (!audioTrack) {
+        audioTrack = addTrack('audio');
+      }
+      recTrackId.current = audioTrack.id;
+      recStartBeat.current = positionBeats;
+      audioEngine.startMicRecording();
+      setMicRecording(true);
+    }
+  }
+
+  async function toggleBounce() {
+    if (bouncing) {
+      const blob = await audioEngine.stopMasterBounce();
+      setBouncing(false);
+      audioEngine.stop();
+      setPlaying(false);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.name.replace(/\s+/g, '_')}_bounce_${Date.now()}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      await audioEngine.init();
+      audioEngine.stop();
+      setPosition(0);
+      audioEngine.startMasterBounce();
+      await audioEngine.play();
+      setPlaying(true);
+      setBouncing(true);
+    }
   }
 
   const [showBpmEdit, setShowBpmEdit] = useState(false);
@@ -94,11 +153,20 @@ export function Transport() {
           ■ STOP
         </button>
         <button
-          className={`nerv-btn nerv-btn--rec touch-target ${recording ? 'is-active' : ''}`}
-          onClick={rec}
-          aria-pressed={recording}
+          className={`nerv-btn nerv-btn--rec touch-target ${micRecording ? 'is-active' : ''}`}
+          onClick={toggleMicRec}
+          aria-pressed={micRecording}
+          title="Record from microphone into an audio track"
         >
-          ● REC
+          ● {micRecording ? 'STOP REC' : 'MIC REC'}
+        </button>
+        <button
+          className={`nerv-btn nerv-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
+          onClick={toggleBounce}
+          aria-pressed={bouncing}
+          title="Bounce the master output to an audio file"
+        >
+          ⭳ {bouncing ? 'STOP BOUNCE' : 'BOUNCE'}
         </button>
         <button
           className={`nerv-btn touch-target ${project.loopEnabled ? 'is-active' : ''}`}

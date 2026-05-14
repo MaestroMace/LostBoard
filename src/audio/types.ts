@@ -11,7 +11,8 @@ export type SynthParams = {
   release: number;
   glide: number;
   unison: number; // 1..7
-  fmDepth: number; // 0..1
+  fmDepth: number; // 0..1 (FM engine: modulation index)
+  harmonicity: number; // FM engine: carrier:modulator ratio
   reverb: number; // 0..1
   delay: number; // 0..1
   delayTime: string;
@@ -29,7 +30,8 @@ export const DEFAULT_SYNTH: SynthParams = {
   release: 0.6,
   glide: 0,
   unison: 3,
-  fmDepth: 0,
+  fmDepth: 4,
+  harmonicity: 3,
   reverb: 0.18,
   delay: 0.12,
   delayTime: '8n',
@@ -108,7 +110,49 @@ export type Clip =
       pattern: DrumPattern;
       color?: string;
       name?: string;
+    }
+  | {
+      id: string;
+      kind: 'audio';
+      trackId: string;
+      start: number; // beats
+      length: number; // beats
+      sampleId: string; // key into the runtime sample bank
+      gain: number; // 0..2
+      offset: number; // seconds into the sample
+      color?: string;
+      name?: string;
     };
+
+export type FxRack = {
+  enabled: boolean;
+  eqLow: number; // dB  -24..24
+  eqMid: number; // dB
+  eqHigh: number; // dB
+  compThreshold: number; // dB -60..0
+  compRatio: number; // 1..20
+  compOn: boolean;
+  chorusDepth: number; // 0..1
+  chorusOn: boolean;
+  bitcrush: number; // 1..16 bits, 16 = off
+  bitcrushOn: boolean;
+};
+
+export const DEFAULT_FX: FxRack = {
+  enabled: true,
+  eqLow: 0,
+  eqMid: 0,
+  eqHigh: 0,
+  compThreshold: -18,
+  compRatio: 3,
+  compOn: false,
+  chorusDepth: 0.5,
+  chorusOn: false,
+  bitcrush: 8,
+  bitcrushOn: false,
+};
+
+export type SynthEngine = 'subtractive' | 'fm';
 
 export type Track = {
   id: string;
@@ -121,6 +165,8 @@ export type Track = {
   solo: boolean;
   arm: boolean;
   synth?: SynthParams;
+  synthEngine?: SynthEngine;
+  fx?: FxRack;
   clips: Clip[];
 };
 

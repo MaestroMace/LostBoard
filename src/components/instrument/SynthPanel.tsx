@@ -21,6 +21,7 @@ export function SynthPanel() {
   const selectedTrackId = useStore((s) => s.selectedTrackId);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateSynth = useStore((s) => s.updateSynth);
+  const setSynthEngine = useStore((s) => s.setSynthEngine);
 
   const synthTracks = project.tracks.filter((t) => t.kind === 'synth');
   const active = synthTracks.find((t) => t.id === selectedTrackId) ?? synthTracks[0];
@@ -33,6 +34,7 @@ export function SynthPanel() {
     );
   }
   const s = active.synth;
+  const engine = active.synthEngine ?? 'subtractive';
 
   function patch(p: Partial<SynthParams>) {
     if (!active) return;
@@ -47,7 +49,7 @@ export function SynthPanel() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div className="hud-label">INSTRUMENT // SYNTH-01</div>
+        <div className="hud-label">INSTRUMENT // {engine === 'fm' ? 'FM-01' : 'SYNTH-01'}</div>
         <select
           className="display"
           value={active.id}
@@ -57,6 +59,19 @@ export function SynthPanel() {
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
+        <span className="hud-readout">ENGINE:</span>
+        <button
+          className={`nerv-btn ${engine === 'subtractive' ? 'is-active' : ''}`}
+          onClick={() => setSynthEngine(active.id, 'subtractive')}
+        >
+          SUBTRACTIVE
+        </button>
+        <button
+          className={`nerv-btn ${engine === 'fm' ? 'is-active' : ''}`}
+          onClick={() => setSynthEngine(active.id, 'fm')}
+        >
+          FM
+        </button>
         <div style={{ flex: 1 }} />
         <span className="hud-readout">PRESET:</span>
         {Object.keys(PRESETS).map((k) => (
@@ -66,6 +81,48 @@ export function SynthPanel() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+        {engine === 'fm' ? (
+          <HexFrame title="FM CORE">
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+              <Knob
+                label="HARMONIC"
+                value={s.harmonicity}
+                min={0.25}
+                max={12}
+                step={0.25}
+                display={(v) => `${v.toFixed(2)}`}
+                onChange={(v) => patch({ harmonicity: v })}
+              />
+              <Knob
+                label="MOD IDX"
+                value={s.fmDepth}
+                min={0}
+                max={40}
+                step={0.5}
+                display={(v) => `${v.toFixed(1)}`}
+                onChange={(v) => patch({ fmDepth: v })}
+              />
+              <Knob
+                label="DETUNE"
+                value={s.detune}
+                min={-100}
+                max={100}
+                step={1}
+                display={(v) => `${v.toFixed(0)}c`}
+                onChange={(v) => patch({ detune: v })}
+              />
+              <Knob
+                label="GLIDE"
+                value={s.glide}
+                min={0}
+                max={0.5}
+                step={0.005}
+                display={(v) => `${(v * 1000).toFixed(0)}ms`}
+                onChange={(v) => patch({ glide: v })}
+              />
+            </div>
+          </HexFrame>
+        ) : (
         <HexFrame title="OSC">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {OSCS.map((o) => (
@@ -85,6 +142,7 @@ export function SynthPanel() {
             <Knob label="GLIDE" value={s.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
           </div>
         </HexFrame>
+        )}
 
         <HexFrame title="FILTER">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>

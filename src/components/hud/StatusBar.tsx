@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
+import { Scope } from './Scope';
 
 const MESSAGES = [
   'MAGI SYSTEM ONLINE',
@@ -16,7 +17,9 @@ const MESSAGES = [
 export function StatusBar() {
   const project = useStore((s) => s.project);
   const playing = useStore((s) => s.isPlaying);
-  const recording = useStore((s) => s.isRecording);
+  const micRecording = useStore((s) => s.micRecording);
+  const bouncing = useStore((s) => s.bouncing);
+  const recording = micRecording || bouncing;
   const positionBeats = useStore((s) => s.positionBeats);
 
   const [now, setNow] = useState(() => new Date());
@@ -72,11 +75,15 @@ export function StatusBar() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Ticker />
-        <div className="hud-readout">
-          <span className="glyph-cross" style={{ marginRight: 6 }} />
-          {now.toTimeString().slice(0, 8)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Scope width={140} height={38} mode="wave" />
+        <Scope width={90} height={38} mode="fft" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Ticker />
+          <div className="hud-readout">
+            <span className="glyph-cross" style={{ marginRight: 6 }} />
+            {now.toTimeString().slice(0, 8)}
+          </div>
         </div>
       </div>
     </div>

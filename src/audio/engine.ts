@@ -1,10 +1,20 @@
 import * as Tone from 'tone';
-import type { DrumPad, SynthParams, Track, Project, Clip, Note } from './types';
+import type {
+  DrumPad,
+  SynthParams,
+  Track,
+  Project,
+  Clip,
+  FxRack,
+  SynthEngine,
+} from './types';
 
 /**
  * AudioEngine — wraps Tone.js into a DAW-style engine.
- * - master limiter + reverb send + delay send
- * - per-track channel strip + instrument
+ * - master limiter + reverb send + delay send + analyser/scope
+ * - per-track channel strip + FX rack + instrument
+ * - runtime sample bank for recorded / imported audio
+ * - mic recorder + real-time master bounce-to-WAV
  * - scheduler driven by Tone.Transport
  */
 class Engine {
@@ -14,11 +24,20 @@ class Engine {
   private reverb!: Tone.Reverb;
   private delay!: Tone.FeedbackDelay;
   private analyser!: Tone.Analyser;
+  private fft!: Tone.Analyser;
   private trackNodes = new Map<string, TrackNode>();
   private scheduledIds: number[] = [];
   private metronomeSynth?: Tone.MembraneSynth;
   private metronomeEvent?: number;
   metronomeEnabled = false;
+
+  // recording
+  private mic?: Tone.UserMedia;
+  private micRecorder?: Tone.Recorder;
+  private masterRecorder?: Tone.Recorder;
+
+  // runtime sample bank — recorded/imported audio buffers keyed by id
+  private sampleBank = new Map<string, AudioBuffer>();
 
   async init() {
     if (this.inited) return;
@@ -27,6 +46,7 @@ class Engine {
     this.masterGain = new Tone.Gain(0.9);
     this.master = new Tone.Limiter(-1);
     this.analyser = new Tone.Analyser('waveform', 1024);
+    this.fft = new Tone.Analyser('fft', 64);
     this.reverb = new Tone.Reverb({ decay: 3, preDelay: 0.02, wet: 1 });
     this.delay = new Tone.FeedbackDelay({ delayTime: '8n', feedback: 0.35, wet: 1 });
     await this.reverb.generate();
@@ -34,7 +54,10 @@ class Engine {
     this.reverb.connect(this.masterGain);
     this.masterGain.connect(this.master);
     this.master.connect(this.analyser);
+    this.master.connect(this.fft);
     this.master.toDestination();
+    this.masterRecorder = new Tone.Recorder();
+    this.master.connect(this.masterRecorder);
     this.inited = true;
   }
 
@@ -44,6 +67,10 @@ class Engine {
 
   getAnalyser() {
     return this.analyser;
+  }
+
+  getFft() {
+    return this.fft;
   }
 
   setBpm(bpm: number) {
@@ -118,13 +145,85 @@ class Engine {
     return Tone.getTransport().state === 'started';
   }
 
+  // ---------- SAMPLE BANK ----------
+
+  registerSample(id: string, buffer: AudioBuffer) {
+    this.sampleBank.set(id, buffer);
+  }
+
+  getSample(id: string): AudioBuffer | undefined {
+    return this.sampleBank.get(id);
+  }
+
+  hasSample(id: string): boolean {
+    return this.sampleBank.has(id);
+  }
+
+  /** Decode an arbitrary audio File/Blob into the bank, returns {id, durationSec}. */
+  async loadAudioFile(file: Blob): Promise<{ id: string; duration: number }> {
+    if (!this.inited) await this.init();
+    const arrayBuf = await file.arrayBuffer();
+    const audioBuf = await Tone.getContext().rawContext.decodeAudioData(arrayBuf);
+    const id = `smp_${Math.random().toString(36).slice(2, 10)}`;
+    this.sampleBank.set(id, audioBuf);
+    return { id, duration: audioBuf.duration };
+  }
+
+  // ---------- MIC RECORDING ----------
+
+  async armMic(): Promise<boolean> {
+    if (!this.inited) await this.init();
+    try {
+      this.mic = new Tone.UserMedia();
+      await this.mic.open();
+      this.micRecorder = new Tone.Recorder();
+      this.mic.connect(this.micRecorder);
+      return true;
+    } catch (e) {
+      console.error('Mic access failed', e);
+      return false;
+    }
+  }
+
+  startMicRecording() {
+    this.micRecorder?.start();
+  }
+
+  /** Stops mic recording, decodes the result into the sample bank. */
+  async stopMicRecording(): Promise<{ id: string; duration: number } | null> {
+    if (!this.micRecorder) return null;
+    const blob = await this.micRecorder.stop();
+    const result = await this.loadAudioFile(blob);
+    this.mic?.close();
+    this.mic?.dispose();
+    this.micRecorder.dispose();
+    this.mic = undefined;
+    this.micRecorder = undefined;
+    return result;
+  }
+
+  isMicArmed() {
+    return !!this.mic;
+  }
+
+  // ---------- MASTER BOUNCE ----------
+
+  startMasterBounce() {
+    this.masterRecorder?.start();
+  }
+
+  async stopMasterBounce(): Promise<Blob | null> {
+    if (!this.masterRecorder) return null;
+    return await this.masterRecorder.stop();
+  }
+
   // ---------- TRACK MANAGEMENT ----------
 
   ensureTrack(track: Track) {
     if (!this.inited) return undefined;
     let node = this.trackNodes.get(track.id);
     if (!node) {
-      node = new TrackNode(track, this.reverb, this.delay, this.masterGain);
+      node = new TrackNode(track, this.reverb, this.delay, this.masterGain, this.sampleBank);
       this.trackNodes.set(track.id, node);
     }
     node.update(track);
@@ -139,6 +238,10 @@ class Engine {
     }
   }
 
+  getTrackLevel(id: string): number {
+    return this.trackNodes.get(id)?.getLevel() ?? -60;
+  }
+
   trigger(trackId: string, pitch: number | DrumPad, velocity = 0.9, duration = '8n') {
     const node = this.trackNodes.get(trackId);
     node?.trigger(pitch, velocity, duration);
@@ -147,7 +250,6 @@ class Engine {
   /** Schedule the entire project's clip content onto the transport. */
   schedule(project: Project) {
     if (!this.inited) return;
-    // clear old
     const t = Tone.getTransport();
     this.scheduledIds.forEach((id) => t.clear(id));
     this.scheduledIds = [];
@@ -155,6 +257,7 @@ class Engine {
     for (const track of project.tracks) {
       const node = this.ensureTrack(track);
       if (!node) continue;
+      node.clearPlayers();
       for (const clip of track.clips) {
         this.scheduleClip(clip, node, project);
       }
@@ -174,9 +277,8 @@ class Engine {
         this.scheduledIds.push(id);
       }
     } else if (clip.kind === 'pattern') {
-      // 16-step grid spread over clip.length beats
       const stepsPerBeat = clip.pattern.length / clip.length;
-      const stepDur = 1 / stepsPerBeat; // beats per step
+      const stepDur = 1 / stepsPerBeat;
       const padNames = Object.keys(clip.pattern.steps) as DrumPad[];
       for (const pad of padNames) {
         const steps = clip.pattern.steps[pad];
@@ -191,6 +293,28 @@ class Engine {
           this.scheduledIds.push(id);
         });
       }
+    } else if (clip.kind === 'audio') {
+      const buffer = this.sampleBank.get(clip.sampleId);
+      if (!buffer) return;
+      const player = node.addPlayer(clip.id, buffer, clip.gain);
+      const id = t.schedule((time) => {
+        try {
+          player.start(time, clip.offset);
+        } catch {
+          /* player may be stopped/disposed */
+        }
+      }, beatsToBarsBeats(startBeats));
+      this.scheduledIds.push(id);
+      // stop at clip end
+      const endBeats = startBeats + clip.length;
+      const stopId = t.schedule((time) => {
+        try {
+          player.stop(time);
+        } catch {
+          /* noop */
+        }
+      }, beatsToBarsBeats(endBeats));
+      this.scheduledIds.push(stopId);
     }
   }
 }
@@ -205,22 +329,45 @@ class TrackNode {
   instrument: Instrument;
   meter: Tone.Meter;
 
+  // FX rack
+  fxInput: Tone.Gain;
+  eq: Tone.EQ3;
+  comp: Tone.Compressor;
+  chorus: Tone.Chorus;
+  crusher: Tone.BitCrusher;
+
+  // audio clip players
+  private players = new Map<string, Tone.Player>();
+  private sampleBank: Map<string, AudioBuffer>;
+
   constructor(
     track: Track,
     reverb: Tone.Reverb,
     delay: Tone.FeedbackDelay,
     masterGain: Tone.Gain,
+    sampleBank: Map<string, AudioBuffer>,
   ) {
     this.trackId = track.id;
+    this.sampleBank = sampleBank;
     this.channel = new Tone.Channel({
       volume: track.volume,
       pan: track.pan,
       mute: track.mute,
       solo: track.solo,
     });
-    this.meter = new Tone.Meter({ smoothing: 0.6 });
+    this.meter = new Tone.Meter({ smoothing: 0.7 });
     this.reverbSend = new Tone.Gain(0);
     this.delaySend = new Tone.Gain(0);
+
+    // FX chain: fxInput -> eq -> comp -> chorus -> crusher -> channel
+    this.fxInput = new Tone.Gain(1);
+    this.eq = new Tone.EQ3(0, 0, 0);
+    this.comp = new Tone.Compressor({ threshold: 0, ratio: 1, attack: 0.01, release: 0.1 });
+    this.chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0, wet: 0 }).start();
+    this.crusher = new Tone.BitCrusher(16);
+    this.crusher.wet.value = 0;
+    this.fxInput.chain(this.eq, this.comp, this.chorus, this.crusher, this.channel);
+
     this.channel.connect(masterGain);
     this.channel.connect(this.meter);
     this.channel.connect(this.reverbSend);
@@ -229,8 +376,9 @@ class TrackNode {
     this.delaySend.connect(delay);
 
     this.instrument = buildInstrument(track);
-    this.instrument.output.connect(this.channel);
+    this.instrument.output.connect(this.fxInput);
     this.applySends(track);
+    this.applyFx(track.fx);
   }
 
   update(track: Track) {
@@ -238,10 +386,48 @@ class TrackNode {
     this.channel.pan.rampTo(track.pan, 0.02);
     this.channel.mute = track.mute;
     this.channel.solo = track.solo;
-    if (track.synth && this.instrument.kind === 'synth') {
-      (this.instrument as SynthInstrument).applyParams(track.synth);
+
+    // rebuild the instrument if the requested synth engine changed
+    if (track.kind === 'synth') {
+      const wantKind = track.synthEngine === 'fm' ? 'fm' : 'synth';
+      if (this.instrument.kind !== wantKind) {
+        this.instrument.dispose();
+        this.instrument = buildInstrument(track);
+        this.instrument.output.connect(this.fxInput);
+      }
+    }
+
+    if (track.synth) {
+      if (this.instrument.kind === 'synth') {
+        (this.instrument as SynthInstrument).applyParams(track.synth);
+      } else if (this.instrument.kind === 'fm') {
+        (this.instrument as FmInstrument).applyParams(track.synth);
+      }
     }
     this.applySends(track);
+    this.applyFx(track.fx);
+  }
+
+  applyFx(fx?: FxRack) {
+    if (!fx || !fx.enabled) {
+      this.eq.low.rampTo(0, 0.05);
+      this.eq.mid.rampTo(0, 0.05);
+      this.eq.high.rampTo(0, 0.05);
+      this.comp.threshold.rampTo(0, 0.05);
+      this.comp.ratio.rampTo(1, 0.05);
+      this.chorus.wet.rampTo(0, 0.05);
+      this.crusher.wet.rampTo(0, 0.05);
+      return;
+    }
+    this.eq.low.rampTo(fx.eqLow, 0.05);
+    this.eq.mid.rampTo(fx.eqMid, 0.05);
+    this.eq.high.rampTo(fx.eqHigh, 0.05);
+    this.comp.threshold.rampTo(fx.compOn ? fx.compThreshold : 0, 0.05);
+    this.comp.ratio.rampTo(fx.compOn ? fx.compRatio : 1, 0.05);
+    this.chorus.depth = fx.chorusOn ? fx.chorusDepth : 0;
+    this.chorus.wet.rampTo(fx.chorusOn ? 1 : 0, 0.05);
+    this.crusher.bits.value = fx.bitcrush;
+    this.crusher.wet.rampTo(fx.bitcrushOn ? 1 : 0, 0.05);
   }
 
   applySends(track: Track) {
@@ -249,6 +435,26 @@ class TrackNode {
     const dly = track.synth?.delay ?? 0.1;
     this.reverbSend.gain.rampTo(rev, 0.05);
     this.delaySend.gain.rampTo(dly, 0.05);
+  }
+
+  // audio clip players
+  addPlayer(clipId: string, buffer: AudioBuffer, gain: number): Tone.Player {
+    let player = this.players.get(clipId);
+    if (player) {
+      player.dispose();
+    }
+    player = new Tone.Player(buffer);
+    player.volume.value = Tone.gainToDb(Math.max(0.0001, gain));
+    player.connect(this.fxInput);
+    this.players.set(clipId, player);
+    return player;
+  }
+
+  clearPlayers() {
+    for (const p of this.players.values()) {
+      p.dispose();
+    }
+    this.players.clear();
   }
 
   trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
@@ -266,17 +472,23 @@ class TrackNode {
 
   dispose() {
     this.instrument.dispose();
+    this.clearPlayers();
     this.channel.dispose();
     this.reverbSend.dispose();
     this.delaySend.dispose();
     this.meter.dispose();
+    this.fxInput.dispose();
+    this.eq.dispose();
+    this.comp.dispose();
+    this.chorus.dispose();
+    this.crusher.dispose();
   }
 }
 
 // -----------------------------------------------------------
 
 type Instrument = {
-  kind: 'synth' | 'drum' | 'sampler';
+  kind: 'synth' | 'fm' | 'drum' | 'sampler';
   output: Tone.ToneAudioNode;
   trigger(pitch: number | DrumPad, vel: number, dur: string | number): void;
   triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number): void;
@@ -342,6 +554,73 @@ class SynthInstrument implements Instrument {
     this.poly.dispose();
     this.filter.dispose();
     this.drive.dispose();
+    this.output.dispose();
+  }
+}
+
+class FmInstrument implements Instrument {
+  kind = 'fm' as const;
+  output: Tone.Gain;
+  private poly: Tone.PolySynth;
+  private filter: Tone.Filter;
+
+  constructor(params: SynthParams) {
+    this.output = new Tone.Gain(1);
+    this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
+    this.poly = new Tone.PolySynth(Tone.FMSynth, {
+      harmonicity: params.harmonicity,
+      modulationIndex: params.fmDepth,
+      detune: params.detune,
+      portamento: params.glide,
+      envelope: {
+        attack: params.attack,
+        decay: params.decay,
+        sustain: params.sustain,
+        release: params.release,
+      },
+      modulationEnvelope: {
+        attack: params.attack * 1.5,
+        decay: params.decay,
+        sustain: params.sustain,
+        release: params.release,
+      },
+    });
+    this.poly.maxPolyphony = 12;
+    this.poly.chain(this.filter, this.output);
+  }
+
+  applyParams(p: SynthParams) {
+    this.filter.frequency.rampTo(p.cutoff, 0.05);
+    this.filter.Q.rampTo(p.resonance, 0.05);
+    this.poly.set({
+      harmonicity: p.harmonicity,
+      modulationIndex: p.fmDepth,
+      detune: p.detune,
+      portamento: p.glide,
+      envelope: {
+        attack: p.attack,
+        decay: p.decay,
+        sustain: p.sustain,
+        release: p.release,
+      },
+    } as any);
+  }
+
+  trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
+    if (typeof pitch !== 'number') return;
+    const freq = Tone.Frequency(pitch, 'midi').toFrequency();
+    this.poly.triggerAttackRelease(freq, dur, undefined, vel);
+  }
+
+  triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
+    if (typeof pitch !== 'number') return;
+    const freq = Tone.Frequency(pitch, 'midi').toFrequency();
+    this.poly.triggerAttackRelease(freq, dur, time, vel);
+  }
+
+  dispose() {
+    this.poly.dispose();
+    this.filter.dispose();
     this.output.dispose();
   }
 }
@@ -465,44 +744,48 @@ class DrumInstrument implements Instrument {
   }
 }
 
+/** Pass-through instrument for audio tracks (no synthesis — players feed FX directly). */
+class NullInstrument implements Instrument {
+  kind = 'sampler' as const;
+  output: Tone.Gain;
+  constructor() {
+    this.output = new Tone.Gain(1);
+  }
+  trigger() {}
+  triggerAt() {}
+  dispose() {
+    this.output.dispose();
+  }
+}
+
+const FALLBACK_SYNTH: SynthParams = {
+  osc: 'sawtooth',
+  detune: 0,
+  cutoff: 1800,
+  resonance: 1,
+  attack: 0.01,
+  decay: 0.2,
+  sustain: 0.6,
+  release: 0.6,
+  glide: 0,
+  unison: 1,
+  fmDepth: 4,
+  harmonicity: 3,
+  reverb: 0.15,
+  delay: 0.1,
+  delayTime: '8n',
+  drive: 0,
+};
+
 function buildInstrument(track: Track): Instrument {
   if (track.kind === 'drum') return new DrumInstrument();
-  if (track.kind === 'synth' && track.synth) return new SynthInstrument(track.synth);
-  if (track.kind === 'synth')
-    return new SynthInstrument({
-      osc: 'sawtooth',
-      detune: 0,
-      cutoff: 1800,
-      resonance: 1,
-      attack: 0.01,
-      decay: 0.2,
-      sustain: 0.6,
-      release: 0.6,
-      glide: 0,
-      unison: 1,
-      fmDepth: 0,
-      reverb: 0.15,
-      delay: 0.1,
-      delayTime: '8n',
-      drive: 0,
-    });
-  return new SynthInstrument({
-    osc: 'sine',
-    detune: 0,
-    cutoff: 2000,
-    resonance: 1,
-    attack: 0.01,
-    decay: 0.2,
-    sustain: 0.5,
-    release: 0.4,
-    glide: 0,
-    unison: 1,
-    fmDepth: 0,
-    reverb: 0.1,
-    delay: 0.05,
-    delayTime: '8n',
-    drive: 0,
-  });
+  if (track.kind === 'audio') return new NullInstrument();
+  if (track.kind === 'synth') {
+    const params = track.synth ?? FALLBACK_SYNTH;
+    if (track.synthEngine === 'fm') return new FmInstrument(params);
+    return new SynthInstrument(params);
+  }
+  return new SynthInstrument(FALLBACK_SYNTH);
 }
 
 function beatsToBarsBeats(beats: number): string {

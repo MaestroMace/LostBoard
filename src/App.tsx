@@ -10,12 +10,15 @@ import { SynthPanel } from './components/instrument/SynthPanel';
 import { StepSequencer } from './components/sequencer/StepSequencer';
 import { PianoRoll } from './components/pianoroll/PianoRoll';
 import { ProjectView } from './components/project/ProjectView';
+import { FxPanel } from './components/fx/FxPanel';
+import { useGlobalKeys } from './hooks/useGlobalKeys';
 
 const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
   { id: 'arrange', label: 'ARRANGE' },
   { id: 'sequencer', label: 'SEQUENCER' },
   { id: 'pianoroll', label: 'PIANO ROLL' },
   { id: 'instrument', label: 'INSTRUMENT' },
+  { id: 'fx', label: 'FX RACK' },
   { id: 'mixer', label: 'MIXER' },
   { id: 'project', label: 'PROJECT' },
 ];
@@ -24,6 +27,8 @@ export default function App() {
   const [booted, setBooted] = useState(false);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
+
+  useGlobalKeys();
 
   useEffect(() => {
     loadProjectFromStorage();
@@ -75,6 +80,7 @@ export default function App() {
         {view === 'sequencer' && <StepSequencer />}
         {view === 'pianoroll' && <PianoRoll />}
         {view === 'instrument' && <SynthPanel />}
+        {view === 'fx' && <FxPanel />}
         {view === 'mixer' && <MixerView />}
         {view === 'project' && <ProjectView />}
       </div>

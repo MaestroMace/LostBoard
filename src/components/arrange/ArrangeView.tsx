@@ -61,6 +61,9 @@ export function ArrangeView() {
               <button className="nerv-btn nerv-btn--icon" onClick={() => addTrack('drum')} title="Add drum track">
                 +DRM
               </button>
+              <button className="nerv-btn nerv-btn--icon" onClick={() => addTrack('audio')} title="Add audio track">
+                +AUD
+              </button>
             </div>
           </div>
           <div style={{ overflow: 'auto', flex: 1 }}>
@@ -197,16 +200,20 @@ function TrackHeader({
           onChange={(e) => onUpdate({ name: e.target.value })}
           onClick={(e) => e.stopPropagation()}
         />
-        <button
-          className="nerv-btn nerv-btn--icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenInstrument();
-          }}
-          title="Open instrument"
-        >
-          ⌘
-        </button>
+        {track.kind === 'audio' ? (
+          <AudioImportButton trackId={track.id} />
+        ) : (
+          <button
+            className="nerv-btn nerv-btn--icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenInstrument();
+            }}
+            title="Open instrument"
+          >
+            ⌘
+          </button>
+        )}
         <button
           className="nerv-btn nerv-btn--icon"
           onClick={(e) => {
@@ -468,6 +475,9 @@ function ClipPreview({ clip }: { clip: Clip }) {
       </svg>
     );
   }
+  if (clip.kind === 'audio') {
+    return <AudioWaveform sampleId={clip.sampleId} width={clip.length * BEAT_W} />;
+  }
   // pattern preview: dots
   return (
     <svg
@@ -483,6 +493,76 @@ function ClipPreview({ clip }: { clip: Clip }) {
         ),
       )}
     </svg>
+  );
+}
+
+function AudioWaveform({ sampleId, width }: { sampleId: string; width: number }) {
+  const buffer = audioEngine.getSample(sampleId);
+  if (!buffer) {
+    return (
+      <div
+        className="hud-readout--dim hud-readout"
+        style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8 }}
+      >
+        SAMPLE NOT LOADED
+      </div>
+    );
+  }
+  const data = buffer.getChannelData(0);
+  const cols = Math.max(8, Math.min(400, Math.floor(width)));
+  const block = Math.floor(data.length / cols) || 1;
+  const peaks: number[] = [];
+  for (let i = 0; i < cols; i++) {
+    let max = 0;
+    for (let j = 0; j < block; j++) {
+      const v = Math.abs(data[i * block + j] ?? 0);
+      if (v > max) max = v;
+    }
+    peaks.push(max);
+  }
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${cols} 100`}
+      preserveAspectRatio="none"
+      style={{ position: 'absolute', inset: 0, opacity: 0.85 }}
+    >
+      {peaks.map((p, i) => (
+        <rect key={i} x={i} y={50 - p * 48} width={0.9} height={Math.max(0.5, p * 96)} fill="#fff" />
+      ))}
+    </svg>
+  );
+}
+
+function AudioImportButton({ trackId }: { trackId: string }) {
+  const addAudioClip = useStore((s) => s.addAudioClip);
+  return (
+    <label
+      className="nerv-btn nerv-btn--icon"
+      title="Import audio file"
+      onClick={(e) => e.stopPropagation()}
+      style={{ cursor: 'pointer' }}
+    >
+      ⬆
+      <input
+        type="file"
+        accept="audio/*"
+        style={{ display: 'none' }}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          try {
+            const { id, duration } = await audioEngine.loadAudioFile(file);
+            addAudioClip(trackId, 0, id, duration, file.name.slice(0, 14).toUpperCase());
+          } catch (err) {
+            console.error(err);
+            alert('Could not decode that audio file.');
+          }
+          e.target.value = '';
+        }}
+      />
+    </label>
   );
 }
 

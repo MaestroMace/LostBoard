@@ -2,13 +2,16 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {
   DEFAULT_SYNTH,
+  DEFAULT_FX,
   DRUM_PADS,
   type Clip,
   type DrumPad,
   type DrumPattern,
+  type FxRack,
   type Note,
   type Project,
   type Step,
+  type SynthEngine,
   type SynthParams,
   type Track,
   type TrackKind,
@@ -16,7 +19,7 @@ import {
 
 const NERV_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
 
-const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
+export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
 function emptyPattern(length = 16): DrumPattern {
   const steps: Record<DrumPad, Step[]> = {} as any;
@@ -67,12 +70,14 @@ function makeProject(): Project {
     mute: false,
     solo: false,
     arm: false,
+    fx: { ...DEFAULT_FX, compOn: true, compThreshold: -16, compRatio: 4 },
     clips: [],
   };
   const bassTrack: Track = {
     id: newId('trk'),
     name: 'MAGI-02 // CASPER',
     kind: 'synth',
+    synthEngine: 'subtractive',
     color: NERV_COLORS[1],
     volume: -10,
     pan: -0.15,
@@ -80,12 +85,14 @@ function makeProject(): Project {
     solo: false,
     arm: false,
     synth: { ...DEFAULT_SYNTH, osc: 'square', cutoff: 600, resonance: 6, drive: 0.15, reverb: 0.1, delay: 0.05 },
+    fx: { ...DEFAULT_FX, eqLow: 3 },
     clips: [],
   };
   const leadTrack: Track = {
     id: newId('trk'),
     name: 'MAGI-03 // MELCHIOR',
     kind: 'synth',
+    synthEngine: 'subtractive',
     color: NERV_COLORS[2],
     volume: -12,
     pan: 0.15,
@@ -93,6 +100,7 @@ function makeProject(): Project {
     solo: false,
     arm: false,
     synth: { ...DEFAULT_SYNTH, osc: 'fatsawtooth', cutoff: 3200, resonance: 1.5, reverb: 0.35, delay: 0.25 },
+    fx: { ...DEFAULT_FX, chorusOn: true, chorusDepth: 0.6 },
     clips: [],
   };
 
@@ -157,7 +165,14 @@ function makeProject(): Project {
   };
 }
 
-export type View = 'arrange' | 'mixer' | 'instrument' | 'pianoroll' | 'sequencer' | 'project';
+export type View =
+  | 'arrange'
+  | 'mixer'
+  | 'instrument'
+  | 'pianoroll'
+  | 'sequencer'
+  | 'fx'
+  | 'project';
 
 type State = {
   project: Project;
@@ -168,6 +183,10 @@ type State = {
   isRecording: boolean;
   metronome: boolean;
   positionBeats: number;
+  /** mic recording in progress */
+  micRecording: boolean;
+  /** master bounce in progress */
+  bouncing: boolean;
 };
 
 type Actions = {
@@ -188,11 +207,17 @@ type Actions = {
   removeTrack(id: string): void;
   updateTrack(id: string, patch: Partial<Track>): void;
   updateSynth(id: string, patch: Partial<SynthParams>): void;
+  setSynthEngine(id: string, engine: SynthEngine): void;
+  updateFx(id: string, patch: Partial<FxRack>): void;
 
   addClip(trackId: string, atBeat: number, lengthBeats?: number): Clip | null;
+  addAudioClip(trackId: string, atBeat: number, sampleId: string, durationSec: number, name?: string): Clip | null;
   removeClip(clipId: string): void;
   moveClip(clipId: string, newStart: number): void;
   resizeClip(clipId: string, newLength: number): void;
+
+  setMicRecording(b: boolean): void;
+  setBouncing(b: boolean): void;
 
   toggleStep(trackId: string, clipId: string, pad: DrumPad, step: number): void;
   setStepVelocity(trackId: string, clipId: string, pad: DrumPad, step: number, v: number): void;
@@ -219,6 +244,8 @@ export const useStore = create<Store>()(
     isRecording: false,
     metronome: false,
     positionBeats: 0,
+    micRecording: false,
+    bouncing: false,
 
     setView: (v) => set({ view: v }),
     selectTrack: (id) => set({ selectedTrackId: id }),
@@ -245,6 +272,8 @@ export const useStore = create<Store>()(
     setPosition: (beats) => set({ positionBeats: beats }),
     setPlaying: (b) => set({ isPlaying: b }),
     setRecording: (b) => set({ isRecording: b }),
+    setMicRecording: (b) => set({ micRecording: b }),
+    setBouncing: (b) => set({ bouncing: b }),
 
     addTrack: (kind) => {
       const tracks = get().project.tracks;
@@ -261,6 +290,8 @@ export const useStore = create<Store>()(
         solo: false,
         arm: false,
         synth: kind === 'synth' ? { ...DEFAULT_SYNTH } : undefined,
+        synthEngine: kind === 'synth' ? 'subtractive' : undefined,
+        fx: { ...DEFAULT_FX },
         clips: [],
       };
       set({
@@ -283,6 +314,18 @@ export const useStore = create<Store>()(
       );
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
+    setSynthEngine: (id, engine) => {
+      const tracks = get().project.tracks.map((t) =>
+        t.id === id ? { ...t, synthEngine: engine } : t,
+      );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    updateFx: (id, patch) => {
+      const tracks = get().project.tracks.map((t) =>
+        t.id === id ? { ...t, fx: { ...(t.fx ?? DEFAULT_FX), ...patch } } : t,
+      );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
 
     addClip: (trackId, atBeat, lengthBeats = 4) => {
       const track = get().project.tracks.find((t) => t.id === trackId);
@@ -299,6 +342,9 @@ export const useStore = create<Store>()(
           color: track.color,
           name: `PTN-${track.clips.length + 1}`,
         };
+      } else if (track.kind === 'audio') {
+        // empty audio track clip not meaningful — skip
+        return null;
       } else {
         clip = {
           id: newId('clp'),
@@ -311,6 +357,33 @@ export const useStore = create<Store>()(
           name: `CLP-${track.clips.length + 1}`,
         };
       }
+      const tracks = get().project.tracks.map((t) =>
+        t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
+      );
+      set({
+        project: { ...get().project, tracks, updatedAt: Date.now() },
+        selectedClipId: clip.id,
+      });
+      return clip;
+    },
+
+    addAudioClip: (trackId, atBeat, sampleId, durationSec, name) => {
+      const track = get().project.tracks.find((t) => t.id === trackId);
+      if (!track) return null;
+      const bps = get().project.bpm / 60;
+      const lengthBeats = Math.max(0.25, durationSec * bps);
+      const clip: Clip = {
+        id: newId('clp'),
+        kind: 'audio',
+        trackId,
+        start: atBeat,
+        length: lengthBeats,
+        sampleId,
+        gain: 1,
+        offset: 0,
+        color: track.color,
+        name: name ?? `AUD-${track.clips.length + 1}`,
+      };
       const tracks = get().project.tracks.map((t) =>
         t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
       );

@@ -17,12 +17,24 @@ intended to be reachable from an iPhone over Tailscale.
   step-cursor highlight
 - **Piano roll** with draw / move / resize / delete notes, 1/4–1/16 snap,
   preview-on-touch keyboard column
-- **Subtractive synth** with osc selector, detune, filter cutoff + resonance,
-  ADSR envelope, drive, reverb + delay sends, and Eva-themed presets
-  (`BERSERK BASS`, `LCL PAD`, `AT-FIELD LEAD`, `TANG PLUCK`, `ANGEL CHOIR`,
-  `NERV ARP`)
+- **Dual-engine synth** — switch each synth track between a **subtractive**
+  engine (osc selector, detune, filter cutoff + resonance, drive) and an
+  **FM** engine (harmonicity, mod index), both with ADSR, reverb + delay
+  sends, and Eva-themed presets (`BERSERK BASS`, `LCL PAD`, `AT-FIELD LEAD`,
+  `TANG PLUCK`, `ANGEL CHOIR`, `NERV ARP`)
+- **Per-track FX rack**: 3-band EQ, compressor, chorus and bit-crusher, each
+  individually switchable, with a master rack bypass
+- **Audio tracks**: import audio files or **record from the microphone**
+  straight into an audio clip with a rendered waveform; clips are draggable
+  and resizable like any other
+- **Master bounce**: real-time capture of the master bus to a downloadable
+  audio file
 - **Mixer** view with channel strips (volume / pan / mute / solo / meter) and
   a hot master strip with a `-1.0 dB` limiter
+- **Live HUD scopes**: oscilloscope + FFT spectrum fed from the master bus
+- **Keyboard control**: Space play/pause, Enter/Backspace stop, `L` loop,
+  `M` metronome; QWERTY rows play the selected instrument track (`Z`/`X`
+  shift octave; drum tracks map `A`–`K` to the 8 pads)
 - **Project** view: save/load via `localStorage`, export/import JSON, BPM /
   time signature / song length editor, raw-data editor
 - **PWA-ready** manifest + iOS web-app meta + safe-area inset padding so the
@@ -82,17 +94,19 @@ src/
 
 ## Roadmap
 
-This is the meaty base. Easy next moves:
+Done so far: full arrange/sequencer/piano-roll/mixer, dual-engine synth,
+per-track FX rack, audio tracks with mic recording + file import, master
+bounce, HUD scopes, keyboard control.
 
-- Mic / audio-file recording → real `audio` clips on `audio` tracks
-- Sample-loaded clips (drag-drop wavs)
-- Per-track FX rack (EQ / compressor / chorus / phaser)
+Next moves:
+
 - MIDI device input via Web MIDI
 - Automation lanes per parameter
-- More instruments: FM synth, wavetable, sampler with chromatic playback
+- Wavetable instrument + chromatic sampler
+- Persist recorded audio (IndexedDB) so audio clips survive reload
 - Project library with multiple saved slots
 - Touch-optimized piano roll with pinch-zoom
-- Bounce / export to WAV using Tone.Offline
+- Offline (faster-than-real-time) bounce via `Tone.Offline`
 - Sync the MAGI ticker to actual engine + transport telemetry
 
 ## License
