@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { useStore } from '../../state/store';
+import { memo, useEffect, useRef, useState } from 'react';
+import { shallow } from 'zustand/shallow';
+import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
-import { saveProjectToStorage } from '../../state/store';
+import { transportClock, seek, usePlayhead } from '../../state/transportClock';
 
 export function Transport() {
-  const project = useStore((s) => s.project);
   const playing = useStore((s) => s.isPlaying);
   const micRecording = useStore((s) => s.micRecording);
   const bouncing = useStore((s) => s.bouncing);
   const metronome = useStore((s) => s.metronome);
+  const loopEnabled = useStore((s) => s.project.loopEnabled);
+  const bpm = useStore((s) => s.project.bpm);
+
   const setMetronome = useStore((s) => s.setMetronome);
   const setBpm = useStore((s) => s.setBpm);
   const setPlaying = useStore((s) => s.setPlaying);
@@ -16,41 +19,33 @@ export function Transport() {
   const setMicRecording = useStore((s) => s.setMicRecording);
   const setBouncing = useStore((s) => s.setBouncing);
   const setLoop = useStore((s) => s.setLoop);
-  const setPosition = useStore((s) => s.setPosition);
-  const positionBeats = useStore((s) => s.positionBeats);
   const addTrack = useStore((s) => s.addTrack);
   const addAudioClip = useStore((s) => s.addAudioClip);
 
   const recStartBeat = useRef(0);
   const recTrackId = useRef<string | null>(null);
 
-  // sync engine state from store
+  // sync transport-level engine params (cheap, only fires when these change)
+  const tparams = useStore(
+    (s) => ({
+      bpm: s.project.bpm,
+      numerator: s.project.numerator,
+      denominator: s.project.denominator,
+      masterVol: s.project.master.volume,
+      loopEnabled: s.project.loopEnabled,
+      loopStart: s.project.loopStart,
+      loopEnd: s.project.loopEnd,
+      metronome: s.metronome,
+    }),
+    shallow,
+  );
   useEffect(() => {
-    audioEngine.setBpm(project.bpm);
-    audioEngine.setTimeSig(project.numerator, project.denominator);
-    audioEngine.setMasterVolume(project.master.volume);
-    audioEngine.setLoop(project.loopEnabled, project.loopStart, project.loopEnd);
-    audioEngine.startMetronome(metronome);
-  }, [project.bpm, project.numerator, project.denominator, project.master.volume, project.loopEnabled, project.loopStart, project.loopEnd, metronome]);
-
-  // schedule whenever project content changes
-  useEffect(() => {
-    // ensure engine knows about every track
-    for (const t of project.tracks) audioEngine.ensureTrack(t);
-    audioEngine.schedule(project);
-  }, [project]);
-
-  // poll position
-  useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      const beats = audioEngine.getPositionBeats();
-      useStore.getState().setPosition(beats);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    audioEngine.setBpm(tparams.bpm);
+    audioEngine.setTimeSig(tparams.numerator, tparams.denominator);
+    audioEngine.setMasterVolume(tparams.masterVol);
+    audioEngine.setLoop(tparams.loopEnabled, tparams.loopStart, tparams.loopEnd);
+    audioEngine.startMetronome(tparams.metronome);
+  }, [tparams]);
 
   async function play() {
     await audioEngine.init();
@@ -66,12 +61,11 @@ export function Transport() {
     audioEngine.stop();
     setPlaying(false);
     setRecording(false);
-    setPosition(0);
+    transportClock.set(0);
   }
 
   async function toggleMicRec() {
     if (micRecording) {
-      // stop recording → decode → drop an audio clip
       const result = await audioEngine.stopMicRecording();
       setMicRecording(false);
       if (result) {
@@ -86,13 +80,12 @@ export function Transport() {
         alert('Microphone access denied or unavailable.');
         return;
       }
-      // ensure an audio track to host the take
       let audioTrack = useStore.getState().project.tracks.find((t) => t.kind === 'audio');
       if (!audioTrack) {
         audioTrack = addTrack('audio');
       }
       recTrackId.current = audioTrack.id;
-      recStartBeat.current = positionBeats;
+      recStartBeat.current = transportClock.getSnapshot();
       audioEngine.startMicRecording();
       setMicRecording(true);
     }
@@ -108,14 +101,14 @@ export function Transport() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${project.name.replace(/\s+/g, '_')}_bounce_${Date.now()}.webm`;
+        a.download = `${useStore.getState().project.name.replace(/\s+/g, '_')}_bounce_${Date.now()}.webm`;
         a.click();
         URL.revokeObjectURL(url);
       }
     } else {
       await audioEngine.init();
       audioEngine.stop();
-      setPosition(0);
+      transportClock.set(0);
       audioEngine.startMasterBounce();
       await audioEngine.play();
       setPlaying(true);
@@ -135,10 +128,11 @@ export function Transport() {
         background: 'rgba(0,0,0,0.6)',
         borderBottom: '1px solid rgba(255,106,0,0.4)',
         flexWrap: 'wrap',
+        contain: 'layout style',
       }}
     >
       <div style={{ display: 'flex', gap: 4 }}>
-        <button className="nerv-btn touch-target" onClick={() => { setPosition(0); audioEngine.setPosition(0); }} title="Return to start">
+        <button className="nerv-btn touch-target" onClick={() => seek(0)} title="Return to start">
           ⏮
         </button>
         <button
@@ -169,9 +163,9 @@ export function Transport() {
           ⭳ {bouncing ? 'STOP BOUNCE' : 'BOUNCE'}
         </button>
         <button
-          className={`nerv-btn touch-target ${project.loopEnabled ? 'is-active' : ''}`}
-          onClick={() => setLoop(!project.loopEnabled)}
-          aria-pressed={project.loopEnabled}
+          className={`nerv-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
+          onClick={() => setLoop(!loopEnabled)}
+          aria-pressed={loopEnabled}
         >
           ↻ LOOP
         </button>
@@ -191,7 +185,7 @@ export function Transport() {
         onClick={() => setShowBpmEdit((v) => !v)}
         style={{ minWidth: 100 }}
       >
-        TEMPO {project.bpm.toFixed(1)}
+        TEMPO {bpm.toFixed(1)}
       </button>
       {showBpmEdit && (
         <input
@@ -200,19 +194,26 @@ export function Transport() {
           min={30}
           max={300}
           step={0.5}
-          value={project.bpm}
+          value={bpm}
           onChange={(e) => setBpm(parseFloat(e.target.value || '120'))}
           style={{ width: 80, padding: 4 }}
         />
       )}
 
-      <BpmSlider />
+      <input
+        className="nerv-slider"
+        type="range"
+        min={60}
+        max={200}
+        step={0.5}
+        value={bpm}
+        onChange={(e) => setBpm(parseFloat(e.target.value))}
+        style={{ width: 160 }}
+      />
 
       <button
         className="nerv-btn nerv-btn--ghost touch-target"
-        onClick={() => {
-          saveProjectToStorage();
-        }}
+        onClick={() => saveProjectToStorage()}
         title="Save current project to local storage"
       >
         💾 SAVE
@@ -223,28 +224,9 @@ export function Transport() {
   );
 }
 
-function BpmSlider() {
-  const bpm = useStore((s) => s.project.bpm);
-  const setBpm = useStore((s) => s.setBpm);
-  return (
-    <input
-      className="nerv-slider"
-      type="range"
-      min={60}
-      max={200}
-      step={0.5}
-      value={bpm}
-      onChange={(e) => setBpm(parseFloat(e.target.value))}
-      style={{ width: 160 }}
-    />
-  );
-}
-
-function PositionBar() {
-  const project = useStore((s) => s.project);
-  const positionBeats = useStore((s) => s.positionBeats);
-  const setPosition = useStore((s) => s.setPosition);
-  const totalBeats = project.lengthBars * project.numerator;
+const PositionBar = memo(function PositionBar() {
+  const totalBeats = useStore((s) => s.project.lengthBars * s.project.numerator);
+  const positionBeats = usePlayhead();
   const pct = Math.min(1, positionBeats / totalBeats);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -252,9 +234,7 @@ function PositionBar() {
     const r = trackRef.current?.getBoundingClientRect();
     if (!r) return;
     const x = Math.max(0, Math.min(r.width, clientX - r.left));
-    const beats = (x / r.width) * totalBeats;
-    setPosition(beats);
-    audioEngine.setPosition(beats);
+    seek((x / r.width) * totalBeats);
   }
   return (
     <div
@@ -267,6 +247,7 @@ function PositionBar() {
         background: 'rgba(0,0,0,0.6)',
         border: '1px solid rgba(255,106,0,0.4)',
         cursor: 'pointer',
+        contain: 'strict',
       }}
     >
       <div
@@ -277,6 +258,7 @@ function PositionBar() {
           bottom: 0,
           width: `${pct * 100}%`,
           background: 'linear-gradient(90deg, rgba(255,106,0,0.4), rgba(255,106,0,0.8))',
+          willChange: 'width',
         }}
       />
       <div
@@ -294,4 +276,4 @@ function PositionBar() {
       </div>
     </div>
   );
-}
+});

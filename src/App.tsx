@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import { loadProjectFromStorage, saveProjectToStorage, useStore } from './state/store';
 import { audioEngine } from './audio/engine';
 import { StatusBar } from './components/hud/StatusBar';
@@ -12,6 +13,7 @@ import { PianoRoll } from './components/pianoroll/PianoRoll';
 import { ProjectView } from './components/project/ProjectView';
 import { FxPanel } from './components/fx/FxPanel';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
+import { useEngineSync } from './hooks/useEngineSync';
 
 const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
   { id: 'arrange', label: 'ARRANGE' },
@@ -23,12 +25,25 @@ const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[
   { id: 'project', label: 'PROJECT' },
 ];
 
+async function bootEngine() {
+  await audioEngine.init();
+  const st = useStore.getState();
+  const p = st.project;
+  audioEngine.setBpm(p.bpm);
+  audioEngine.setTimeSig(p.numerator, p.denominator);
+  audioEngine.setMasterVolume(p.master.volume);
+  audioEngine.setLoop(p.loopEnabled, p.loopStart, p.loopEnd);
+  audioEngine.startMetronome(st.metronome);
+  audioEngine.schedule(p);
+}
+
 export default function App() {
   const [booted, setBooted] = useState(false);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
 
   useGlobalKeys();
+  useEngineSync();
 
   useEffect(() => {
     loadProjectFromStorage();
@@ -54,7 +69,7 @@ export default function App() {
   return (
     <div className="scanlines crt-flicker" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {!booted && <BootSequence onDone={async () => {
-        await audioEngine.init();
+        await bootEngine();
         setBooted(true);
       }} />}
 
@@ -95,8 +110,14 @@ export default function App() {
   );
 }
 
-function FooterBar() {
-  const project = useStore((s) => s.project);
+const FooterBar = memo(function FooterBar() {
+  const { trackCount, clipCount } = useStore(
+    (s) => ({
+      trackCount: s.project.tracks.length,
+      clipCount: s.project.tracks.reduce((n, t) => n + t.clips.length, 0),
+    }),
+    shallow,
+  );
   const playing = useStore((s) => s.isPlaying);
   return (
     <div
@@ -111,11 +132,11 @@ function FooterBar() {
       }}
     >
       <span className="hud-readout--green hud-readout">● ENGINE OK</span>
-      <span className="hud-readout">TRACKS {String(project.tracks.length).padStart(2, '0')}</span>
-      <span className="hud-readout">CLIPS {String(project.tracks.reduce((n, t) => n + t.clips.length, 0)).padStart(3, '0')}</span>
+      <span className="hud-readout">TRACKS {String(trackCount).padStart(2, '0')}</span>
+      <span className="hud-readout">CLIPS {String(clipCount).padStart(3, '0')}</span>
       <span className="hud-readout">{playing ? 'TRANSPORT ROLLING' : 'TRANSPORT HALTED'}</span>
       <div style={{ flex: 1 }} />
       <span className="hud-readout--dim hud-readout">A.T. FIELD STABLE // SYNC 87% // NO PATTERN BLUE</span>
     </div>
   );
-}
+});

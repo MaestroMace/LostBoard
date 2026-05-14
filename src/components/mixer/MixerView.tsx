@@ -1,74 +1,35 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo } from 'react';
 import { useStore } from '../../state/store';
-import { audioEngine } from '../../audio/engine';
-import { Meter } from '../hud/Meter';
+import type { Track } from '../../audio/types';
+import { LiveMeter } from '../hud/Meter';
 import { Knob } from '../hud/Knob';
 
 export function MixerView() {
-  const project = useStore((s) => s.project);
-  const updateTrack = useStore((s) => s.updateTrack);
+  const tracks = useStore((s) => s.project.tracks);
+  const masterVolume = useStore((s) => s.project.master.volume);
   const setMasterVolume = useStore((s) => s.setMasterVolume);
-  const selectTrack = useStore((s) => s.selectTrack);
-  const selectedTrackId = useStore((s) => s.selectedTrackId);
 
   return (
-    <div style={{ flex: 1, minHeight: 0, padding: 12, display: 'flex', gap: 8, overflowX: 'auto' }} className="hex-grid-bg">
-      {project.tracks.map((t) => (
-        <ChannelStrip
-          key={t.id}
-          track={t}
-          selected={t.id === selectedTrackId}
-          onSelect={() => selectTrack(t.id)}
-          onUpdate={(p) => updateTrack(t.id, p)}
-        />
+    <div
+      style={{ flex: 1, minHeight: 0, padding: 12, display: 'flex', gap: 8, overflowX: 'auto', contain: 'layout style' }}
+      className="hex-grid-bg"
+    >
+      {tracks.map((t) => (
+        <ChannelStrip key={t.id} track={t} />
       ))}
-      <MasterStrip volume={project.master.volume} onVolume={setMasterVolume} />
+      <MasterStrip volume={masterVolume} onVolume={setMasterVolume} />
     </div>
   );
 }
 
-function useMeter(trackId: string | 'master') {
-  const [level, setLevel] = useState(-60);
-  useEffect(() => {
-    let raf = 0;
-    function tick() {
-      // We can't easily get per-track here without exposing trackNodes; use master analyser for now
-      // Read overall by sampling analyser RMS, scaled lightly
-      const analyser = audioEngine.getAnalyser();
-      if (analyser) {
-        const buf = analyser.getValue();
-        if (Array.isArray(buf) || ArrayBuffer.isView(buf)) {
-          let sum = 0;
-          const arr = buf as Float32Array;
-          for (let i = 0; i < arr.length; i++) sum += arr[i] * arr[i];
-          const rms = Math.sqrt(sum / arr.length);
-          const db = 20 * Math.log10(rms || 1e-6);
-          setLevel(db);
-        }
-      }
-      raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [trackId]);
-  return level;
-}
+const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
+  const selected = useStore((s) => s.selectedTrackId === track.id);
+  const selectTrack = useStore((s) => s.selectTrack);
+  const updateTrack = useStore((s) => s.updateTrack);
 
-function ChannelStrip({
-  track,
-  selected,
-  onSelect,
-  onUpdate,
-}: {
-  track: ReturnType<typeof useStore.getState>['project']['tracks'][number];
-  selected: boolean;
-  onSelect: () => void;
-  onUpdate: (p: Partial<typeof track>) => void;
-}) {
-  const level = useMeter(track.id);
   return (
     <div
-      onClick={onSelect}
+      onClick={() => selectTrack(track.id)}
       style={{
         width: 116,
         flexShrink: 0,
@@ -82,6 +43,7 @@ function ChannelStrip({
         gap: 6,
         clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
         cursor: 'pointer',
+        contain: 'layout style',
       }}
     >
       <div style={{ width: '100%', height: 4, background: track.color, opacity: 0.7 }} />
@@ -95,14 +57,14 @@ function ChannelStrip({
         size={36}
         label="PAN"
         display={(v) => (v === 0 ? 'C' : v < 0 ? `L${Math.round(-v * 100)}` : `R${Math.round(v * 100)}`)}
-        onChange={(v) => onUpdate({ pan: v })}
+        onChange={(v) => updateTrack(track.id, { pan: v })}
       />
       <div style={{ display: 'flex', gap: 4 }}>
         <button
           className={`nerv-btn nerv-btn--icon ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            onUpdate({ mute: !track.mute });
+            updateTrack(track.id, { mute: !track.mute });
           }}
           style={{ fontSize: 9, minWidth: 28, padding: '2px 4px' }}
         >
@@ -112,7 +74,7 @@ function ChannelStrip({
           className={`nerv-btn nerv-btn--green nerv-btn--icon ${track.solo ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            onUpdate({ solo: !track.solo });
+            updateTrack(track.id, { solo: !track.solo });
           }}
           style={{ fontSize: 9, minWidth: 28, padding: '2px 4px' }}
         >
@@ -127,25 +89,26 @@ function ChannelStrip({
           max={6}
           step={0.5}
           value={track.volume}
-          onChange={(e) => onUpdate({ volume: parseFloat(e.target.value) })}
+          onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
           onClick={(e) => e.stopPropagation()}
-          style={{
-            WebkitAppearance: 'slider-vertical' as any,
-            width: 22,
-            height: 140,
-          }}
+          style={{ WebkitAppearance: 'slider-vertical' as any, width: 22, height: 140 }}
         />
-        <Meter db={level} height={140} />
+        <LiveMeter meterKey={track.id} height={140} />
       </div>
       <div className="display" style={{ fontSize: 10, width: '100%', justifyContent: 'center' }}>
         {track.volume.toFixed(1)} dB
       </div>
     </div>
   );
-}
+});
 
-function MasterStrip({ volume, onVolume }: { volume: number; onVolume: (v: number) => void }) {
-  const level = useMeter('master');
+const MasterStrip = memo(function MasterStrip({
+  volume,
+  onVolume,
+}: {
+  volume: number;
+  onVolume: (v: number) => void;
+}) {
   return (
     <div
       style={{
@@ -160,6 +123,7 @@ function MasterStrip({ volume, onVolume }: { volume: number; onVolume: (v: numbe
         alignItems: 'center',
         gap: 6,
         clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        contain: 'layout style',
       }}
     >
       <div className="hud-label" style={{ fontSize: 9 }}>MASTER // OUT</div>
@@ -173,13 +137,9 @@ function MasterStrip({ volume, onVolume }: { volume: number; onVolume: (v: numbe
           step={0.5}
           value={volume}
           onChange={(e) => onVolume(parseFloat(e.target.value))}
-          style={{
-            WebkitAppearance: 'slider-vertical' as any,
-            width: 22,
-            height: 150,
-          }}
+          style={{ WebkitAppearance: 'slider-vertical' as any, width: 22, height: 150 }}
         />
-        <Meter db={level} height={150} />
+        <LiveMeter meterKey="master" height={150} />
       </div>
       <div className="display display--big" style={{ width: '100%', justifyContent: 'center' }}>
         {volume.toFixed(1)}
@@ -187,4 +147,4 @@ function MasterStrip({ volume, onVolume }: { volume: number; onVolume: (v: numbe
       <div className="hud-readout--green hud-readout" style={{ fontSize: 9 }}>● ACTIVE</div>
     </div>
   );
-}
+});

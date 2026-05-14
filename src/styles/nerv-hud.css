@@ -1,6 +1,7 @@
 /* ---------------- N.E.R.V. HUD COMPONENTS ---------------- */
 
-/* Scanlines overlay */
+/* Scanlines overlay — promoted to its own compositor layer so scrolling
+   content underneath never repaints it. No mix-blend-mode (expensive on iOS). */
 .scanlines::before {
   content: '';
   pointer-events: none;
@@ -13,9 +14,10 @@
     var(--nerv-scanline) 2px,
     var(--nerv-scanline) 3px
   );
-  mix-blend-mode: multiply;
-  opacity: 0.35;
+  opacity: 0.22;
   z-index: 9999;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .crt-flicker {
@@ -277,7 +279,7 @@
 .meter__bar {
   width: 100%;
   background: linear-gradient(to top, var(--nerv-green) 0%, var(--nerv-green) 65%, var(--nerv-amber) 80%, var(--nerv-red) 95%);
-  transition: height 30ms linear;
+  /* driven directly by the meter bus at 60fps — no CSS transition */
 }
 
 /* Hex grid background */

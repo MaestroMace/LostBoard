@@ -25,6 +25,7 @@ class Engine {
   private delay!: Tone.FeedbackDelay;
   private analyser!: Tone.Analyser;
   private fft!: Tone.Analyser;
+  private masterMeter!: Tone.Meter;
   private trackNodes = new Map<string, TrackNode>();
   private scheduledIds: number[] = [];
   private metronomeSynth?: Tone.MembraneSynth;
@@ -47,6 +48,7 @@ class Engine {
     this.master = new Tone.Limiter(-1);
     this.analyser = new Tone.Analyser('waveform', 1024);
     this.fft = new Tone.Analyser('fft', 64);
+    this.masterMeter = new Tone.Meter({ smoothing: 0.7 });
     this.reverb = new Tone.Reverb({ decay: 3, preDelay: 0.02, wet: 1 });
     this.delay = new Tone.FeedbackDelay({ delayTime: '8n', feedback: 0.35, wet: 1 });
     await this.reverb.generate();
@@ -55,6 +57,7 @@ class Engine {
     this.masterGain.connect(this.master);
     this.master.connect(this.analyser);
     this.master.connect(this.fft);
+    this.master.connect(this.masterMeter);
     this.master.toDestination();
     this.masterRecorder = new Tone.Recorder();
     this.master.connect(this.masterRecorder);
@@ -240,6 +243,12 @@ class Engine {
 
   getTrackLevel(id: string): number {
     return this.trackNodes.get(id)?.getLevel() ?? -60;
+  }
+
+  getMasterLevel(): number {
+    if (!this.inited) return -60;
+    const v = this.masterMeter.getValue();
+    return typeof v === 'number' ? v : v[0];
   }
 
   trigger(trackId: string, pitch: number | DrumPad, velocity = 0.9, duration = '8n') {

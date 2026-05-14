@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import { useStore } from '../../state/store';
+import { usePlayhead } from '../../state/transportClock';
 import { Scope } from './Scope';
 
 const MESSAGES = [
@@ -15,22 +17,19 @@ const MESSAGES = [
 ];
 
 export function StatusBar() {
-  const project = useStore((s) => s.project);
+  const { name, bpm, numerator, denominator } = useStore(
+    (s) => ({
+      name: s.project.name,
+      bpm: s.project.bpm,
+      numerator: s.project.numerator,
+      denominator: s.project.denominator,
+    }),
+    shallow,
+  );
   const playing = useStore((s) => s.isPlaying);
   const micRecording = useStore((s) => s.micRecording);
   const bouncing = useStore((s) => s.bouncing);
   const recording = micRecording || bouncing;
-  const positionBeats = useStore((s) => s.positionBeats);
-
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const i = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(i);
-  }, []);
-
-  const bar = Math.floor(positionBeats / project.numerator) + 1;
-  const beat = Math.floor(positionBeats % project.numerator) + 1;
-  const sixteenth = Math.floor(((positionBeats % 1) * 4)) + 1;
 
   return (
     <div
@@ -43,34 +42,29 @@ export function StatusBar() {
         padding: '6px 12px',
         background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
         borderBottom: '1px solid rgba(255,106,0,0.5)',
+        contain: 'layout style',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <NervMark />
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>NERV / M.A.G.I.</span>
-          <span className="hud-value" style={{ fontSize: 12 }}>LOSTBOARD // {project.name}</span>
+          <span className="hud-value" style={{ fontSize: 12 }}>LOSTBOARD // {name}</span>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <Indicator label="PLAY" on={playing} color="green" />
         <Indicator label="REC" on={recording} color="red" />
-        <div className="display display--big" style={{ minWidth: 110 }}>
-          <span style={{ color: 'var(--nerv-orange-bright)' }}>{String(bar).padStart(3, '0')}</span>
-          <span style={{ color: 'rgba(255,106,0,0.5)' }}>:</span>
-          <span>{String(beat).padStart(2, '0')}</span>
-          <span style={{ color: 'rgba(255,106,0,0.5)' }}>:</span>
-          <span style={{ color: 'var(--nerv-amber)' }}>{String(sixteenth).padStart(2, '0')}</span>
-        </div>
+        <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 11 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>BPM</span>
-          <span style={{ color: 'var(--nerv-orange-bright)' }}>{project.bpm.toFixed(1)}</span>
+          <span style={{ color: 'var(--nerv-orange-bright)' }}>{bpm.toFixed(1)}</span>
         </div>
         <div className="display" style={{ fontSize: 11 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>SIG</span>
           <span>
-            {project.numerator}/{project.denominator}
+            {numerator}/{denominator}
           </span>
         </div>
       </div>
@@ -80,12 +74,40 @@ export function StatusBar() {
         <Scope width={90} height={38} mode="fft" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <Ticker />
-          <div className="hud-readout">
-            <span className="glyph-cross" style={{ marginRight: 6 }} />
-            {now.toTimeString().slice(0, 8)}
-          </div>
+          <HudClock />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Leaf: only this re-renders as the playhead moves. */
+const PositionReadout = memo(function PositionReadout({ numerator }: { numerator: number }) {
+  const positionBeats = usePlayhead();
+  const bar = Math.floor(positionBeats / numerator) + 1;
+  const beat = Math.floor(positionBeats % numerator) + 1;
+  const sixteenth = Math.floor((positionBeats % 1) * 4) + 1;
+  return (
+    <div className="display display--big" style={{ minWidth: 110 }}>
+      <span style={{ color: 'var(--nerv-orange-bright)' }}>{String(bar).padStart(3, '0')}</span>
+      <span style={{ color: 'rgba(255,106,0,0.5)' }}>:</span>
+      <span>{String(beat).padStart(2, '0')}</span>
+      <span style={{ color: 'rgba(255,106,0,0.5)' }}>:</span>
+      <span style={{ color: 'var(--nerv-amber)' }}>{String(sixteenth).padStart(2, '0')}</span>
+    </div>
+  );
+});
+
+function HudClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const i = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(i);
+  }, []);
+  return (
+    <div className="hud-readout">
+      <span className="glyph-cross" style={{ marginRight: 6 }} />
+      {now.toTimeString().slice(0, 8)}
     </div>
   );
 }

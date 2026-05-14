@@ -1,32 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useRef } from 'react';
 import { useStore } from '../../state/store';
 import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
+import { usePlayhead } from '../../state/transportClock';
 
 const TRACK_HEAD_W = 196;
 const ROW_H = 64;
 const BEAT_W = 24;
 
 export function ArrangeView() {
-  const project = useStore((s) => s.project);
-  const selectedTrackId = useStore((s) => s.selectedTrackId);
-  const selectedClipId = useStore((s) => s.selectedClipId);
-  const selectTrack = useStore((s) => s.selectTrack);
-  const selectClip = useStore((s) => s.selectClip);
-  const addClip = useStore((s) => s.addClip);
-  const moveClip = useStore((s) => s.moveClip);
-  const resizeClip = useStore((s) => s.resizeClip);
-  const removeClip = useStore((s) => s.removeClip);
-  const updateTrack = useStore((s) => s.updateTrack);
+  const tracks = useStore((s) => s.project.tracks);
+  const totalBeats = useStore((s) => s.project.lengthBars * s.project.numerator);
   const addTrack = useStore((s) => s.addTrack);
-  const removeTrack = useStore((s) => s.removeTrack);
-  const positionBeats = useStore((s) => s.positionBeats);
-  const setView = useStore((s) => s.setView);
 
-  const totalBeats = project.lengthBars * project.numerator;
   const timelineW = totalBeats * BEAT_W;
-  const playheadX = positionBeats * BEAT_W;
-
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -41,6 +28,7 @@ export function ArrangeView() {
             borderRight: '1px solid rgba(255,106,0,0.4)',
             display: 'flex',
             flexDirection: 'column',
+            contain: 'layout style',
           }}
         >
           <div
@@ -67,43 +55,24 @@ export function ArrangeView() {
             </div>
           </div>
           <div style={{ overflow: 'auto', flex: 1 }}>
-            {project.tracks.map((t) => (
-              <TrackHeader
-                key={t.id}
-                track={t}
-                selected={t.id === selectedTrackId}
-                onSelect={() => selectTrack(t.id)}
-                onUpdate={(p) => updateTrack(t.id, p)}
-                onRemove={() => removeTrack(t.id)}
-                onOpenInstrument={() => {
-                  selectTrack(t.id);
-                  setView(t.kind === 'drum' ? 'sequencer' : 'instrument');
-                }}
-              />
+            {tracks.map((t) => (
+              <TrackHeader key={t.id} track={t} />
             ))}
           </div>
         </div>
 
         {/* Timeline */}
-        <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', position: 'relative' }} className="hex-grid-bg">
+        <div
+          ref={scrollRef}
+          style={{ flex: 1, overflow: 'auto', position: 'relative', contain: 'layout style' }}
+          className="hex-grid-bg"
+        >
           <Ruler beats={totalBeats} />
           <div style={{ position: 'relative', width: timelineW, minWidth: '100%' }}>
-            {project.tracks.map((t) => (
-              <TrackLane
-                key={t.id}
-                track={t}
-                selectedClipId={selectedClipId}
-                onSelectClip={selectClip}
-                onAddClip={(beat) => {
-                  selectTrack(t.id);
-                  addClip(t.id, beat, 4);
-                }}
-                onMoveClip={moveClip}
-                onResizeClip={resizeClip}
-                onRemoveClip={removeClip}
-              />
+            {tracks.map((t) => (
+              <TrackLane key={t.id} trackId={t.id} clips={t.clips} color={t.color} />
             ))}
-            <Playhead x={playheadX} height={project.tracks.length * ROW_H + 32} />
+            <Playhead height={tracks.length * ROW_H + 32} />
           </div>
         </div>
       </div>
@@ -111,7 +80,7 @@ export function ArrangeView() {
   );
 }
 
-function Ruler({ beats }: { beats: number }) {
+const Ruler = memo(function Ruler({ beats }: { beats: number }) {
   return (
     <div
       style={{
@@ -123,6 +92,7 @@ function Ruler({ beats }: { beats: number }) {
         borderBottom: '1px solid rgba(255,106,0,0.5)',
         display: 'flex',
         alignItems: 'flex-end',
+        contain: 'layout style paint',
       }}
     >
       {Array.from({ length: beats + 1 }).map((_, i) => {
@@ -139,10 +109,7 @@ function Ruler({ beats }: { beats: number }) {
             }}
           >
             {isBar && (
-              <span
-                className="hud-label"
-                style={{ position: 'absolute', top: -16, left: 2, fontSize: 9 }}
-              >
+              <span className="hud-label" style={{ position: 'absolute', top: -16, left: 2, fontSize: 9 }}>
                 {i / 4 + 1}
               </span>
             )}
@@ -151,26 +118,19 @@ function Ruler({ beats }: { beats: number }) {
       })}
     </div>
   );
-}
+});
 
-function TrackHeader({
-  track,
-  selected,
-  onSelect,
-  onUpdate,
-  onRemove,
-  onOpenInstrument,
-}: {
-  track: Track;
-  selected: boolean;
-  onSelect: () => void;
-  onUpdate: (p: Partial<Track>) => void;
-  onRemove: () => void;
-  onOpenInstrument: () => void;
-}) {
+/** Memoized track header — only re-renders when ITS track object changes. */
+const TrackHeader = memo(function TrackHeader({ track }: { track: Track }) {
+  const selected = useStore((s) => s.selectedTrackId === track.id);
+  const selectTrack = useStore((s) => s.selectTrack);
+  const updateTrack = useStore((s) => s.updateTrack);
+  const removeTrack = useStore((s) => s.removeTrack);
+  const setView = useStore((s) => s.setView);
+
   return (
     <div
-      onClick={onSelect}
+      onClick={() => selectTrack(track.id)}
       style={{
         height: ROW_H,
         padding: '4px 6px',
@@ -181,6 +141,7 @@ function TrackHeader({
         flexDirection: 'column',
         gap: 2,
         cursor: 'pointer',
+        contain: 'layout style',
       }}
     >
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: track.color }} />
@@ -197,7 +158,7 @@ function TrackHeader({
             minWidth: 0,
           }}
           value={track.name}
-          onChange={(e) => onUpdate({ name: e.target.value })}
+          onChange={(e) => updateTrack(track.id, { name: e.target.value })}
           onClick={(e) => e.stopPropagation()}
         />
         {track.kind === 'audio' ? (
@@ -207,7 +168,8 @@ function TrackHeader({
             className="nerv-btn nerv-btn--icon"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenInstrument();
+              selectTrack(track.id);
+              setView(track.kind === 'drum' ? 'sequencer' : 'instrument');
             }}
             title="Open instrument"
           >
@@ -218,7 +180,7 @@ function TrackHeader({
           className="nerv-btn nerv-btn--icon"
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm(`Delete track "${track.name}"?`)) onRemove();
+            if (confirm(`Delete track "${track.name}"?`)) removeTrack(track.id);
           }}
           title="Delete track"
         >
@@ -230,7 +192,7 @@ function TrackHeader({
           className={`nerv-btn nerv-btn--icon ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            onUpdate({ mute: !track.mute });
+            updateTrack(track.id, { mute: !track.mute });
           }}
           style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
         >
@@ -240,7 +202,7 @@ function TrackHeader({
           className={`nerv-btn nerv-btn--green nerv-btn--icon ${track.solo ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            onUpdate({ solo: !track.solo });
+            updateTrack(track.id, { solo: !track.solo });
           }}
           style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
         >
@@ -250,7 +212,7 @@ function TrackHeader({
           className={`nerv-btn nerv-btn--rec nerv-btn--icon ${track.arm ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            onUpdate({ arm: !track.arm });
+            updateTrack(track.id, { arm: !track.arm });
           }}
           style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
         >
@@ -263,7 +225,7 @@ function TrackHeader({
           max={6}
           step={0.5}
           value={track.volume}
-          onChange={(e) => onUpdate({ volume: parseFloat(e.target.value) })}
+          onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
           onClick={(e) => e.stopPropagation()}
           style={{ flex: 1, height: 4 }}
         />
@@ -273,112 +235,101 @@ function TrackHeader({
       </div>
     </div>
   );
-}
+});
 
-function TrackLane({
-  track,
-  selectedClipId,
-  onSelectClip,
-  onAddClip,
-  onMoveClip,
-  onResizeClip,
-  onRemoveClip,
+/**
+ * Memoized lane — re-renders only when this track's clip list / colour
+ * changes, NOT when the track's mute/volume/synth params change.
+ */
+const TrackLane = memo(function TrackLane({
+  trackId,
+  clips,
+  color,
 }: {
-  track: Track;
-  selectedClipId: string | null;
-  onSelectClip: (id: string) => void;
-  onAddClip: (beat: number) => void;
-  onMoveClip: (id: string, newStart: number) => void;
-  onResizeClip: (id: string, newLength: number) => void;
-  onRemoveClip: (id: string) => void;
+  trackId: string;
+  clips: Clip[];
+  color: string;
 }) {
+  const addClip = useStore((s) => s.addClip);
+  const selectTrack = useStore((s) => s.selectTrack);
+
   return (
     <div
       style={{
         position: 'relative',
         height: ROW_H,
         borderBottom: '1px solid rgba(255,106,0,0.18)',
-        background: `linear-gradient(180deg, ${track.color}10, transparent)`,
+        background: `linear-gradient(180deg, ${color}10, transparent)`,
+        contain: 'layout style',
       }}
       onDoubleClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
         const beat = Math.max(0, Math.floor((e.clientX - r.left) / BEAT_W));
-        onAddClip(beat);
+        selectTrack(trackId);
+        addClip(trackId, beat, 4);
       }}
     >
-      {/* beat grid lines */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage:
-            `linear-gradient(90deg, rgba(255,106,0,0.18) 1px, transparent 1px)`,
+          backgroundImage: 'linear-gradient(90deg, rgba(255,106,0,0.18) 1px, transparent 1px)',
           backgroundSize: `${BEAT_W * 4}px 100%`,
+          pointerEvents: 'none',
         }}
       />
-      {track.clips.map((c) => (
-        <ClipBlock
-          key={c.id}
-          clip={c}
-          color={track.color}
-          selected={c.id === selectedClipId}
-          onSelect={() => onSelectClip(c.id)}
-          onMove={(s) => onMoveClip(c.id, s)}
-          onResize={(l) => onResizeClip(c.id, l)}
-          onRemove={() => onRemoveClip(c.id)}
-        />
+      {clips.map((c) => (
+        <ClipBlock key={c.id} clip={c} color={color} />
       ))}
     </div>
   );
-}
+});
 
-function ClipBlock({
-  clip,
-  color,
-  selected,
-  onSelect,
-  onMove,
-  onResize,
-  onRemove,
-}: {
-  clip: Clip;
-  color: string;
-  selected: boolean;
-  onSelect: () => void;
-  onMove: (start: number) => void;
-  onResize: (length: number) => void;
-  onRemove: () => void;
-}) {
-  const setView = useStore((s) => s.setView);
+/** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
+const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {
+  const selected = useStore((s) => s.selectedClipId === clip.id);
+  const selectClip = useStore((s) => s.selectClip);
   const selectTrack = useStore((s) => s.selectTrack);
-  const start = useRef(0);
-  const baseStart = useRef(0);
-  const baseLen = useRef(0);
-  const mode = useRef<'move' | 'resize' | null>(null);
+  const setView = useStore((s) => s.setView);
+  const moveClip = useStore((s) => s.moveClip);
+  const resizeClip = useStore((s) => s.resizeClip);
+  const removeClip = useStore((s) => s.removeClip);
 
-  function down(e: React.PointerEvent, m: 'move' | 'resize') {
+  const elRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ mode: 'move' | 'resize'; startX: number; baseStart: number; baseLen: number } | null>(
+    null,
+  );
+
+  function down(e: React.PointerEvent, mode: 'move' | 'resize') {
     e.stopPropagation();
-    onSelect();
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    start.current = e.clientX;
-    baseStart.current = clip.start;
-    baseLen.current = clip.length;
-    mode.current = m;
+    selectClip(clip.id);
+    elRef.current?.setPointerCapture(e.pointerId);
+    drag.current = { mode, startX: e.clientX, baseStart: clip.start, baseLen: clip.length };
   }
   function move(e: React.PointerEvent) {
-    if (!mode.current) return;
-    const dx = e.clientX - start.current;
-    const dBeats = Math.round(dx / BEAT_W);
-    if (mode.current === 'move') onMove(Math.max(0, baseStart.current + dBeats));
-    else onResize(Math.max(0.5, baseLen.current + dBeats));
+    const d = drag.current;
+    const el = elRef.current;
+    if (!d || !el) return;
+    const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
+    if (d.mode === 'move') {
+      el.style.left = `${Math.max(0, d.baseStart + dBeats) * BEAT_W}px`;
+    } else {
+      el.style.width = `${Math.max(0.5, d.baseLen + dBeats) * BEAT_W - 2}px`;
+    }
   }
   function up(e: React.PointerEvent) {
-    mode.current = null;
-    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    const d = drag.current;
+    if (!d) return;
+    const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
+    if (d.mode === 'move') moveClip(clip.id, Math.max(0, d.baseStart + dBeats));
+    else resizeClip(clip.id, Math.max(0.5, d.baseLen + dBeats));
+    drag.current = null;
+    elRef.current?.releasePointerCapture(e.pointerId);
   }
 
   return (
     <div
+      ref={elRef}
       onPointerDown={(e) => down(e, 'move')}
       onPointerMove={move}
       onPointerUp={up}
@@ -386,7 +337,7 @@ function ClipBlock({
       onDoubleClick={(e) => {
         e.stopPropagation();
         selectTrack(clip.trackId);
-        setView(clip.kind === 'pattern' ? 'sequencer' : 'pianoroll');
+        setView(clip.kind === 'pattern' ? 'sequencer' : clip.kind === 'midi' ? 'pianoroll' : 'arrange');
       }}
       style={{
         position: 'absolute',
@@ -401,6 +352,8 @@ function ClipBlock({
         boxShadow: selected ? `0 0 12px ${color}` : 'none',
         overflow: 'hidden',
         userSelect: 'none',
+        touchAction: 'none',
+        contain: 'layout style paint',
       }}
     >
       <div
@@ -422,8 +375,9 @@ function ClipBlock({
         className="nerv-btn nerv-btn--icon"
         onClick={(e) => {
           e.stopPropagation();
-          onRemove();
+          removeClip(clip.id);
         }}
+        onPointerDown={(e) => e.stopPropagation()}
         style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '2px 4px', fontSize: 9 }}
       >
         ✕
@@ -435,16 +389,17 @@ function ClipBlock({
           right: 0,
           top: 0,
           bottom: 0,
-          width: 8,
+          width: 10,
           cursor: 'ew-resize',
           background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2))',
+          touchAction: 'none',
         }}
       />
     </div>
   );
-}
+});
 
-function ClipPreview({ clip }: { clip: Clip }) {
+const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
   if (clip.kind === 'midi') {
     if (clip.notes.length === 0) return null;
     const lo = Math.min(...clip.notes.map((n) => n.pitch));
@@ -478,7 +433,6 @@ function ClipPreview({ clip }: { clip: Clip }) {
   if (clip.kind === 'audio') {
     return <AudioWaveform sampleId={clip.sampleId} width={clip.length * BEAT_W} />;
   }
-  // pattern preview: dots
   return (
     <svg
       width="100%"
@@ -494,7 +448,7 @@ function ClipPreview({ clip }: { clip: Clip }) {
       )}
     </svg>
   );
-}
+});
 
 function AudioWaveform({ sampleId, width }: { sampleId: string; width: number }) {
   const buffer = audioEngine.getSample(sampleId);
@@ -502,7 +456,14 @@ function AudioWaveform({ sampleId, width }: { sampleId: string; width: number })
     return (
       <div
         className="hud-readout--dim hud-readout"
-        style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8 }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 8,
+        }}
       >
         SAMPLE NOT LOADED
       </div>
@@ -566,20 +527,24 @@ function AudioImportButton({ trackId }: { trackId: string }) {
   );
 }
 
-function Playhead({ x, height }: { x: number; height: number }) {
+/** Leaf — the only thing that re-renders as the playhead moves. */
+const Playhead = memo(function Playhead({ height }: { height: number }) {
+  const positionBeats = usePlayhead();
   return (
     <div
       style={{
         position: 'absolute',
         top: 0,
-        left: x,
+        left: 0,
         width: 2,
         height,
         background: 'var(--nerv-green)',
         boxShadow: '0 0 6px var(--nerv-green)',
         pointerEvents: 'none',
         zIndex: 10,
+        transform: `translateX(${positionBeats * BEAT_W}px)`,
+        willChange: 'transform',
       }}
     />
   );
-}
+});

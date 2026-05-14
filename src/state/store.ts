@@ -182,7 +182,6 @@ type State = {
   isPlaying: boolean;
   isRecording: boolean;
   metronome: boolean;
-  positionBeats: number;
   /** mic recording in progress */
   micRecording: boolean;
   /** master bounce in progress */
@@ -199,7 +198,6 @@ type Actions = {
   setMasterVolume(db: number): void;
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
-  setPosition(beats: number): void;
   setPlaying(b: boolean): void;
   setRecording(b: boolean): void;
 
@@ -243,7 +241,6 @@ export const useStore = create<Store>()(
     isPlaying: false,
     isRecording: false,
     metronome: false,
-    positionBeats: 0,
     micRecording: false,
     bouncing: false,
 
@@ -269,7 +266,6 @@ export const useStore = create<Store>()(
         },
       }),
     setMetronome: (b) => set({ metronome: b }),
-    setPosition: (beats) => set({ positionBeats: beats }),
     setPlaying: (b) => set({ isPlaying: b }),
     setRecording: (b) => set({ isRecording: b }),
     setMicRecording: (b) => set({ micRecording: b }),

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from '../state/store';
 import { audioEngine } from '../audio/engine';
 import { DRUM_PADS } from '../audio/types';
+import { seek } from '../state/transportClock';
 
 /**
  * Global keyboard control:
@@ -66,7 +67,7 @@ export function useGlobalKeys() {
         e.preventDefault();
         audioEngine.stop();
         st.setPlaying(false);
-        st.setPosition(0);
+        seek(0);
         return;
       }
       if (key === 'l') {
