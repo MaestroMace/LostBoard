@@ -162,14 +162,20 @@ class Engine {
     return this.sampleBank.has(id);
   }
 
-  /** Decode an arbitrary audio File/Blob into the bank, returns {id, durationSec}. */
+  /** Decode an arbitrary audio File/Blob into the bank under a fresh id. */
   async loadAudioFile(file: Blob): Promise<{ id: string; duration: number }> {
-    if (!this.inited) await this.init();
-    const arrayBuf = await file.arrayBuffer();
-    const audioBuf = await Tone.getContext().rawContext.decodeAudioData(arrayBuf);
     const id = `smp_${Math.random().toString(36).slice(2, 10)}`;
+    const duration = await this.decodeSample(id, file);
+    return { id, duration };
+  }
+
+  /** Decode a blob into the bank under a KNOWN id (used to rehydrate from IndexedDB). */
+  async decodeSample(id: string, blob: Blob): Promise<number> {
+    const arrayBuf = await blob.arrayBuffer();
+    // decodeAudioData works on a suspended context, so this is safe pre-boot
+    const audioBuf = await Tone.getContext().rawContext.decodeAudioData(arrayBuf);
     this.sampleBank.set(id, audioBuf);
-    return { id, duration: audioBuf.duration };
+    return audioBuf.duration;
   }
 
   // ---------- MIC RECORDING ----------
@@ -192,8 +198,8 @@ class Engine {
     this.micRecorder?.start();
   }
 
-  /** Stops mic recording, decodes the result into the sample bank. */
-  async stopMicRecording(): Promise<{ id: string; duration: number } | null> {
+  /** Stops mic recording, decodes the result into the sample bank, returns the blob too. */
+  async stopMicRecording(): Promise<{ id: string; duration: number; blob: Blob } | null> {
     if (!this.micRecorder) return null;
     const blob = await this.micRecorder.stop();
     const result = await this.loadAudioFile(blob);
@@ -202,7 +208,7 @@ class Engine {
     this.micRecorder.dispose();
     this.mic = undefined;
     this.micRecorder = undefined;
-    return result;
+    return { ...result, blob };
   }
 
   isMicArmed() {

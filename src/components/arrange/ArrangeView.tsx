@@ -4,6 +4,7 @@ import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { importSample } from '../../state/samples';
 
 const ROW_H = 64;
 const BEAT_W = 24;
@@ -91,7 +92,7 @@ export function ArrangeView() {
             {tracks.map((t) => (
               <TrackLane key={t.id} trackId={t.id} clips={t.clips} color={t.color} />
             ))}
-            <Playhead height={tracks.length * ROW_H + 32} />
+            <Playhead height={tracks.length * ROW_H + 34} />
           </div>
         </div>
       </div>
@@ -106,35 +107,129 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
         position: 'sticky',
         top: 0,
         zIndex: 5,
-        height: 32,
+        height: 34,
         background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
         borderBottom: '1px solid rgba(255,106,0,0.5)',
         display: 'flex',
-        alignItems: 'flex-end',
-        contain: 'layout style paint',
+        flexDirection: 'column',
       }}
     >
-      {Array.from({ length: beats + 1 }).map((_, i) => {
-        const isBar = i % 4 === 0;
-        return (
-          <div
-            key={i}
-            style={{
-              width: BEAT_W,
-              borderLeft: '1px solid rgba(255,106,0,0.4)',
-              height: isBar ? 20 : 10,
-              alignSelf: 'flex-end',
-              position: 'relative',
-            }}
-          >
-            {isBar && (
-              <span className="hud-label" style={{ position: 'absolute', top: -16, left: 2, fontSize: 9 }}>
-                {i / 4 + 1}
-              </span>
-            )}
-          </div>
-        );
-      })}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
+        {Array.from({ length: beats + 1 }).map((_, i) => {
+          const isBar = i % 4 === 0;
+          return (
+            <div
+              key={i}
+              style={{
+                width: BEAT_W,
+                borderLeft: '1px solid rgba(255,106,0,0.4)',
+                height: isBar ? 15 : 7,
+                alignSelf: 'flex-end',
+                position: 'relative',
+              }}
+            >
+              {isBar && (
+                <span className="hud-label" style={{ position: 'absolute', top: -14, left: 2, fontSize: 9 }}>
+                  {i / 4 + 1}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <LoopLane beats={beats} />
+    </div>
+  );
+});
+
+/** Draggable loop-region strip along the bottom of the ruler. */
+const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
+  const loopEnabled = useStore((s) => s.project.loopEnabled);
+  const loopStart = useStore((s) => s.project.loopStart);
+  const loopEnd = useStore((s) => s.project.loopEnd);
+  const setLoop = useStore((s) => s.setLoop);
+  const laneRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<
+    { mode: 'new' | 'move' | 'l' | 'r'; baseStart: number; baseEnd: number; downBeat: number } | null
+  >(null);
+
+  function beatAt(clientX: number): number {
+    const r = laneRef.current?.getBoundingClientRect();
+    if (!r) return 0;
+    return Math.max(0, Math.min(beats, Math.round((clientX - r.left) / BEAT_W)));
+  }
+  function begin(e: React.PointerEvent, mode: 'new' | 'move' | 'l' | 'r') {
+    if (mode !== 'new') e.stopPropagation();
+    laneRef.current?.setPointerCapture(e.pointerId);
+    drag.current = { mode, baseStart: loopStart, baseEnd: loopEnd, downBeat: beatAt(e.clientX) };
+  }
+  function move(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d) return;
+    const b = beatAt(e.clientX);
+    if (d.mode === 'new') {
+      const lo = Math.min(d.downBeat, b);
+      const hi = Math.max(d.downBeat, b);
+      if (hi > lo) setLoop(true, lo, hi);
+    } else if (d.mode === 'move') {
+      const len = d.baseEnd - d.baseStart;
+      let ns = Math.max(0, Math.min(beats - len, d.baseStart + (b - d.downBeat)));
+      setLoop(true, ns, ns + len);
+    } else if (d.mode === 'l') {
+      setLoop(true, Math.min(b, d.baseEnd - 1), d.baseEnd);
+    } else {
+      setLoop(true, d.baseStart, Math.max(b, d.baseStart + 1));
+    }
+  }
+  function end(e: React.PointerEvent) {
+    drag.current = null;
+    laneRef.current?.releasePointerCapture(e.pointerId);
+  }
+
+  const x = loopStart * BEAT_W;
+  const w = Math.max(2, (loopEnd - loopStart) * BEAT_W);
+
+  return (
+    <div
+      ref={laneRef}
+      onPointerDown={(e) => begin(e, 'new')}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      title="Drag to set the loop region"
+      style={{
+        position: 'relative',
+        height: 13,
+        background: 'rgba(0,0,0,0.5)',
+        borderTop: '1px solid rgba(255,106,0,0.25)',
+        cursor: 'crosshair',
+        touchAction: 'none',
+      }}
+    >
+      <div
+        onPointerDown={(e) => begin(e, 'move')}
+        style={{
+          position: 'absolute',
+          left: x,
+          width: w,
+          top: 0,
+          bottom: 0,
+          background: loopEnabled ? 'rgba(255,106,0,0.4)' : 'rgba(255,106,0,0.12)',
+          border: `1px solid ${loopEnabled ? 'var(--nerv-orange)' : 'rgba(255,106,0,0.4)'}`,
+          boxShadow: loopEnabled ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
+          cursor: 'grab',
+          touchAction: 'none',
+        }}
+      >
+        <div
+          onPointerDown={(e) => begin(e, 'l')}
+          style={{ position: 'absolute', left: -3, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', touchAction: 'none' }}
+        />
+        <div
+          onPointerDown={(e) => begin(e, 'r')}
+          style={{ position: 'absolute', right: -3, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', touchAction: 'none' }}
+        />
+      </div>
     </div>
   );
 });
@@ -536,7 +631,7 @@ function AudioImportButton({ trackId }: { trackId: string }) {
           const file = e.target.files?.[0];
           if (!file) return;
           try {
-            const { id, duration } = await audioEngine.loadAudioFile(file);
+            const { id, duration } = await importSample(file);
             addAudioClip(trackId, 0, id, duration, file.name.slice(0, 14).toUpperCase());
           } catch (err) {
             console.error(err);

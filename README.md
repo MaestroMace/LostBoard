@@ -26,7 +26,13 @@ intended to be reachable from an iPhone over Tailscale.
   individually switchable, with a master rack bypass
 - **Audio tracks**: import audio files or **record from the microphone**
   straight into an audio clip with a rendered waveform; clips are draggable
-  and resizable like any other
+  and resizable like any other. Recorded/imported audio is persisted in
+  IndexedDB and re-decoded on startup, so audio clips survive a reload
+- **Undo / redo** — an 80-deep history of every structural and musical edit
+  (clips, notes, steps, tracks), with `↶` / `↷` buttons and
+  Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z
+- **Loop region** — drag the strip along the bottom of the arrange ruler to
+  set the loop in/out points; drag the band to move it or its edges to resize
 - **Master bounce**: real-time capture of the master bus to a downloadable
   audio file
 - **Mixer** view with channel strips (volume / pan / mute / solo / meter) and
@@ -108,11 +114,11 @@ Next moves:
 - MIDI device input via Web MIDI
 - Automation lanes per parameter
 - Wavetable instrument + chromatic sampler
-- Persist recorded audio (IndexedDB) so audio clips survive reload
 - Project library with multiple saved slots
 - Touch-optimized piano roll with pinch-zoom
 - Offline (faster-than-real-time) bounce via `Tone.Offline`
 - Sync the MAGI ticker to actual engine + transport telemetry
+- Garbage-collect orphaned samples from IndexedDB
 
 ## License
 

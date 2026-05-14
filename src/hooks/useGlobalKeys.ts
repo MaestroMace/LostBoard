@@ -47,8 +47,23 @@ export function useGlobalKeys() {
       if (isTypingTarget(e.target)) return;
       const key = e.key.toLowerCase();
 
-      // ----- transport -----
+      // ----- undo / redo -----
       const st = useStore.getState();
+      if ((e.metaKey || e.ctrlKey) && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) st.redo();
+        else st.undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === 'y') {
+        e.preventDefault();
+        st.redo();
+        return;
+      }
+      // ignore other modifier combos (browser/system shortcuts)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // ----- transport -----
       if (e.code === 'Space') {
         e.preventDefault();
         (async () => {

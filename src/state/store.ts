@@ -180,12 +180,14 @@ type State = {
   selectedTrackId: string | null;
   selectedClipId: string | null;
   isPlaying: boolean;
-  isRecording: boolean;
   metronome: boolean;
   /** mic recording in progress */
   micRecording: boolean;
   /** master bounce in progress */
   bouncing: boolean;
+  /** undo / redo history of full project snapshots */
+  past: Project[];
+  future: Project[];
 };
 
 type Actions = {
@@ -199,7 +201,9 @@ type Actions = {
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
   setPlaying(b: boolean): void;
-  setRecording(b: boolean): void;
+
+  undo(): void;
+  redo(): void;
 
   addTrack(kind: TrackKind): Track;
   removeTrack(id: string): void;
@@ -232,17 +236,37 @@ type Actions = {
 
 type Store = State & Actions;
 
+const HISTORY_LIMIT = 80;
+
 export const useStore = create<Store>()(
-  subscribeWithSelector((set, get) => ({
+  subscribeWithSelector((set, get) => {
+    /**
+     * commit — apply a new project AND record the previous one onto the undo
+     * stack. Used by structural / musical edits (clips, notes, steps, tracks).
+     * Continuous param tweaks (volume, pan, synth/fx knobs, bpm slider) call
+     * plain `set` so they don't flood the history.
+     */
+    const commit = (next: Project, extra?: Partial<Store>) => {
+      const s = get();
+      set({
+        project: next,
+        past: [...s.past, s.project].slice(-HISTORY_LIMIT),
+        future: [],
+        ...extra,
+      } as Partial<Store>);
+    };
+
+    return {
     project: makeProject(),
     view: 'arrange',
     selectedTrackId: null,
     selectedClipId: null,
     isPlaying: false,
-    isRecording: false,
     metronome: false,
     micRecording: false,
     bouncing: false,
+    past: [],
+    future: [],
 
     setView: (v) => set({ view: v }),
     selectTrack: (id) => set({ selectedTrackId: id }),
@@ -267,9 +291,29 @@ export const useStore = create<Store>()(
       }),
     setMetronome: (b) => set({ metronome: b }),
     setPlaying: (b) => set({ isPlaying: b }),
-    setRecording: (b) => set({ isRecording: b }),
     setMicRecording: (b) => set({ micRecording: b }),
     setBouncing: (b) => set({ bouncing: b }),
+
+    undo: () => {
+      const s = get();
+      if (s.past.length === 0) return;
+      const prev = s.past[s.past.length - 1];
+      set({
+        project: prev,
+        past: s.past.slice(0, -1),
+        future: [s.project, ...s.future].slice(0, HISTORY_LIMIT),
+      });
+    },
+    redo: () => {
+      const s = get();
+      if (s.future.length === 0) return;
+      const next = s.future[0];
+      set({
+        project: next,
+        past: [...s.past, s.project].slice(-HISTORY_LIMIT),
+        future: s.future.slice(1),
+      });
+    },
 
     addTrack: (kind) => {
       const tracks = get().project.tracks;
@@ -290,15 +334,12 @@ export const useStore = create<Store>()(
         fx: { ...DEFAULT_FX },
         clips: [],
       };
-      set({
-        project: { ...get().project, tracks: [...tracks, t], updatedAt: Date.now() },
-        selectedTrackId: t.id,
-      });
+      commit({ ...get().project, tracks: [...tracks, t], updatedAt: Date.now() }, { selectedTrackId: t.id });
       return t;
     },
     removeTrack: (id) => {
       const tracks = get().project.tracks.filter((t) => t.id !== id);
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
     updateTrack: (id, patch) => {
       const tracks = get().project.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t));
@@ -356,10 +397,7 @@ export const useStore = create<Store>()(
       const tracks = get().project.tracks.map((t) =>
         t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
       );
-      set({
-        project: { ...get().project, tracks, updatedAt: Date.now() },
-        selectedClipId: clip.id,
-      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipId: clip.id });
       return clip;
     },
 
@@ -383,10 +421,7 @@ export const useStore = create<Store>()(
       const tracks = get().project.tracks.map((t) =>
         t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
       );
-      set({
-        project: { ...get().project, tracks, updatedAt: Date.now() },
-        selectedClipId: clip.id,
-      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipId: clip.id });
       return clip;
     },
 
@@ -395,7 +430,7 @@ export const useStore = create<Store>()(
         ...t,
         clips: t.clips.filter((c) => c.id !== clipId),
       }));
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     moveClip: (clipId, newStart) => {
@@ -403,7 +438,7 @@ export const useStore = create<Store>()(
         ...t,
         clips: t.clips.map((c) => (c.id === clipId ? { ...c, start: Math.max(0, newStart) } : c)),
       }));
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     resizeClip: (clipId, newLength) => {
@@ -411,7 +446,7 @@ export const useStore = create<Store>()(
         ...t,
         clips: t.clips.map((c) => (c.id === clipId ? { ...c, length: Math.max(0.25, newLength) } : c)),
       }));
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     toggleStep: (trackId, clipId, pad, step) => {
@@ -430,7 +465,7 @@ export const useStore = create<Store>()(
               }),
             },
       );
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     setStepVelocity: (trackId, clipId, pad, step, v) => {
@@ -465,7 +500,7 @@ export const useStore = create<Store>()(
               ),
             },
       );
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     removeNote: (trackId, clipId, noteId) => {
@@ -479,7 +514,7 @@ export const useStore = create<Store>()(
               ),
             },
       );
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     updateNote: (trackId, clipId, noteId, patch) => {
@@ -495,23 +530,25 @@ export const useStore = create<Store>()(
               ),
             },
       );
-      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
-    loadProject: (p) => set({ project: p, selectedClipId: null, selectedTrackId: null }),
+    loadProject: (p) => set({ project: p, selectedClipId: null, selectedTrackId: null, past: [], future: [] }),
 
-    newProject: () => set({ project: makeProject(), selectedClipId: null, selectedTrackId: null }),
+    newProject: () =>
+      set({ project: makeProject(), selectedClipId: null, selectedTrackId: null, past: [], future: [] }),
 
     exportProject: () => JSON.stringify(get().project, null, 2),
     importProject: (json) => {
       try {
         const p = JSON.parse(json) as Project;
-        set({ project: p });
+        set({ project: p, past: [], future: [] });
       } catch (e) {
         console.error('Failed to import project', e);
       }
     },
-  })),
+    };
+  }),
 );
 
 export const PROJECT_STORAGE_KEY = 'lostboard.project.v1';

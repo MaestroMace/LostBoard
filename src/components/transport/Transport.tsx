@@ -4,6 +4,7 @@ import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { putSample } from '../../state/sampleDB';
 
 export function Transport() {
   const playing = useStore((s) => s.isPlaying);
@@ -12,16 +13,19 @@ export function Transport() {
   const metronome = useStore((s) => s.metronome);
   const loopEnabled = useStore((s) => s.project.loopEnabled);
   const bpm = useStore((s) => s.project.bpm);
+  const canUndo = useStore((s) => s.past.length > 0);
+  const canRedo = useStore((s) => s.future.length > 0);
 
   const setMetronome = useStore((s) => s.setMetronome);
   const setBpm = useStore((s) => s.setBpm);
   const setPlaying = useStore((s) => s.setPlaying);
-  const setRecording = useStore((s) => s.setRecording);
   const setMicRecording = useStore((s) => s.setMicRecording);
   const setBouncing = useStore((s) => s.setBouncing);
   const setLoop = useStore((s) => s.setLoop);
   const addTrack = useStore((s) => s.addTrack);
   const addAudioClip = useStore((s) => s.addAudioClip);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
 
   const recStartBeat = useRef(0);
   const recTrackId = useRef<string | null>(null);
@@ -61,7 +65,6 @@ export function Transport() {
   function stop() {
     audioEngine.stop();
     setPlaying(false);
-    setRecording(false);
     transportClock.set(0);
   }
 
@@ -70,6 +73,8 @@ export function Transport() {
       const result = await audioEngine.stopMicRecording();
       setMicRecording(false);
       if (result) {
+        // persist the take so it survives a reload
+        putSample(result.id, result.blob).catch((e) => console.warn('persist failed', e));
         const trackId = recTrackId.current;
         if (trackId) {
           addAudioClip(trackId, recStartBeat.current, result.id, result.duration, 'MIC TAKE');
@@ -81,7 +86,10 @@ export function Transport() {
         alert('Microphone access denied or unavailable.');
         return;
       }
-      let audioTrack = useStore.getState().project.tracks.find((t) => t.kind === 'audio');
+      // prefer an armed audio track, then any audio track, else create one
+      const tracks = useStore.getState().project.tracks;
+      let audioTrack =
+        tracks.find((t) => t.kind === 'audio' && t.arm) ?? tracks.find((t) => t.kind === 'audio');
       if (!audioTrack) {
         audioTrack = addTrack('audio');
       }
@@ -180,6 +188,24 @@ export function Transport() {
           title="Metronome"
         >
           ⛬{lbl('CLICK')}
+        </button>
+        <button
+          className="nerv-btn nerv-btn--ghost touch-target"
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo"
+          style={{ opacity: canUndo ? 1 : 0.35 }}
+        >
+          ↶{lbl('UNDO')}
+        </button>
+        <button
+          className="nerv-btn nerv-btn--ghost touch-target"
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo"
+          style={{ opacity: canRedo ? 1 : 0.35 }}
+        >
+          ↷{lbl('REDO')}
         </button>
         <button
           className="nerv-btn nerv-btn--ghost touch-target"

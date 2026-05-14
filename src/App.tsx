@@ -14,6 +14,7 @@ import { ProjectView } from './components/project/ProjectView';
 import { FxPanel } from './components/fx/FxPanel';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
 import { useEngineSync } from './hooks/useEngineSync';
+import { rehydrateSamples } from './state/samples';
 
 const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
   { id: 'arrange', label: 'ARRANGE' },
@@ -47,6 +48,12 @@ export default function App() {
 
   useEffect(() => {
     loadProjectFromStorage();
+    // re-decode persisted audio so audio clips survive a reload
+    rehydrateSamples().then((n) => {
+      if (n > 0 && audioEngine.isInited()) {
+        audioEngine.schedule(useStore.getState().project);
+      }
+    });
   }, []);
 
   // Auto-save every 20s
