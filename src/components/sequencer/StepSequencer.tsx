@@ -1,9 +1,10 @@
-import { memo, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useStore } from '../../state/store';
 import { DRUM_LABELS, DRUM_PADS, type DrumPad, type Step } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
+import { useActiveTrack } from '../../hooks/useActiveTrack';
 
 function cellBg(on: boolean, vel: number) {
   return on
@@ -12,15 +13,12 @@ function cellBg(on: boolean, vel: number) {
 }
 
 export function StepSequencer() {
-  const tracks = useStore((s) => s.project.tracks);
-  const selectedTrackId = useStore((s) => s.selectedTrackId);
   const selectTrack = useStore((s) => s.selectTrack);
   const selectedClipId = useStore((s) => s.selectedClipId);
   const selectClip = useStore((s) => s.selectClip);
   const addClip = useStore((s) => s.addClip);
 
-  const drumTracks = useMemo(() => tracks.filter((t) => t.kind === 'drum'), [tracks]);
-  const activeTrack = drumTracks.find((t) => t.id === selectedTrackId) ?? drumTracks[0];
+  const { pool: drumTracks, active: activeTrack } = useActiveTrack('drum');
 
   const patternClips = useMemo(
     () => (activeTrack ? activeTrack.clips.filter((c) => c.kind === 'pattern') : []),
@@ -29,6 +27,11 @@ export function StepSequencer() {
   const activeClip = (patternClips.find((c) => c.id === selectedClipId) ?? patternClips[0]) as
     | Extract<(typeof patternClips)[number], { kind: 'pattern' }>
     | undefined;
+
+  // keep the global clip selection in sync with what the editor actually shows
+  useEffect(() => {
+    if (activeClip && activeClip.id !== selectedClipId) selectClip(activeClip.id);
+  }, [activeClip, selectedClipId, selectClip]);
 
   if (!activeTrack) {
     return (

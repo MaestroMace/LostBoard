@@ -4,6 +4,7 @@ import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
 import { DEFAULT_SYNTH, type SynthParams } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
+import { useActiveTrack } from '../../hooks/useActiveTrack';
 
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
@@ -17,14 +18,11 @@ const PRESETS: Record<string, Partial<SynthParams>> = {
 };
 
 export function SynthPanel() {
-  const project = useStore((s) => s.project);
-  const selectedTrackId = useStore((s) => s.selectedTrackId);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateSynth = useStore((s) => s.updateSynth);
   const setSynthEngine = useStore((s) => s.setSynthEngine);
 
-  const synthTracks = project.tracks.filter((t) => t.kind === 'synth');
-  const active = synthTracks.find((t) => t.id === selectedTrackId) ?? synthTracks[0];
+  const { pool: synthTracks, active } = useActiveTrack('synth');
 
   if (!active || !active.synth) {
     return (

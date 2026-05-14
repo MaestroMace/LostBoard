@@ -96,6 +96,21 @@ export function ArrangeView() {
           </div>
         </div>
       </div>
+      <div
+        className="hud-readout--dim hud-readout"
+        style={{
+          padding: '3px 10px',
+          fontSize: 9,
+          borderTop: '1px solid rgba(255,106,0,0.25)',
+          background: 'rgba(0,0,0,0.5)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        TIP: double-click a lane to add a clip · double-click a clip to edit it · drag clips to move, drag their
+        right edge to resize · drag the strip under the ruler to set the loop
+      </div>
     </div>
   );
 }
@@ -283,11 +298,11 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             onClick={(e) => {
               e.stopPropagation();
               selectTrack(track.id);
-              setView(track.kind === 'drum' ? 'sequencer' : 'instrument');
+              setView(track.kind === 'drum' ? 'sequencer' : 'pianoroll');
             }}
-            title="Open instrument"
+            title={track.kind === 'drum' ? 'Edit pattern' : 'Edit notes'}
           >
-            ⌘
+            ✎
           </button>
         )}
         <button

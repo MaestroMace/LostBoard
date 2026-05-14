@@ -1,9 +1,10 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import type { Note } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
+import { useActiveTrack } from '../../hooks/useActiveTrack';
 
 const BEAT_W = 56;
 const ROW_H = 16;
@@ -12,16 +13,13 @@ const HI = 84; // C6
 const ROWS = HI - LO + 1;
 
 export function PianoRoll() {
-  const tracks = useStore((s) => s.project.tracks);
-  const selectedTrackId = useStore((s) => s.selectedTrackId);
   const selectTrack = useStore((s) => s.selectTrack);
   const selectedClipId = useStore((s) => s.selectedClipId);
   const selectClip = useStore((s) => s.selectClip);
   const addNote = useStore((s) => s.addNote);
   const addClip = useStore((s) => s.addClip);
 
-  const synthTracks = useMemo(() => tracks.filter((t) => t.kind === 'synth'), [tracks]);
-  const activeTrack = synthTracks.find((t) => t.id === selectedTrackId) ?? synthTracks[0];
+  const { pool: synthTracks, active: activeTrack } = useActiveTrack('synth');
   const midiClips = useMemo(
     () => (activeTrack ? activeTrack.clips.filter((c) => c.kind === 'midi') : []),
     [activeTrack],
@@ -29,6 +27,11 @@ export function PianoRoll() {
   const activeClip = (midiClips.find((c) => c.id === selectedClipId) ?? midiClips[0]) as
     | Extract<(typeof midiClips)[number], { kind: 'midi' }>
     | undefined;
+
+  // keep the global clip selection in sync with what the editor actually shows
+  useEffect(() => {
+    if (activeClip && activeClip.id !== selectedClipId) selectClip(activeClip.id);
+  }, [activeClip, selectedClipId, selectClip]);
 
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [snap, setSnap] = useState<0.25 | 0.5 | 1>(0.25);

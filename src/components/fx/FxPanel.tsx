@@ -2,14 +2,13 @@ import { useStore } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
 import { DEFAULT_FX, type FxRack } from '../../audio/types';
+import { useActiveTrack } from '../../hooks/useActiveTrack';
 
 export function FxPanel() {
-  const project = useStore((s) => s.project);
-  const selectedTrackId = useStore((s) => s.selectedTrackId);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateFx = useStore((s) => s.updateFx);
 
-  const track = project.tracks.find((t) => t.id === selectedTrackId) ?? project.tracks[0];
+  const { pool: tracks, active: track } = useActiveTrack('any');
 
   if (!track) {
     return (
@@ -33,7 +32,7 @@ export function FxPanel() {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="hud-label">FX RACK // SIGNAL CONDITIONING</span>
         <select className="display" value={track.id} onChange={(e) => selectTrack(e.target.value)}>
-          {project.tracks.map((t) => (
+          {tracks.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
             </option>
