@@ -226,6 +226,7 @@ export function Transport() {
       >
         {isMobile ? bpm.toFixed(0) : `TEMPO ${bpm.toFixed(1)}`}
       </button>
+      <TapTempoButton compact={isMobile} setBpm={setBpm} />
       {showBpmEdit && (
         <input
           type="number"
@@ -309,5 +310,50 @@ const PositionBar = memo(function PositionBar() {
         {positionBeats.toFixed(2)} / {totalBeats}
       </div>
     </div>
+  );
+});
+
+
+/**
+ * TapTempoButton — tap repeatedly to set BPM from the inter-tap interval.
+ * Resets if more than 2 seconds pass between taps, averages the last 4 to
+ * smooth out human jitter.
+ */
+const TapTempoButton = memo(function TapTempoButton({
+  compact,
+  setBpm,
+}: {
+  compact: boolean;
+  setBpm: (bpm: number) => void;
+}) {
+  const taps = useRef<number[]>([]);
+  const [pulse, setPulse] = useState(0);
+
+  function tap() {
+    const now = performance.now();
+    if (taps.current.length > 0 && now - taps.current[taps.current.length - 1] > 2000) {
+      taps.current = [];
+    }
+    taps.current.push(now);
+    setPulse((p) => p + 1);
+    if (taps.current.length < 2) return;
+    // average over the last 4 intervals
+    const recent = taps.current.slice(-5);
+    const intervals = recent.slice(1).map((t, i) => t - recent[i]);
+    const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const bpm = 60000 / avgMs;
+    if (bpm >= 40 && bpm <= 240) setBpm(Math.round(bpm * 10) / 10);
+  }
+
+  return (
+    <button
+      className="nerv-btn nerv-btn--ghost touch-target"
+      onClick={tap}
+      title="Tap repeatedly to set the tempo"
+      // tiny visual blink on each tap so the user sees their input
+      style={{ filter: pulse % 2 === 0 ? undefined : 'brightness(1.4)' }}
+    >
+      ◉{compact ? '' : ' TAP'}
+    </button>
   );
 });
