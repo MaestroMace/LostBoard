@@ -194,6 +194,8 @@ type State = {
   micRecording: boolean;
   /** master bounce in progress */
   bouncing: boolean;
+  /** Help overlay visibility, toggled via `?` or the in-app button. */
+  helpOpen: boolean;
   /** When true the engine schedules session loops instead of the arrangement. */
   sessionMode: boolean;
   /** Runtime map of trackId → currently-playing session clipId. Not part of the project. */
@@ -224,6 +226,7 @@ type Actions = {
   setPlaying(b: boolean): void;
 
   setSessionMode(on: boolean): void;
+  setHelpOpen(open: boolean): void;
   launchSessionClip(trackId: string, clipId: string | null): void;
   launchScene(sceneIndex: number): void;
   stopAllSessionClips(): void;
@@ -302,6 +305,7 @@ export const useStore = create<Store>()(
     bouncing: false,
     sessionMode: false,
     sessionPlaying: {},
+    helpOpen: false,
     past: [],
     future: [],
 
@@ -423,6 +427,7 @@ export const useStore = create<Store>()(
     setBouncing: (b) => set({ bouncing: b }),
 
     setSessionMode: (on) => set({ sessionMode: on }),
+    setHelpOpen: (open) => set({ helpOpen: open }),
     launchSessionClip: (trackId, clipId) => {
       const next = { ...get().sessionPlaying };
       if (clipId === null) delete next[trackId];

@@ -47,8 +47,21 @@ export function useGlobalKeys() {
       if (isTypingTarget(e.target)) return;
       const key = e.key.toLowerCase();
 
-      // ----- undo / redo + clipboard -----
       const st = useStore.getState();
+
+      // ----- help overlay -----
+      if (key === '?' || (e.shiftKey && e.code === 'Slash')) {
+        e.preventDefault();
+        st.setHelpOpen(!st.helpOpen);
+        return;
+      }
+      if (key === 'escape' && st.helpOpen) {
+        e.preventDefault();
+        st.setHelpOpen(false);
+        return;
+      }
+
+      // ----- undo / redo + clipboard -----
       if ((e.metaKey || e.ctrlKey) && key === 'z') {
         e.preventDefault();
         if (e.shiftKey) st.redo();

@@ -4,6 +4,7 @@ import { loadProjectFromStorage, saveProjectToStorage, useStore } from './state/
 import { audioEngine } from './audio/engine';
 import { StatusBar } from './components/hud/StatusBar';
 import { BootSequence } from './components/hud/BootSequence';
+import { HelpOverlay } from './components/hud/HelpOverlay';
 import { Transport } from './components/transport/Transport';
 import { ArrangeView } from './components/arrange/ArrangeView';
 import { SessionView } from './components/session/SessionView';
@@ -46,6 +47,8 @@ export default function App() {
   const [booted, setBooted] = useState(false);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
+  const helpOpen = useStore((s) => s.helpOpen);
+  const setHelpOpen = useStore((s) => s.setHelpOpen);
 
   useGlobalKeys();
   useEngineSync();
@@ -101,6 +104,14 @@ export default function App() {
           </button>
         ))}
         <div style={{ flex: 1 }} />
+        <button
+          className="nerv-btn nerv-btn--ghost nerv-btn--icon"
+          onClick={() => setHelpOpen(true)}
+          title="Help (?)"
+          style={{ alignSelf: 'center', minWidth: 32 }}
+        >
+          ?
+        </button>
         <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}>
           VER 0.1.0
         </span>
@@ -118,6 +129,8 @@ export default function App() {
       </div>
 
       <FooterBar />
+
+      {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
 
       <div className="crosshair-corner tl" />
       <div className="crosshair-corner tr" />
