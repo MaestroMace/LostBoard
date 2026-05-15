@@ -18,6 +18,7 @@ export function StepSequencer() {
   const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
   const addClip = useStore((s) => s.addClip);
+  const setPatternLength = useStore((s) => s.setPatternLength);
 
   const { pool: drumTracks, active: activeTrack } = useActiveTrack('drum');
   const [mode, setMode] = useState<'normal' | 'prob'>('normal');
@@ -94,6 +95,18 @@ export function StepSequencer() {
         >
           + PATTERN
         </button>
+        <span className="hud-readout">STEPS</span>
+        <select
+          className="display"
+          value={activeClip.pattern.length}
+          onChange={(e) => setPatternLength(activeTrack.id, activeClip.id, parseInt(e.target.value, 10))}
+          title="Resize the pattern (beat positions are preserved)"
+        >
+          <option value={8}>8</option>
+          <option value={16}>16</option>
+          <option value={32}>32</option>
+          <option value={64}>64</option>
+        </select>
         <div style={{ flex: 1 }} />
         <button
           className={`nerv-btn ${mode === 'normal' ? 'is-active' : ''}`}
@@ -115,7 +128,14 @@ export function StepSequencer() {
 
       <HexFrame title={`PATTERN // ${activeClip.name ?? activeClip.id}`}>
         <div style={{ position: 'relative' }}>
-          <div style={{ display: 'grid', gap: 4, gridTemplateColumns: `64px repeat(${length}, 1fr)` }}>
+          <div
+            style={{
+              display: 'grid',
+              gap: 4,
+              // wider patterns get a min width per step so cells stay tappable; outer container will scroll
+              gridTemplateColumns: `64px repeat(${length}, minmax(${length > 16 ? 22 : 0}px, 1fr))`,
+            }}
+          >
             <div />
             {Array.from({ length }).map((_, i) => (
               <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 8, opacity: 0.6 }}>

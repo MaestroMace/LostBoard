@@ -254,6 +254,7 @@ type Actions = {
   toggleStep(trackId: string, clipId: string, pad: DrumPad, step: number): void;
   setStepVelocity(trackId: string, clipId: string, pad: DrumPad, step: number, v: number): void;
   setStepProbability(trackId: string, clipId: string, pad: DrumPad, step: number, p: number): void;
+  setPatternLength(trackId: string, clipId: string, newLength: number): void;
 
   addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
   removeNote(trackId: string, clipId: string, noteId: string): void;
@@ -678,6 +679,40 @@ export const useStore = create<Store>()(
             },
       );
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+
+    /**
+     * Resize a pattern, preserving beat positions. Old steps map to
+     * `floor(i * newLen / oldLen)` in the new array, so doubling spreads
+     * existing hits out (filling gaps with empty) and halving collapses
+     * neighbours (last "on" wins). The clip's beat length is left alone.
+     */
+    setPatternLength: (trackId, clipId, newLength) => {
+      const clamped = Math.max(2, Math.min(128, Math.floor(newLength)));
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) => {
+                if (c.id !== clipId || c.kind !== 'pattern') return c;
+                const oldLen = c.pattern.length;
+                if (oldLen === clamped) return c;
+                const nextSteps: Record<DrumPad, Step[]> = {} as Record<DrumPad, Step[]>;
+                for (const pad of Object.keys(c.pattern.steps) as DrumPad[]) {
+                  const src = c.pattern.steps[pad];
+                  const dst: Step[] = Array.from({ length: clamped }, () => ({ on: false, velocity: 0.9 }));
+                  for (let i = 0; i < oldLen; i++) {
+                    const j = Math.floor((i * clamped) / oldLen);
+                    if (j < clamped && src[i].on) dst[j] = { ...src[i] };
+                  }
+                  nextSteps[pad] = dst;
+                }
+                return { ...c, pattern: { length: clamped, steps: nextSteps } };
+              }),
+            },
+      );
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     addNote: (trackId, clipId, note) => {
