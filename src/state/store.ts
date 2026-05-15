@@ -255,6 +255,7 @@ type Actions = {
   setStepVelocity(trackId: string, clipId: string, pad: DrumPad, step: number, v: number): void;
   setStepProbability(trackId: string, clipId: string, pad: DrumPad, step: number, p: number): void;
   setPatternLength(trackId: string, clipId: string, newLength: number): void;
+  quantizeClip(trackId: string, clipId: string, gridBeats: number): void;
 
   addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
   removeNote(trackId: string, clipId: string, noteId: string): void;
@@ -710,6 +711,30 @@ export const useStore = create<Store>()(
                 }
                 return { ...c, pattern: { length: clamped, steps: nextSteps } };
               }),
+            },
+      );
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    /** Snap every note's start in a MIDI clip to the nearest `gridBeats` boundary. */
+    quantizeClip: (trackId, clipId, gridBeats) => {
+      if (gridBeats <= 0) return;
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) => ({
+                        ...n,
+                        start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats),
+                      })),
+                    },
+              ),
             },
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() });

@@ -15,12 +15,56 @@ const ROWS = HI - LO + 1;
 const BeatWidthContext = createContext(BASE_BEAT_W);
 const useBeatWidth = () => useContext(BeatWidthContext);
 
+// ------- scale lock -------
+type ScaleName =
+  | 'chromatic'
+  | 'major'
+  | 'minor'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'harmonic minor'
+  | 'pentatonic'
+  | 'pent minor'
+  | 'blues';
+
+const SCALES: Record<ScaleName, number[]> = {
+  chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  major: [0, 2, 4, 5, 7, 9, 11],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+  dorian: [0, 2, 3, 5, 7, 9, 10],
+  phrygian: [0, 1, 3, 5, 7, 8, 10],
+  lydian: [0, 2, 4, 6, 7, 9, 11],
+  mixolydian: [0, 2, 4, 5, 7, 9, 10],
+  'harmonic minor': [0, 2, 3, 5, 7, 8, 11],
+  pentatonic: [0, 2, 4, 7, 9],
+  'pent minor': [0, 3, 5, 7, 10],
+  blues: [0, 3, 5, 6, 7, 10],
+};
+const ROOTS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const ScaleContext = createContext<{ root: number; scale: ScaleName }>({ root: 0, scale: 'chromatic' });
+const useScale = () => useContext(ScaleContext);
+
+/** Snap a MIDI pitch to the nearest in-scale pitch. Falls through unchanged for chromatic. */
+function snapPitchToScale(pitch: number, root: number, scale: ScaleName): number {
+  const intervals = SCALES[scale];
+  if (intervals.length === 12) return pitch;
+  const inScale = (p: number) => intervals.includes((((p - root) % 12) + 12) % 12);
+  for (let d = 0; d < 7; d++) {
+    if (inScale(pitch - d)) return pitch - d;
+    if (inScale(pitch + d)) return pitch + d;
+  }
+  return pitch;
+}
+
 export function PianoRoll() {
   const selectTrack = useStore((s) => s.selectTrack);
   const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
   const addNote = useStore((s) => s.addNote);
   const addClip = useStore((s) => s.addClip);
+  const quantizeClip = useStore((s) => s.quantizeClip);
 
   const { pool: synthTracks, active: activeTrack } = useActiveTrack('synth');
   const midiClips = useMemo(
@@ -38,6 +82,8 @@ export function PianoRoll() {
 
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [snap, setSnap] = useState<0.25 | 0.5 | 1>(0.25);
+  const [scaleRoot, setScaleRoot] = useState(0);
+  const [scaleName, setScaleName] = useState<ScaleName>('chromatic');
 
   if (!activeTrack) {
     return (
@@ -80,7 +126,8 @@ export function PianoRoll() {
     if (tool !== 'draw' || !activeTrack || !activeClip) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const beat = Math.floor((e.clientX - r.left) / BEAT_W / snap) * snap;
-    const pitch = HI - Math.floor((e.clientY - r.top) / ROW_H);
+    const rawPitch = HI - Math.floor((e.clientY - r.top) / ROW_H);
+    const pitch = snapPitchToScale(rawPitch, scaleRoot, scaleName);
     if (beat < 0 || beat >= beats || pitch < LO || pitch > HI) return;
     addNote(activeTrack.id, activeClip.id, { pitch, start: beat, length: snap, velocity: 0.9 });
     audioEngine.trigger(activeTrack.id, pitch, 0.9, '16n');
@@ -88,6 +135,7 @@ export function PianoRoll() {
 
   return (
     <BeatWidthContext.Provider value={BEAT_W}>
+    <ScaleContext.Provider value={{ root: scaleRoot, scale: scaleName }}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', contain: 'layout style', position: 'relative' }}>
       <div
         style={{
@@ -136,6 +184,38 @@ export function PianoRoll() {
           <option value={0.5}>1/8</option>
           <option value={0.25}>1/16</option>
         </select>
+        <span className="hud-readout">SCALE</span>
+        <select
+          className="display"
+          value={scaleRoot}
+          onChange={(e) => setScaleRoot(parseInt(e.target.value, 10))}
+          title="Scale root"
+        >
+          {ROOTS.map((n, i) => (
+            <option key={i} value={i}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <select
+          className="display"
+          value={scaleName}
+          onChange={(e) => setScaleName(e.target.value as ScaleName)}
+          title="Scale — new notes snap to it"
+        >
+          {(Object.keys(SCALES) as ScaleName[]).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <button
+          className="nerv-btn nerv-btn--ghost"
+          onClick={() => quantizeClip(activeTrack.id, activeClip.id, snap)}
+          title={`Quantize every note to the current SNAP (1/${1 / snap === 4 ? 4 : 1 / snap === 8 ? 8 : 16})`}
+        >
+          ⎌ QUANTIZE
+        </button>
       </div>
       <div
         ref={gridRef}
@@ -159,6 +239,7 @@ export function PianoRoll() {
           }}
         >
           <BlackKeyShading />
+          <ScaleShading root={scaleRoot} scale={scaleName} />
           {activeClip.notes.map((n) => (
             <NoteEl
               key={n.id}
@@ -174,11 +255,13 @@ export function PianoRoll() {
         </div>
       </div>
       <EditorTip>
-        DRAW mode — tap grid to add, drag notes to move, drag the right edge to resize · ERASE mode — tap a note to
-        delete · ⌘+wheel to zoom
+        DRAW — tap grid to add, drag notes to move, drag right edge to resize · ERASE — tap a note to delete · SCALE
+        snaps new and dragged notes to its rows · QUANTIZE pulls every note's start onto the current SNAP grid ·
+        ⌘+wheel to zoom
       </EditorTip>
       <ZoomFloater zoom={zoom} setZoom={setZoom} />
     </div>
+    </ScaleContext.Provider>
     </BeatWidthContext.Provider>
   );
 }
@@ -275,6 +358,35 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
   );
 });
 
+/** Darkens rows that fall outside the current scale (no-op for chromatic). */
+const ScaleShading = memo(function ScaleShading({ root, scale }: { root: number; scale: ScaleName }) {
+  const intervals = SCALES[scale];
+  if (intervals.length === 12) return null;
+  return (
+    <>
+      {Array.from({ length: ROWS }).map((_, i) => {
+        const pitch = HI - i;
+        const interval = (((pitch - root) % 12) + 12) % 12;
+        if (intervals.includes(interval)) return null;
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: i * ROW_H,
+              height: ROW_H,
+              background: 'rgba(0,0,0,0.5)',
+              pointerEvents: 'none',
+            }}
+          />
+        );
+      })}
+    </>
+  );
+});
+
 const BlackKeyShading = memo(function BlackKeyShading() {
   return (
     <>
@@ -317,6 +429,7 @@ const NoteEl = memo(function NoteEl({
   tool: 'draw' | 'erase';
 }) {
   const BEAT_W = useBeatWidth();
+  const { root, scale } = useScale();
   const updateNote = useStore((s) => s.updateNote);
   const removeNote = useStore((s) => s.removeNote);
   const elRef = useRef<HTMLDivElement>(null);
@@ -362,7 +475,8 @@ const NoteEl = memo(function NoteEl({
       el.style.width = `${Math.max(8, d.nextLen * BEAT_W)}px`;
     } else {
       d.nextStart = Math.max(0, Math.round((d.baseStart + dx / BEAT_W) / snap) * snap);
-      d.nextPitch = Math.max(LO, Math.min(HI, d.basePitch - Math.round(dy / ROW_H)));
+      const rawPitch = Math.max(LO, Math.min(HI, d.basePitch - Math.round(dy / ROW_H)));
+      d.nextPitch = snapPitchToScale(rawPitch, root, scale);
       el.style.left = `${d.nextStart * BEAT_W}px`;
       el.style.top = `${(HI - d.nextPitch) * ROW_H}px`;
     }
