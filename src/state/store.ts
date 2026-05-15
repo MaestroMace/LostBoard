@@ -21,6 +21,11 @@ const NERV_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff
 
 export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
+/** Default scene list when a project doesn't carry one (old projects, fresh `makeProject`). */
+export function defaultScenes() {
+  return [{ name: 'INTRO' }, { name: 'A' }, { name: 'B' }, { name: 'DROP' }];
+}
+
 function emptyPattern(length = 16): DrumPattern {
   const steps: Record<DrumPad, Step[]> = {} as any;
   for (const pad of DRUM_PADS) {
@@ -167,6 +172,7 @@ function makeProject(): Project {
 
 export type View =
   | 'arrange'
+  | 'session'
   | 'mixer'
   | 'instrument'
   | 'pianoroll'
@@ -188,6 +194,10 @@ type State = {
   micRecording: boolean;
   /** master bounce in progress */
   bouncing: boolean;
+  /** When true the engine schedules session loops instead of the arrangement. */
+  sessionMode: boolean;
+  /** Runtime map of trackId → currently-playing session clipId. Not part of the project. */
+  sessionPlaying: Record<string, string>;
   /** undo / redo history of full project snapshots */
   past: Project[];
   future: Project[];
@@ -212,6 +222,15 @@ type Actions = {
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
   setPlaying(b: boolean): void;
+
+  setSessionMode(on: boolean): void;
+  launchSessionClip(trackId: string, clipId: string | null): void;
+  launchScene(sceneIndex: number): void;
+  stopAllSessionClips(): void;
+  setSessionSlot(trackId: string, sceneIndex: number, clipId: string | null): void;
+  addScene(): void;
+  removeScene(sceneIndex: number): void;
+  setSceneName(sceneIndex: number, name: string): void;
 
   undo(): void;
   redo(): void;
@@ -277,6 +296,8 @@ export const useStore = create<Store>()(
     metronome: false,
     micRecording: false,
     bouncing: false,
+    sessionMode: false,
+    sessionPlaying: {},
     past: [],
     future: [],
 
@@ -396,6 +417,54 @@ export const useStore = create<Store>()(
     setPlaying: (b) => set({ isPlaying: b }),
     setMicRecording: (b) => set({ micRecording: b }),
     setBouncing: (b) => set({ bouncing: b }),
+
+    setSessionMode: (on) => set({ sessionMode: on }),
+    launchSessionClip: (trackId, clipId) => {
+      const next = { ...get().sessionPlaying };
+      if (clipId === null) delete next[trackId];
+      else next[trackId] = clipId;
+      set({ sessionPlaying: next, sessionMode: true });
+    },
+    launchScene: (sceneIndex) => {
+      const next: Record<string, string> = {};
+      for (const t of get().project.tracks) {
+        const clipId = t.sessionSlots?.[sceneIndex] ?? null;
+        if (clipId && t.clips.some((c) => c.id === clipId)) next[t.id] = clipId;
+      }
+      set({ sessionPlaying: next, sessionMode: true });
+    },
+    stopAllSessionClips: () => set({ sessionPlaying: {} }),
+    setSessionSlot: (trackId, sceneIndex, clipId) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const slots = [...(t.sessionSlots ?? [])];
+        while (slots.length <= sceneIndex) slots.push(null);
+        slots[sceneIndex] = clipId;
+        return { ...t, sessionSlots: slots };
+      });
+      // not history-tracked — assigning a slot is like adjusting a UI knob
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    addScene: () => {
+      const p = get().project;
+      const scenes = [...(p.scenes ?? defaultScenes()), { name: `SCENE ${(p.scenes?.length ?? 4) + 1}` }];
+      const tracks = p.tracks.map((t) => ({ ...t, sessionSlots: [...(t.sessionSlots ?? []), null] }));
+      set({ project: { ...p, scenes, tracks, updatedAt: Date.now() } });
+    },
+    removeScene: (idx) => {
+      const p = get().project;
+      const scenes = (p.scenes ?? defaultScenes()).filter((_, i) => i !== idx);
+      const tracks = p.tracks.map((t) => ({
+        ...t,
+        sessionSlots: (t.sessionSlots ?? []).filter((_, i) => i !== idx),
+      }));
+      set({ project: { ...p, scenes, tracks, updatedAt: Date.now() } });
+    },
+    setSceneName: (idx, name) => {
+      const p = get().project;
+      const scenes = (p.scenes ?? defaultScenes()).map((s, i) => (i === idx ? { ...s, name } : s));
+      set({ project: { ...p, scenes, updatedAt: Date.now() } });
+    },
 
     undo: () => {
       const s = get();

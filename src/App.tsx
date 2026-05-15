@@ -6,6 +6,7 @@ import { StatusBar } from './components/hud/StatusBar';
 import { BootSequence } from './components/hud/BootSequence';
 import { Transport } from './components/transport/Transport';
 import { ArrangeView } from './components/arrange/ArrangeView';
+import { SessionView } from './components/session/SessionView';
 import { MixerView } from './components/mixer/MixerView';
 import { SynthPanel } from './components/instrument/SynthPanel';
 import { StepSequencer } from './components/sequencer/StepSequencer';
@@ -19,6 +20,7 @@ import { midiInput } from './audio/midiInput';
 
 const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
   { id: 'arrange', label: 'ARRANGE' },
+  { id: 'session', label: 'SESSION' },
   { id: 'sequencer', label: 'SEQUENCER' },
   { id: 'pianoroll', label: 'PIANO ROLL' },
   { id: 'instrument', label: 'INSTRUMENT' },
@@ -104,6 +106,7 @@ export default function App() {
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {view === 'arrange' && <ArrangeView />}
+        {view === 'session' && <SessionView />}
         {view === 'sequencer' && <StepSequencer />}
         {view === 'pianoroll' && <PianoRoll />}
         {view === 'instrument' && <SynthPanel />}

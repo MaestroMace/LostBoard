@@ -168,6 +168,8 @@ export type Track = {
   synthEngine?: SynthEngine;
   fx?: FxRack;
   clips: Clip[];
+  /** Per-scene clip references for the session view. Index = scene number; value is a clip id from this track's `clips`, or null for an empty slot. */
+  sessionSlots?: (string | null)[];
 };
 
 export type Project = {
@@ -181,6 +183,8 @@ export type Project = {
     limiter: boolean;
   };
   tracks: Track[];
+  /** Scene names for the session view. Sessions are columns in the launcher grid; each track's sessionSlots indexes into this array. */
+  scenes?: { name: string }[];
   loopStart: number;
   loopEnd: number;
   loopEnabled: boolean;

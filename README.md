@@ -32,6 +32,11 @@ intended to be reachable from an iPhone over Tailscale.
   device name. Arm any synth track (`●` in the track header) and incoming
   notes monitor live; with the transport rolling they're captured into a MIDI
   clip on that track (creating one at the bar if none exists)
+- **Session view** — an Ableton-style scenes × tracks launcher grid as a new
+  tab. Assign any clip on a track to a scene slot and tap to loop it; tap a
+  scene header to launch the whole column. Session loops are transport-
+  relative (follow tempo / start / stop) and override the arrangement until
+  you switch back to ARRANGEMENT mode
 - **Undo / redo** — an 80-deep history of every structural and musical edit
   (clips, notes, steps, tracks), with `↶` / `↷` buttons and
   Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z

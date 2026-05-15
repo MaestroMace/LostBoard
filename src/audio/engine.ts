@@ -28,6 +28,8 @@ class Engine {
   private masterMeter!: Tone.Meter;
   private trackNodes = new Map<string, TrackNode>();
   private scheduledIds: number[] = [];
+  /** Per-track Tone.Loop instances driving session-view playback. */
+  private sessionLoops: Map<string, Tone.Loop> = new Map();
   private metronomeSynth?: Tone.MembraneSynth;
   private metronomeEvent?: number;
   metronomeEnabled = false;
@@ -265,9 +267,7 @@ class Engine {
   /** Schedule the entire project's clip content onto the transport. */
   schedule(project: Project) {
     if (!this.inited) return;
-    const t = Tone.getTransport();
-    this.scheduledIds.forEach((id) => t.clear(id));
-    this.scheduledIds = [];
+    this.clearArrangement();
 
     for (const track of project.tracks) {
       const node = this.ensureTrack(track);
@@ -277,6 +277,76 @@ class Engine {
         this.scheduleClip(clip, node, project);
       }
     }
+  }
+
+  private clearArrangement() {
+    const t = Tone.getTransport();
+    this.scheduledIds.forEach((id) => t.clear(id));
+    this.scheduledIds = [];
+  }
+
+  /**
+   * Schedule session-view playback: a Tone.Loop per active session clip that
+   * re-fires its contents every `clip.length` beats, transport-relative so it
+   * follows tempo / start / stop automatically. Replaces any arrangement
+   * scheduling, so callers should pick one or the other based on session mode.
+   */
+  scheduleSession(project: Project, playing: Map<string, string>) {
+    if (!this.inited) return;
+    this.clearArrangement();
+    this.stopAllSessionClips();
+
+    for (const track of project.tracks) {
+      this.ensureTrack(track)?.clearPlayers();
+    }
+
+    playing.forEach((clipId, trackId) => {
+      const track = project.tracks.find((t) => t.id === trackId);
+      if (!track) return;
+      const clip = track.clips.find((c) => c.id === clipId);
+      if (!clip) return;
+      const node = this.trackNodes.get(trackId);
+      if (!node) return;
+      const interval = `${clip.length}*4n`;
+      try {
+        const loop = new Tone.Loop((time) => {
+          this.fireClipInstance(clip, node, time);
+        }, interval).start(0);
+        this.sessionLoops.set(trackId, loop);
+      } catch (e) {
+        console.warn('session loop create failed', e);
+      }
+    });
+  }
+
+  stopAllSessionClips() {
+    this.sessionLoops.forEach((loop) => loop.dispose());
+    this.sessionLoops.clear();
+  }
+
+  /** Fires the contents of a clip starting at `baseTime` (seconds, transport-relative). */
+  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number) {
+    if (clip.kind === 'midi') {
+      for (const note of clip.notes) {
+        const off = Tone.Time(`${note.start}*4n`).toSeconds();
+        const dur = Tone.Time(`${note.length}*4n`).toSeconds();
+        node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
+      }
+    } else if (clip.kind === 'pattern') {
+      const stepsPerBeat = clip.pattern.length / clip.length;
+      const stepDurBeats = 1 / stepsPerBeat;
+      for (const pad of Object.keys(clip.pattern.steps) as DrumPad[]) {
+        const steps = clip.pattern.steps[pad];
+        if (!steps) continue;
+        steps.forEach((step, i) => {
+          if (!step.on) return;
+          const off = Tone.Time(`${i * stepDurBeats}*4n`).toSeconds();
+          const v = step.velocity * (step.accent ? 1.0 : 0.85);
+          node.triggerAt(pad, v, 0.1, baseTime + off);
+        });
+      }
+    }
+    // audio clips: not supported in session loops yet (would need a Player per cycle)
   }
 
   private scheduleClip(clip: Clip, node: TrackNode, project: Project) {

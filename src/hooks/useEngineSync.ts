@@ -28,25 +28,37 @@ function snapshot(p: Project): Snapshot {
   return { bpm: p.bpm, numerator: p.numerator, denominator: p.denominator, trackById };
 }
 
+function recordToMap(rec: Record<string, string>): Map<string, string> {
+  return new Map(Object.entries(rec));
+}
+
+function rescheduleForCurrentMode() {
+  const s = useStore.getState();
+  if (s.sessionMode) {
+    audioEngine.scheduleSession(s.project, recordToMap(s.sessionPlaying));
+  } else {
+    audioEngine.schedule(s.project);
+  }
+}
+
 export function useEngineSync() {
   useEffect(() => {
     let prev = snapshot(useStore.getState().project);
 
-    const unsub = useStore.subscribe(
+    const unsubProject = useStore.subscribe(
       (s) => s.project,
       (project) => {
-        // 1. live per-track update — only the track(s) that changed
+        // live per-track update — only the track(s) that changed
         for (const t of project.tracks) {
           if (prev.trackById.get(t.id) !== t) audioEngine.ensureTrack(t);
         }
 
-        // 2. decide whether the transport needs a full re-schedule
+        // decide whether the transport needs a full re-schedule
         let needsSchedule =
           project.bpm !== prev.bpm ||
           project.numerator !== prev.numerator ||
           project.denominator !== prev.denominator ||
           project.tracks.length !== prev.trackById.size;
-
         if (!needsSchedule) {
           for (const t of project.tracks) {
             const pt = prev.trackById.get(t.id);
@@ -56,13 +68,41 @@ export function useEngineSync() {
             }
           }
         }
-
-        if (needsSchedule) audioEngine.schedule(project);
-
+        if (needsSchedule) rescheduleForCurrentMode();
         prev = snapshot(project);
       },
     );
 
-    return unsub;
+    // Switching between session and arrangement requires a full re-schedule
+    // (different events, different loops) — the engine handles the swap.
+    const unsubMode = useStore.subscribe(
+      (s) => s.sessionMode,
+      (on) => {
+        if (on) {
+          audioEngine.scheduleSession(
+            useStore.getState().project,
+            recordToMap(useStore.getState().sessionPlaying),
+          );
+        } else {
+          audioEngine.stopAllSessionClips();
+          audioEngine.schedule(useStore.getState().project);
+        }
+      },
+    );
+
+    // Launching a different session clip while in session mode rebuilds the loops.
+    const unsubPlaying = useStore.subscribe(
+      (s) => s.sessionPlaying,
+      (playing) => {
+        if (!useStore.getState().sessionMode) return;
+        audioEngine.scheduleSession(useStore.getState().project, recordToMap(playing));
+      },
+    );
+
+    return () => {
+      unsubProject();
+      unsubMode();
+      unsubPlaying();
+    };
   }, []);
 }
