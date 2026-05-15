@@ -133,7 +133,8 @@ export function StepSequencer() {
               display: 'grid',
               gap: 4,
               // wider patterns get a min width per step so cells stay tappable; outer container will scroll
-              gridTemplateColumns: `64px repeat(${length}, minmax(${length > 16 ? 22 : 0}px, 1fr))`,
+              // 80px label column (fits the pad name + sample-swap dropdown)
+              gridTemplateColumns: `80px repeat(${length}, minmax(${length > 16 ? 22 : 0}px, 1fr))`,
             }}
           >
             <div />
@@ -162,8 +163,8 @@ export function StepSequencer() {
       </HexFrame>
       </div>
       <EditorTip>
-        NORM mode — tap to toggle, drag up/down for velocity · PROB mode — tap a lit step to cycle its trigger
-        chance (100 / 75 / 50 / 25%); a step set below 100% shows its % in the corner
+        NORM tap to toggle · NORM drag up/down for velocity · PROB tap a lit step to cycle 100/75/50/25% · pad
+        dropdown swaps the voice for any imported audio sample (◆ marks customised pads)
       </EditorTip>
     </div>
   );
@@ -223,13 +224,7 @@ const PadRow = memo(function PadRow({
 }) {
   return (
     <>
-      <button
-        onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
-        className="nerv-btn nerv-btn--icon"
-        style={{ fontSize: 9, padding: '4px 6px' }}
-      >
-        {DRUM_LABELS[pad]}
-      </button>
+      <PadHeader pad={pad} trackId={trackId} />
       {steps.map((s, i) => (
         <StepCell
           key={i}
@@ -254,6 +249,64 @@ const PadRow = memo(function PadRow({
  * and committed to the store only on release, so dragging never re-schedules
  * the transport mid-gesture.
  */
+/**
+ * PadHeader — the leftmost cell of each pad row. Click the label to preview;
+ * pick a sample from the dropdown to swap the pad's voice from the built-in
+ * drum synth to any imported / recorded audio sample in the project.
+ */
+const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trackId: string }) {
+  const sampleId = useStore((s) => {
+    const t = s.project.tracks.find((tr) => tr.id === trackId);
+    return t?.padSamples?.[pad] ?? '';
+  });
+  const tracks = useStore((s) => s.project.tracks);
+  const setPadSample = useStore((s) => s.setPadSample);
+
+  // unique audio-clip samples available for assignment
+  const samples = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { id: string; name: string }[] = [];
+    for (const t of tracks) {
+      for (const c of t.clips) {
+        if (c.kind === 'audio' && !seen.has(c.sampleId)) {
+          seen.add(c.sampleId);
+          out.push({ id: c.sampleId, name: c.name ?? c.sampleId.slice(0, 8) });
+        }
+      }
+    }
+    return out;
+  }, [tracks]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch' }}>
+      <button
+        onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
+        className="nerv-btn nerv-btn--icon"
+        style={{ fontSize: 9, padding: '3px 4px', width: '100%' }}
+        title={sampleId ? 'Custom sample assigned — click to preview' : 'Synth pad — click to preview'}
+      >
+        {DRUM_LABELS[pad]}
+        {sampleId && <span style={{ color: 'var(--nerv-orange-bright)' }}> ◆</span>}
+      </button>
+      <select
+        className="display"
+        value={sampleId}
+        onChange={(e) => setPadSample(trackId, pad, e.target.value || null)}
+        title="Swap this pad's voice for a sample"
+        style={{ fontSize: 8, padding: '1px 2px', width: '100%' }}
+        disabled={samples.length === 0}
+      >
+        <option value="">SYNTH</option>
+        {samples.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+});
+
 const PROB_CYCLE = [1, 0.75, 0.5, 0.25] as const;
 function nextProbability(current: number): number {
   const idx = PROB_CYCLE.findIndex((v) => Math.abs(v - current) < 0.01);

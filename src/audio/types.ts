@@ -176,6 +176,8 @@ export type Track = {
   clips: Clip[];
   /** Per-scene clip references for the session view. Index = scene number; value is a clip id from this track's `clips`, or null for an empty slot. */
   sessionSlots?: (string | null)[];
+  /** For drum tracks: map of pad → sampleId. When set, the pad fires that sample instead of the built-in drum synth voice. */
+  padSamples?: Partial<Record<DrumPad, string>>;
 };
 
 export type Project = {

@@ -429,6 +429,9 @@ class TrackNode {
 
   // audio clip players
   private players = new Map<string, Tone.Player>();
+  // drum-pad sample players (per-pad one-shot, replaces the drum-synth voice for that pad when set)
+  private padPlayers = new Map<DrumPad, Tone.Player>();
+  private padSampleIds = new Map<DrumPad, string>();
   private sampleBank: Map<string, AudioBuffer>;
 
   constructor(
@@ -497,6 +500,37 @@ class TrackNode {
     }
     this.applySends(track);
     this.applyFx(track.fx);
+    this.applyPadSamples(track);
+  }
+
+  /**
+   * Reconcile the track's `padSamples` with the actual TrackNode pad players.
+   * Only rebuilds players for pads whose sampleId actually changed so a
+   * currently-playing pad isn't cut by an unrelated knob tweak.
+   */
+  applyPadSamples(track: Track) {
+    if (track.kind !== 'drum') {
+      if (this.padPlayers.size > 0) this.clearPadPlayers();
+      return;
+    }
+    const desired = track.padSamples ?? {};
+    const desiredPads = new Set(
+      (Object.entries(desired) as [DrumPad, string | undefined][])
+        .filter(([, id]) => !!id)
+        .map(([pad]) => pad),
+    );
+    // remove pads no longer mapped
+    for (const pad of [...this.padSampleIds.keys()]) {
+      if (!desiredPads.has(pad)) this.setPadSample(pad, null);
+    }
+    // add or replace pads whose sampleId changed
+    for (const pad of desiredPads) {
+      const wantId = desired[pad];
+      if (!wantId) continue;
+      if (this.padSampleIds.get(pad) === wantId) continue;
+      const buf = this.sampleBank.get(wantId);
+      if (buf) this.setPadSample(pad, buf, wantId);
+    }
   }
 
   applyFx(fx?: FxRack) {
@@ -549,11 +583,64 @@ class TrackNode {
   }
 
   trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
+    if (typeof pitch === 'string' && this.padPlayers.has(pitch as DrumPad)) {
+      this.triggerPadSample(pitch as DrumPad, vel);
+      return;
+    }
     this.instrument.trigger(pitch, vel, dur);
   }
 
   triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
+    if (typeof pitch === 'string' && this.padPlayers.has(pitch as DrumPad)) {
+      this.triggerPadSample(pitch as DrumPad, vel, time);
+      return;
+    }
     this.instrument.triggerAt(pitch, vel, dur, time);
+  }
+
+  hasPadSample(pad: DrumPad): boolean {
+    return this.padPlayers.has(pad);
+  }
+
+  /**
+   * Fire a one-shot pad sample. Velocity is applied via Tone.Player's volume
+   * dB; the small (sub-frame) lag between volume set and start is imperceptible
+   * for drum hits and avoids the complexity of an extra GainNode per pad.
+   */
+  triggerPadSample(pad: DrumPad, vel: number, time?: number) {
+    const player = this.padPlayers.get(pad);
+    if (!player) return;
+    player.volume.value = Tone.gainToDb(Math.max(0.001, vel));
+    try {
+      if (time === undefined) player.start();
+      else player.start(time);
+    } catch {
+      /* player may have been disposed mid-schedule */
+    }
+  }
+
+  /** Install or replace a sample on a pad. Pass `null` to drop back to the synth voice. */
+  setPadSample(pad: DrumPad, buffer: AudioBuffer | null, sampleId?: string) {
+    const existing = this.padPlayers.get(pad);
+    if (existing) {
+      existing.dispose();
+      this.padPlayers.delete(pad);
+      this.padSampleIds.delete(pad);
+    }
+    if (!buffer || !sampleId) return;
+    const player = new Tone.Player(buffer).connect(this.fxInput);
+    this.padPlayers.set(pad, player);
+    this.padSampleIds.set(pad, sampleId);
+  }
+
+  getPadSampleId(pad: DrumPad): string | undefined {
+    return this.padSampleIds.get(pad);
+  }
+
+  clearPadPlayers() {
+    for (const p of this.padPlayers.values()) p.dispose();
+    this.padPlayers.clear();
+    this.padSampleIds.clear();
   }
 
   getLevel() {
@@ -564,6 +651,7 @@ class TrackNode {
   dispose() {
     this.instrument.dispose();
     this.clearPlayers();
+    this.clearPadPlayers();
     this.channel.dispose();
     this.reverbSend.dispose();
     this.delaySend.dispose();

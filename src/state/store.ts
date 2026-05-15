@@ -258,6 +258,7 @@ type Actions = {
   toggleStep(trackId: string, clipId: string, pad: DrumPad, step: number): void;
   setStepVelocity(trackId: string, clipId: string, pad: DrumPad, step: number, v: number): void;
   setStepProbability(trackId: string, clipId: string, pad: DrumPad, step: number, p: number): void;
+  setPadSample(trackId: string, pad: DrumPad, sampleId: string | null): void;
   setPatternLength(trackId: string, clipId: string, newLength: number): void;
   quantizeClip(trackId: string, clipId: string, gridBeats: number): void;
 
@@ -681,6 +682,18 @@ export const useStore = create<Store>()(
               }),
             },
       );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+
+    setPadSample: (trackId, pad, sampleId) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const next = { ...(t.padSamples ?? {}) };
+        if (sampleId) next[pad] = sampleId;
+        else delete next[pad];
+        return { ...t, padSamples: next };
+      });
+      // not history-tracked — pad sample swap is a setup tweak like a knob
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
 
