@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore, saveProjectToStorage, loadProjectFromStorage, PROJECT_STORAGE_KEY } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
+import {
+  deleteSlot,
+  listSlots,
+  newSlotId,
+  putSlot,
+  type ProjectSlot,
+} from '../../state/projectSlots';
+import { rehydrateSamples } from '../../state/samples';
+import { audioEngine } from '../../audio/engine';
 
 export function ProjectView() {
   const project = useStore((s) => s.project);
@@ -95,6 +104,8 @@ export function ProjectView() {
         </div>
       </HexFrame>
 
+      <SlotLibrary />
+
       <HexFrame title="STORAGE // SAVE / LOAD">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
@@ -185,5 +196,149 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="hud-label" style={{ fontSize: 9 }}>{label}</span>
       {children}
     </div>
+  );
+}
+
+/**
+ * SlotLibrary — multiple named save slots persisted in IndexedDB, so the
+ * single autosave isn't the only way to keep work. Recorded/imported audio
+ * stays in IndexedDB across slots (sample ids are stable), so loading a
+ * different slot still hears its audio clips.
+ */
+function SlotLibrary() {
+  const project = useStore((s) => s.project);
+  const loadProject = useStore((s) => s.loadProject);
+  const [slots, setSlots] = useState<ProjectSlot[]>([]);
+
+  const refresh = useCallback(async () => {
+    try {
+      setSlots(await listSlots());
+    } catch (e) {
+      console.warn('listSlots failed', e);
+    }
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function saveAsNew() {
+    const name = prompt('Slot name?', project.name);
+    if (!name) return;
+    await putSlot({
+      id: newSlotId(),
+      name,
+      savedAt: Date.now(),
+      project: { ...project, name },
+    });
+    refresh();
+  }
+
+  async function overwrite(slot: ProjectSlot) {
+    if (!confirm(`Overwrite "${slot.name}" with the current project?`)) return;
+    await putSlot({ ...slot, project, savedAt: Date.now() });
+    refresh();
+  }
+
+  async function load(slot: ProjectSlot) {
+    if (!confirm(`Load "${slot.name}"? Unsaved changes to the current project will be lost.`)) return;
+    loadProject(slot.project);
+    // re-decode persisted audio after a load, since samples may have been
+    // added in another slot's session
+    rehydrateSamples().then((n) => {
+      if (n > 0 && audioEngine.isInited()) {
+        audioEngine.schedule(useStore.getState().project);
+      }
+    });
+  }
+
+  async function remove(slot: ProjectSlot) {
+    if (!confirm(`Delete slot "${slot.name}"? This cannot be undone.`)) return;
+    await deleteSlot(slot.id);
+    refresh();
+  }
+
+  function exportSlot(slot: ProjectSlot) {
+    const blob = new Blob([JSON.stringify(slot.project, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slot.name.replace(/\s+/g, '_')}_${slot.savedAt}.nervproj.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <HexFrame title="PROJECT LIBRARY // SLOTS">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="nerv-btn nerv-btn--green" onClick={saveAsNew}>
+            + SAVE AS NEW SLOT
+          </button>
+          <button className="nerv-btn nerv-btn--ghost" onClick={refresh} title="Re-read the slot list">
+            ↻ REFRESH
+          </button>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+            {slots.length} slot{slots.length === 1 ? '' : 's'} · stored in browser IndexedDB
+          </span>
+        </div>
+        {slots.length === 0 ? (
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
+            No saved slots yet. Save the current project to create one.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {slots.map((slot) => (
+              <div
+                key={slot.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 8px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,106,0,0.2)',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span className="hud-value" style={{ minWidth: 160, fontSize: 11 }}>
+                  {slot.name}
+                </span>
+                <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+                  {new Date(slot.savedAt).toLocaleString()}
+                </span>
+                <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+                  {slot.project.tracks.length}t · {slot.project.bpm.toFixed(0)} bpm
+                </span>
+                <div style={{ flex: 1 }} />
+                <button className="nerv-btn nerv-btn--icon" onClick={() => load(slot)} title="Load this slot">
+                  ⤓ LOAD
+                </button>
+                <button
+                  className="nerv-btn nerv-btn--icon"
+                  onClick={() => overwrite(slot)}
+                  title="Overwrite with current project"
+                >
+                  ↻ OVR
+                </button>
+                <button
+                  className="nerv-btn nerv-btn--icon"
+                  onClick={() => exportSlot(slot)}
+                  title="Download as JSON"
+                >
+                  ⬇
+                </button>
+                <button
+                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  onClick={() => remove(slot)}
+                  title="Delete this slot"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </HexFrame>
   );
 }

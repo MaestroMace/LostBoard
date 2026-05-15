@@ -1,35 +1,14 @@
+import { openDb } from './idb';
+
 /**
- * sampleDB — tiny IndexedDB wrapper for persisting recorded / imported audio.
- *
- * Audio buffers can't live in localStorage (too big, not serialisable), so the
- * original encoded blobs are stored here keyed by sampleId. On app start they
- * are re-decoded into the engine's runtime sample bank so audio clips survive
- * a reload.
+ * sampleDB — IndexedDB persistence for recorded / imported audio blobs.
+ * Audio buffers can't live in localStorage (too big, not serialisable); on
+ * app start the engine re-decodes everything stored here.
  */
-const DB_NAME = 'lostboard';
 const STORE = 'samples';
-const VERSION = 1;
-
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-function openDB(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return dbPromise;
-}
 
 export async function putSample(id: string, blob: Blob): Promise<void> {
-  const db = await openDB();
+  const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).put(blob, id);
@@ -39,7 +18,7 @@ export async function putSample(id: string, blob: Blob): Promise<void> {
 }
 
 export async function getAllSamples(): Promise<{ id: string; blob: Blob }[]> {
-  const db = await openDB();
+  const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const store = tx.objectStore(STORE);
@@ -55,7 +34,7 @@ export async function getAllSamples(): Promise<{ id: string; blob: Blob }[]> {
 }
 
 export async function deleteSample(id: string): Promise<void> {
-  const db = await openDB();
+  const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).delete(id);
