@@ -15,6 +15,7 @@ import { ProjectView } from './components/project/ProjectView';
 import { FxPanel } from './components/fx/FxPanel';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
 import { useEngineSync } from './hooks/useEngineSync';
+import { useMediaSession } from './hooks/useMediaSession';
 import { rehydrateSamples } from './state/samples';
 import { midiInput } from './audio/midiInput';
 
@@ -48,6 +49,7 @@ export default function App() {
 
   useGlobalKeys();
   useEngineSync();
+  useMediaSession();
 
   useEffect(() => {
     loadProjectFromStorage();
