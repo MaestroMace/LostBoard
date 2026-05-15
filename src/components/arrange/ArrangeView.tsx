@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react';
+import { createContext, memo, useContext, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
@@ -8,7 +8,10 @@ import { importSample } from '../../state/samples';
 import { EditorTip } from '../hud/EditorTip';
 
 const ROW_H = 64;
-const BEAT_W = 24;
+/** Default px per beat at zoom = 1×. Consumers read the current value through BeatWidthContext. */
+const BASE_BEAT_W = 24;
+const BeatWidthContext = createContext(BASE_BEAT_W);
+const useBeatWidth = () => useContext(BeatWidthContext);
 
 export function ArrangeView() {
   const tracks = useStore((s) => s.project.tracks);
@@ -17,11 +20,28 @@ export function ArrangeView() {
   const isMobile = useIsMobile();
   const headW = isMobile ? 144 : 196;
 
-  const timelineW = totalBeats * BEAT_W;
+  const [zoom, setZoom] = useState(1);
+  const beatW = BASE_BEAT_W * zoom;
+  const timelineW = totalBeats * beatW;
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Cmd/Ctrl + wheel zooms. Native wheel listener so we can preventDefault
+  // and stop the browser from zooming the whole page.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom((z) => Math.max(0.25, Math.min(4, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <BeatWidthContext.Provider value={beatW}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <div className="warning-stripe--thin warning-stripe" />
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {/* Track headers */}
@@ -99,13 +119,67 @@ export function ArrangeView() {
       </div>
       <EditorTip>
         double-click a lane to add a clip · double-click a clip to edit it · drag to move, drag the right edge to
-        resize · shift-click to multi-select · ⌘C / ⌘V / ⌘D / Del · drag the strip under the ruler to set the loop
+        resize · shift-click to multi-select · ⌘C / ⌘V / ⌘D / Del · ⌘+wheel to zoom · drag the strip under the
+        ruler to set the loop
       </EditorTip>
+      <ZoomFloater zoom={zoom} setZoom={setZoom} />
     </div>
+    </BeatWidthContext.Provider>
   );
 }
 
+/** Floating zoom indicator + buttons over the timeline (bottom-right). */
+const ZoomFloater = memo(function ZoomFloater({
+  zoom,
+  setZoom,
+}: {
+  zoom: number;
+  setZoom: (updater: (z: number) => number) => void;
+}) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 12,
+        bottom: 28,
+        display: 'flex',
+        gap: 2,
+        background: 'rgba(0,0,0,0.85)',
+        border: '1px solid rgba(255,106,0,0.4)',
+        padding: 2,
+        zIndex: 6,
+      }}
+    >
+      <button
+        className="nerv-btn nerv-btn--icon"
+        title="Zoom out"
+        onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
+        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+      >
+        −
+      </button>
+      <button
+        className="nerv-btn nerv-btn--icon"
+        title="Reset zoom to 1×"
+        onClick={() => setZoom(() => 1)}
+        style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
+      >
+        {zoom.toFixed(2)}×
+      </button>
+      <button
+        className="nerv-btn nerv-btn--icon"
+        title="Zoom in"
+        onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
+        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+      >
+        ＋
+      </button>
+    </div>
+  );
+});
+
 const Ruler = memo(function Ruler({ beats }: { beats: number }) {
+  const BEAT_W = useBeatWidth();
   return (
     <div
       style={{
@@ -149,6 +223,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
 
 /** Draggable loop-region strip along the bottom of the ruler. */
 const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
+  const BEAT_W = useBeatWidth();
   const loopEnabled = useStore((s) => s.project.loopEnabled);
   const loopStart = useStore((s) => s.project.loopStart);
   const loopEnd = useStore((s) => s.project.loopEnd);
@@ -379,6 +454,7 @@ const TrackLane = memo(function TrackLane({
   clips: Clip[];
   color: string;
 }) {
+  const BEAT_W = useBeatWidth();
   const addClip = useStore((s) => s.addClip);
   const selectTrack = useStore((s) => s.selectTrack);
 
@@ -416,6 +492,7 @@ const TrackLane = memo(function TrackLane({
 
 /** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
 const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {
+  const BEAT_W = useBeatWidth();
   const selected = useStore((s) => s.selectedClipIds.includes(clip.id));
   const selectClip = useStore((s) => s.selectClip);
   const toggleClipSelected = useStore((s) => s.toggleClipSelected);
@@ -578,6 +655,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
 });
 
 const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
+  const BEAT_W = useBeatWidth();
   if (clip.kind === 'midi') {
     if (clip.notes.length === 0) return null;
     const lo = Math.min(...clip.notes.map((n) => n.pitch));
@@ -707,6 +785,7 @@ function AudioImportButton({ trackId }: { trackId: string }) {
 
 /** Leaf — the only thing that re-renders as the playhead moves. */
 const Playhead = memo(function Playhead({ height }: { height: number }) {
+  const BEAT_W = useBeatWidth();
   const positionBeats = usePlayhead();
   return (
     <div

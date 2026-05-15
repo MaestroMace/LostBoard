@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import type { Note } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
@@ -7,11 +7,13 @@ import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { EditorTip } from '../hud/EditorTip';
 
-const BEAT_W = 56;
+const BASE_BEAT_W = 56;
 const ROW_H = 16;
 const LO = 36; // C2
 const HI = 84; // C6
 const ROWS = HI - LO + 1;
+const BeatWidthContext = createContext(BASE_BEAT_W);
+const useBeatWidth = () => useContext(BeatWidthContext);
 
 export function PianoRoll() {
   const selectTrack = useStore((s) => s.selectTrack);
@@ -58,6 +60,21 @@ export function PianoRoll() {
   }
 
   const beats = Math.max(4, activeClip.length);
+  const [zoom, setZoom] = useState(1);
+  const BEAT_W = BASE_BEAT_W * zoom;
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom((z) => Math.max(0.25, Math.min(4, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   function gridDown(e: React.PointerEvent) {
     if (tool !== 'draw' || !activeTrack || !activeClip) return;
@@ -70,7 +87,8 @@ export function PianoRoll() {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', contain: 'layout style' }}>
+    <BeatWidthContext.Provider value={BEAT_W}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', contain: 'layout style', position: 'relative' }}>
       <div
         style={{
           padding: 8,
@@ -119,7 +137,10 @@ export function PianoRoll() {
           <option value={0.25}>1/16</option>
         </select>
       </div>
-      <div style={{ flex: 1, overflow: 'auto', position: 'relative', display: 'flex', contain: 'layout style' }}>
+      <div
+        ref={gridRef}
+        style={{ flex: 1, overflow: 'auto', position: 'relative', display: 'flex', contain: 'layout style' }}
+      >
         <Keys trackId={activeTrack.id} />
         <div
           onPointerDown={gridDown}
@@ -154,11 +175,62 @@ export function PianoRoll() {
       </div>
       <EditorTip>
         DRAW mode — tap grid to add, drag notes to move, drag the right edge to resize · ERASE mode — tap a note to
-        delete
+        delete · ⌘+wheel to zoom
       </EditorTip>
+      <ZoomFloater zoom={zoom} setZoom={setZoom} />
     </div>
+    </BeatWidthContext.Provider>
   );
 }
+
+const ZoomFloater = memo(function ZoomFloater({
+  zoom,
+  setZoom,
+}: {
+  zoom: number;
+  setZoom: (u: (z: number) => number) => void;
+}) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 12,
+        bottom: 28,
+        display: 'flex',
+        gap: 2,
+        background: 'rgba(0,0,0,0.85)',
+        border: '1px solid rgba(255,106,0,0.4)',
+        padding: 2,
+        zIndex: 6,
+      }}
+    >
+      <button
+        className="nerv-btn nerv-btn--icon"
+        title="Zoom out"
+        onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
+        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+      >
+        −
+      </button>
+      <button
+        className="nerv-btn nerv-btn--icon"
+        title="Reset zoom to 1×"
+        onClick={() => setZoom(() => 1)}
+        style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
+      >
+        {zoom.toFixed(2)}×
+      </button>
+      <button
+        className="nerv-btn nerv-btn--icon"
+        title="Zoom in"
+        onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
+        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+      >
+        ＋
+      </button>
+    </div>
+  );
+});
 
 const Keys = memo(function Keys({ trackId }: { trackId: string }) {
   return (
@@ -244,6 +316,7 @@ const NoteEl = memo(function NoteEl({
   snap: number;
   tool: 'draw' | 'erase';
 }) {
+  const BEAT_W = useBeatWidth();
   const updateNote = useStore((s) => s.updateNote);
   const removeNote = useStore((s) => s.removeNote);
   const elRef = useRef<HTMLDivElement>(null);
@@ -338,6 +411,7 @@ const NoteEl = memo(function NoteEl({
 });
 
 const PianoRollPlayhead = memo(function PianoRollPlayhead({ clipStart }: { clipStart: number }) {
+  const BEAT_W = useBeatWidth();
   const positionBeats = usePlayhead();
   const x = (positionBeats - clipStart) * BEAT_W;
   return (
