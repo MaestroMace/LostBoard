@@ -4,6 +4,7 @@ import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { usePinchZoom } from '../../hooks/usePinchZoom';
 import { importSample } from '../../state/samples';
 import { EditorTip } from '../hud/EditorTip';
 
@@ -38,6 +39,7 @@ export function ArrangeView() {
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
+  usePinchZoom(scrollRef, setZoom);
 
   return (
     <BeatWidthContext.Provider value={beatW}>

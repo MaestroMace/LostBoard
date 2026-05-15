@@ -5,6 +5,7 @@ import { audioEngine } from '../../audio/engine';
 import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { usePinchZoom } from '../../hooks/usePinchZoom';
 import { EditorTip } from '../hud/EditorTip';
 
 const BASE_BEAT_W = 56;
@@ -121,6 +122,7 @@ export function PianoRoll() {
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
+  usePinchZoom(gridRef, setZoom);
 
   function gridDown(e: React.PointerEvent) {
     if (tool !== 'draw' || !activeTrack || !activeClip) return;
