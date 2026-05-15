@@ -122,15 +122,22 @@ Done so far: full arrange/sequencer/piano-roll/mixer, dual-engine synth,
 per-track FX rack, audio tracks with mic recording + file import, master
 bounce, HUD scopes, keyboard control.
 
-Next moves:
+Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
+full ranked roadmap, known limitations, and per-commit changelog):
 
 - Automation lanes per parameter
-- Wavetable instrument + chromatic sampler
-- Project library with multiple saved slots
-- Touch-optimized piano roll with pinch-zoom
 - Offline (faster-than-real-time) bounce via `Tone.Offline`
+- Tempo automation / tempo map
+- Wavetable instrument + chromatic sampler
+- Real audio time-stretch (vs. the current varispeed warp)
 - Sync the MAGI ticker to actual engine + transport telemetry
 - Garbage-collect orphaned samples from IndexedDB
+
+## Status & handoff
+
+[`docs/STATUS.md`](docs/STATUS.md) tracks what's been built on the active
+branch, known limitations and trade-offs, and the ranked roadmap. Update
+it when you push something noteworthy so the next session lands oriented.
 
 ## License
 
