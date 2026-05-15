@@ -200,6 +200,45 @@ class Engine {
     this.micRecorder?.start();
   }
 
+  /**
+   * Bounce each track to its own audio blob, post-FX-rack and pre-master.
+   * Returns one blob per track keyed by track name. Real-time bounce (plays
+   * the project through once) — there is no offline render yet. Reverb /
+   * delay tails are NOT included in the stems since they live on the master
+   * bus; the result is dry-ish stems with track FX baked in, which is
+   * usually what you want when remixing in another DAW.
+   */
+  async bounceStems(project: Project, durationSec: number): Promise<{ name: string; blob: Blob }[]> {
+    if (!this.inited) await this.init();
+    const recorders: { name: string; rec: Tone.Recorder; node: TrackNode }[] = [];
+    for (const track of project.tracks) {
+      const node = this.trackNodes.get(track.id);
+      if (!node) continue;
+      const rec = new Tone.Recorder();
+      node.connectTap(rec);
+      recorders.push({ name: track.name || track.id, rec, node });
+    }
+    if (recorders.length === 0) return [];
+
+    recorders.forEach((r) => r.rec.start());
+    this.stop();
+    await this.play();
+    await new Promise<void>((resolve) => setTimeout(resolve, Math.max(500, durationSec * 1000)));
+    this.pause();
+
+    const out: { name: string; blob: Blob }[] = [];
+    for (const r of recorders) {
+      try {
+        const blob = await r.rec.stop();
+        out.push({ name: r.name, blob });
+      } catch {
+        /* recorder may have already been disposed */
+      }
+      r.rec.dispose();
+    }
+    return out;
+  }
+
   /** Stops mic recording, decodes the result into the sample bank, returns the blob too. */
   async stopMicRecording(): Promise<{ id: string; duration: number; blob: Blob } | null> {
     if (!this.micRecorder) return null;
@@ -635,6 +674,11 @@ class TrackNode {
 
   getPadSampleId(pad: DrumPad): string | undefined {
     return this.padSampleIds.get(pad);
+  }
+
+  /** Tap the channel output (post-FX-rack, pre-master) for stem bounce. */
+  connectTap(node: Tone.ToneAudioNode) {
+    this.channel.connect(node);
   }
 
   clearPadPlayers() {

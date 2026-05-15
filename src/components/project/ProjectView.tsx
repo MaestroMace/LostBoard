@@ -126,6 +126,7 @@ export function ProjectView() {
             ⤓ LOAD FROM BROWSER
           </button>
           <button className="nerv-btn" onClick={exportFile}>⬇ EXPORT JSON</button>
+          <StemBounceButton />
           <label className="nerv-btn" style={{ cursor: 'pointer' }}>
             ⬆ IMPORT JSON
             <input
@@ -340,5 +341,67 @@ function SlotLibrary() {
         )}
       </div>
     </HexFrame>
+  );
+}
+
+/**
+ * StemBounceButton — bounces every track to its own audio file in one
+ * real-time playthrough, then downloads each as a .webm. Disabled while
+ * in session mode (the arrangement scheduler is what feeds the channels)
+ * and while a bounce or transport is already running.
+ */
+function StemBounceButton() {
+  const project = useStore((s) => s.project);
+  const sessionMode = useStore((s) => s.sessionMode);
+  const playing = useStore((s) => s.isPlaying);
+  const bouncing = useStore((s) => s.bouncing);
+  const setPlaying = useStore((s) => s.setPlaying);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const busy = running || bouncing || playing;
+  const beats = project.lengthBars * project.numerator;
+  const durationSec = (beats / project.bpm) * 60 + 0.5;
+
+  async function bounce() {
+    if (sessionMode) {
+      alert('Switch back to ARRANGEMENT mode in the SESSION tab first — stems bounce from the arrangement timeline.');
+      return;
+    }
+    if (!confirm(`Bounce ${project.tracks.length} stems? Playback runs for ~${durationSec.toFixed(1)}s.`)) return;
+    setRunning(true);
+    setProgress(0);
+    const tick = window.setInterval(() => setProgress((p) => Math.min(0.99, p + 0.05 / durationSec)), 50);
+    try {
+      const stems = await audioEngine.bounceStems(project, durationSec);
+      setPlaying(false);
+      // download each stem as a file
+      for (const stem of stems) {
+        const url = URL.createObjectURL(stem.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.name.replace(/\s+/g, '_')}__${stem.name.replace(/[^\w]+/g, '_')}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      console.error('Stem bounce failed', e);
+      alert('Stem bounce failed; see console.');
+    } finally {
+      clearInterval(tick);
+      setRunning(false);
+      setProgress(0);
+    }
+  }
+
+  return (
+    <button
+      className="nerv-btn"
+      onClick={bounce}
+      disabled={busy}
+      title="Bounce each track to its own audio file (real-time playthrough)"
+    >
+      {running ? `⌛ BOUNCING ${Math.round(progress * 100)}%` : '⬇⬇ STEMS'}
+    </button>
   );
 }
