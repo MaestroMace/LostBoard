@@ -5,6 +5,7 @@ import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { importSample } from '../../state/samples';
+import { EditorTip } from '../hud/EditorTip';
 
 const ROW_H = 64;
 const BEAT_W = 24;
@@ -96,21 +97,10 @@ export function ArrangeView() {
           </div>
         </div>
       </div>
-      <div
-        className="hud-readout--dim hud-readout"
-        style={{
-          padding: '3px 10px',
-          fontSize: 9,
-          borderTop: '1px solid rgba(255,106,0,0.25)',
-          background: 'rgba(0,0,0,0.5)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        TIP: double-click a lane to add a clip · double-click a clip to edit it · drag clips to move, drag their
-        right edge to resize · drag the strip under the ruler to set the loop
-      </div>
+      <EditorTip>
+        double-click a lane to add a clip · double-click a clip to edit it · drag clips to move, drag their right
+        edge to resize · drag the strip under the ruler to set the loop
+      </EditorTip>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { audioEngine } from '../../audio/engine';
 import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { EditorTip } from '../hud/EditorTip';
 
 const BEAT_W = 56;
 const ROW_H = 16;
@@ -39,7 +40,7 @@ export function PianoRoll() {
   if (!activeTrack) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No synth track. Add one to edit MIDI.</HexFrame>
+        <HexFrame title="N/A">No synth track. Add one from the Arrange view.</HexFrame>
       </div>
     );
   }
@@ -151,16 +152,10 @@ export function PianoRoll() {
           <PianoRollPlayhead clipStart={activeClip.start} />
         </div>
       </div>
-      <div
-        style={{
-          padding: 6,
-          fontSize: 9,
-          color: 'rgba(255,106,0,0.6)',
-          borderTop: '1px solid rgba(255,106,0,0.3)',
-        }}
-      >
-        TIP: DRAW mode — tap grid to add, drag notes to move, drag right-edge to resize · ERASE mode — tap a note to delete
-      </div>
+      <EditorTip>
+        DRAW mode — tap grid to add, drag notes to move, drag the right edge to resize · ERASE mode — tap a note to
+        delete
+      </EditorTip>
     </div>
   );
 }

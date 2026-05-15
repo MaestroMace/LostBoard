@@ -5,6 +5,7 @@ import { audioEngine } from '../../audio/engine';
 import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { EditorTip } from '../hud/EditorTip';
 
 function cellBg(on: boolean, vel: number) {
   return on
@@ -57,19 +58,19 @@ export function StepSequencer() {
   const length = activeClip.pattern.length;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-        padding: 12,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        contain: 'layout style',
-      }}
-      className="hex-grid-bg"
-    >
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', contain: 'layout style' }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          padding: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+        className="hex-grid-bg"
+      >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span className="hud-label">STEP SEQUENCER // M.A.G.I. BALTHASAR</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
@@ -120,6 +121,8 @@ export function StepSequencer() {
           />
         </div>
       </HexFrame>
+      </div>
+      <EditorTip>tap a step to toggle · drag a step up/down to set its velocity</EditorTip>
     </div>
   );
 }

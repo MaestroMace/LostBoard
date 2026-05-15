@@ -27,7 +27,7 @@ export function SynthPanel() {
   if (!active || !active.synth) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No synth track selected. Add a synth track from the Arrange view.</HexFrame>
+        <HexFrame title="N/A">No synth track. Add one from the Arrange view.</HexFrame>
       </div>
     );
   }
@@ -47,7 +47,7 @@ export function SynthPanel() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div className="hud-label">INSTRUMENT // {engine === 'fm' ? 'FM-01' : 'SYNTH-01'}</div>
+        <span className="hud-label">INSTRUMENT // M.A.G.I. CASPER</span>
         <select
           className="display"
           value={active.id}

@@ -13,7 +13,7 @@ export function FxPanel() {
   if (!track) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No track selected.</HexFrame>
+        <HexFrame title="N/A">No tracks. Add one from the Arrange view.</HexFrame>
       </div>
     );
   }
