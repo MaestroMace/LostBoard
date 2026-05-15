@@ -247,6 +247,7 @@ type Actions = {
   removeClip(clipId: string): void;
   moveClip(clipId: string, newStart: number): void;
   resizeClip(clipId: string, newLength: number): void;
+  updateAudioClip(clipId: string, patch: { sourceBpm?: number; warp?: boolean; gain?: number; offset?: number }): void;
 
   setMicRecording(b: boolean): void;
   setBouncing(b: boolean): void;
@@ -579,7 +580,8 @@ export const useStore = create<Store>()(
     addAudioClip: (trackId, atBeat, sampleId, durationSec, name) => {
       const track = get().project.tracks.find((t) => t.id === trackId);
       if (!track) return null;
-      const bps = get().project.bpm / 60;
+      const bpm = get().project.bpm;
+      const bps = bpm / 60;
       const lengthBeats = Math.max(0.25, durationSec * bps);
       const clip: Clip = {
         id: newId('clp'),
@@ -590,6 +592,9 @@ export const useStore = create<Store>()(
         sampleId,
         gain: 1,
         offset: 0,
+        // capture the tempo at import/record time so the clip can warp later
+        sourceBpm: bpm,
+        warp: true,
         color: track.color,
         name: name ?? `AUD-${track.clips.length + 1}`,
       };
@@ -622,6 +627,18 @@ export const useStore = create<Store>()(
         clips: t.clips.map((c) => (c.id === clipId ? { ...c, length: Math.max(0.25, newLength) } : c)),
       }));
       commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    /** Patch fields on an audio clip. Not history-tracked — these are param tweaks (warp, gain, offset, source bpm). */
+    updateAudioClip: (clipId, patch) => {
+      const tracks = get().project.tracks.map((t) => {
+        const idx = t.clips.findIndex((c) => c.id === clipId && c.kind === 'audio');
+        if (idx < 0) return t;
+        const next = [...t.clips];
+        next[idx] = { ...next[idx], ...patch };
+        return { ...t, clips: next };
+      });
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
 
     toggleStep: (trackId, clipId, pad, step) => {

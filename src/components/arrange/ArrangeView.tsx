@@ -117,6 +117,7 @@ export function ArrangeView() {
           </div>
         </div>
       </div>
+      <AudioClipInspector />
       <EditorTip>
         double-click a lane to add a clip · double-click a clip to edit it · drag to move, drag the right edge to
         resize · shift-click to multi-select · ⌘C / ⌘V / ⌘D / Del · ⌘+wheel to zoom · drag the strip under the
@@ -803,5 +804,75 @@ const Playhead = memo(function Playhead({ height }: { height: number }) {
         willChange: 'transform',
       }}
     />
+  );
+});
+
+/**
+ * AudioClipInspector — appears under the timeline when the primary selected
+ * clip is an audio clip. Exposes warp toggle, source BPM, and gain so the
+ * user can fix tempo drift on imported / recorded audio. Hidden otherwise.
+ */
+const AudioClipInspector = memo(function AudioClipInspector() {
+  const selectedId = useStore((s) => s.selectedClipIds[0] ?? null);
+  const tracks = useStore((s) => s.project.tracks);
+  const projectBpm = useStore((s) => s.project.bpm);
+  const updateAudioClip = useStore((s) => s.updateAudioClip);
+
+  const found = selectedId
+    ? tracks
+        .map((t) => t.clips.find((c) => c.id === selectedId && c.kind === 'audio'))
+        .find((c): c is Extract<Clip, { kind: 'audio' }> => !!c)
+    : undefined;
+  if (!found) return null;
+
+  const src = found.sourceBpm ?? projectBpm;
+  const warp = found.warp !== false;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '4px 12px',
+        borderTop: '1px solid rgba(255,106,0,0.25)',
+        background: 'rgba(0,0,0,0.55)',
+        flexWrap: 'wrap',
+      }}
+    >
+      <span className="hud-label">CLIP // {found.name ?? found.kind.toUpperCase()}</span>
+      <button
+        className={`nerv-btn ${warp ? 'is-active' : ''}`}
+        onClick={() => updateAudioClip(found.id, { warp: !warp })}
+        aria-pressed={warp}
+        title="Warp playback rate to follow project tempo"
+      >
+        ⇄ WARP
+      </button>
+      <span className="hud-readout">SRC BPM</span>
+      <input
+        type="number"
+        className="display"
+        min={30}
+        max={300}
+        step={0.5}
+        value={src}
+        onChange={(e) => updateAudioClip(found.id, { sourceBpm: parseFloat(e.target.value || '120') })}
+        style={{ width: 70, padding: 3 }}
+      />
+      <span className="hud-readout">GAIN</span>
+      <input
+        type="range"
+        className="nerv-slider"
+        min={0}
+        max={2}
+        step={0.01}
+        value={found.gain}
+        onChange={(e) => updateAudioClip(found.id, { gain: parseFloat(e.target.value) })}
+        style={{ width: 100 }}
+      />
+      <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+        ×{(warp ? projectBpm / src : 1).toFixed(2)}
+      </span>
+    </div>
   );
 });

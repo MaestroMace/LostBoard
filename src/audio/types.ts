@@ -122,6 +122,10 @@ export type Clip =
       sampleId: string; // key into the runtime sample bank
       gain: number; // 0..2
       offset: number; // seconds into the sample
+      /** BPM the sample was recorded/imported at. Playback rate adjusts to current tempo when `warp` is on. */
+      sourceBpm?: number;
+      /** When true, clip plays back at currentBpm/sourceBpm so it stays in tempo. */
+      warp?: boolean;
       color?: string;
       name?: string;
     };

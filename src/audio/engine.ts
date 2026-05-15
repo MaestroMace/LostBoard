@@ -385,6 +385,9 @@ class Engine {
       const buffer = this.sampleBank.get(clip.sampleId);
       if (!buffer) return;
       const player = node.addPlayer(clip.id, buffer, clip.gain);
+      // warp playback rate to match current project tempo if the clip carries a source BPM
+      const warp = clip.warp !== false && clip.sourceBpm && clip.sourceBpm > 0;
+      player.playbackRate = warp ? project.bpm / clip.sourceBpm! : 1;
       const id = t.schedule((time) => {
         try {
           player.start(time, clip.offset);
