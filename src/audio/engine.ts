@@ -363,6 +363,36 @@ class Engine {
     this.sessionLoops.clear();
   }
 
+  /**
+   * Reconcile every track's sidechain wiring against the project. Needs every
+   * TrackNode to exist first, so callers run this *after* their ensureTrack
+   * pass. Cheap when nothing's changed — `setSidechain` rebuilds only when the
+   * source / depth / timing actually move.
+   */
+  applySidechains(project: Project) {
+    if (!this.inited) return;
+    for (const track of project.tracks) {
+      const node = this.trackNodes.get(track.id);
+      if (!node) continue;
+      const fx = track.fx;
+      const desiredSourceId = fx?.sidechainSourceId;
+      const desiredDepth = fx?.sidechainDepth ?? 0;
+      const desiredAttack = fx?.sidechainAttack ?? 0.005;
+      const desiredRelease = fx?.sidechainRelease ?? 0.15;
+      const currentSource = node.getSidechainSourceId();
+      const currentState = node.getSidechainState();
+      const want = desiredSourceId && desiredDepth > 0 ? desiredSourceId : undefined;
+      const same =
+        want === currentSource &&
+        currentState.depth === desiredDepth &&
+        currentState.attack === desiredAttack &&
+        currentState.release === desiredRelease;
+      if (same) continue;
+      const sourceNode = want ? this.trackNodes.get(want) ?? null : null;
+      node.setSidechain(sourceNode, desiredDepth, desiredAttack, desiredRelease);
+    }
+  }
+
   /** Fires the contents of a clip starting at `baseTime` (seconds, transport-relative). */
   private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number) {
     if (clip.kind === 'midi') {
@@ -465,6 +495,12 @@ class TrackNode {
   comp: Tone.Compressor;
   chorus: Tone.Chorus;
   crusher: Tone.BitCrusher;
+  /** Always-in-chain gain whose value is modulated by an external follower when sidechain is on. */
+  sidechainGain: Tone.Gain;
+  private sidechainFollower?: Tone.Follower;
+  private sidechainScale?: Tone.Multiply;
+  private sidechainSourceId?: string;
+  private sidechainState: { depth: number; attack: number; release: number } = { depth: 0, attack: 0.005, release: 0.15 };
 
   // audio clip players
   private players = new Map<string, Tone.Player>();
@@ -499,7 +535,8 @@ class TrackNode {
     this.chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0, wet: 0 }).start();
     this.crusher = new Tone.BitCrusher(16);
     this.crusher.wet.value = 0;
-    this.fxInput.chain(this.eq, this.comp, this.chorus, this.crusher, this.channel);
+    this.sidechainGain = new Tone.Gain(1);
+    this.fxInput.chain(this.eq, this.comp, this.chorus, this.crusher, this.sidechainGain, this.channel);
 
     this.channel.connect(masterGain);
     this.channel.connect(this.meter);
@@ -676,9 +713,57 @@ class TrackNode {
     return this.padSampleIds.get(pad);
   }
 
-  /** Tap the channel output (post-FX-rack, pre-master) for stem bounce. */
+  /** Tap the channel output (post-FX-rack, pre-master) for stem bounce or sidechain. */
   connectTap(node: Tone.ToneAudioNode) {
     this.channel.connect(node);
+  }
+
+  /**
+   * Install or update sidechain ducking. Builds an envelope follower from the
+   * source's channel output, scales it by `-depth`, and sums it into this
+   * track's always-in-chain `sidechainGain.gain` (intrinsic value = 1), so the
+   * effective gain is `1 - depth * envelope` — louder source → more ducking.
+   *
+   * Passing `source = null` (or depth ≤ 0) disposes the follower path and
+   * leaves the gain at 1 (transparent).
+   */
+  setSidechain(source: TrackNode | null, depth: number, attack: number, release: number) {
+    // tear down any existing follower path
+    this.sidechainFollower?.dispose();
+    this.sidechainScale?.dispose();
+    this.sidechainFollower = undefined;
+    this.sidechainScale = undefined;
+    this.sidechainSourceId = undefined;
+    this.sidechainState = { depth, attack, release };
+
+    if (!source || depth <= 0 || source === this) {
+      // make sure gain is transparent
+      this.sidechainGain.gain.cancelScheduledValues(0);
+      this.sidechainGain.gain.value = 1;
+      return;
+    }
+
+    // Tone.Follower in this Tone version takes a single smoothing time; we
+    // approximate asymmetric attack/release with the geometric mean so both
+    // UI knobs at least nudge behaviour. A true split would need two
+    // followers averaged, which isn't worth the wiring for v1.
+    const smoothing = Math.sqrt(attack * release);
+    this.sidechainFollower = new Tone.Follower(smoothing);
+    this.sidechainScale = new Tone.Multiply(-depth);
+    source.connectTap(this.sidechainFollower);
+    this.sidechainFollower.connect(this.sidechainScale);
+    // Multiply output → AudioParam (gain.gain). Intrinsic value 1, summed audio-rate signal contributes -depth*env.
+    this.sidechainScale.connect(this.sidechainGain.gain);
+    this.sidechainGain.gain.value = 1;
+    this.sidechainSourceId = source.trackId;
+  }
+
+  getSidechainSourceId(): string | undefined {
+    return this.sidechainSourceId;
+  }
+
+  getSidechainState(): { depth: number; attack: number; release: number } {
+    return this.sidechainState;
   }
 
   clearPadPlayers() {
@@ -696,6 +781,9 @@ class TrackNode {
     this.instrument.dispose();
     this.clearPlayers();
     this.clearPadPlayers();
+    this.sidechainFollower?.dispose();
+    this.sidechainScale?.dispose();
+    this.sidechainGain.dispose();
     this.channel.dispose();
     this.reverbSend.dispose();
     this.delaySend.dispose();

@@ -142,6 +142,14 @@ export type FxRack = {
   chorusOn: boolean;
   bitcrush: number; // 1..16 bits, 16 = off
   bitcrushOn: boolean;
+  /** Sidechain source track id (envelope-follower-based ducking). Omitted = off. */
+  sidechainSourceId?: string;
+  /** Ducking depth, 0..1. 0 = no ducking, 1 = full ducking to silence at source peak. */
+  sidechainDepth?: number;
+  /** Envelope follower attack in seconds (how fast ducking engages). */
+  sidechainAttack?: number;
+  /** Envelope follower release in seconds (how fast level recovers). */
+  sidechainRelease?: number;
 };
 
 export const DEFAULT_FX: FxRack = {

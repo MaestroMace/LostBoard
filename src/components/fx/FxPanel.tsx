@@ -1,7 +1,7 @@
 import { useStore } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
-import { DEFAULT_FX, type FxRack } from '../../audio/types';
+import { DEFAULT_FX, type FxRack, type Track } from '../../audio/types';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 
 export function FxPanel() {
@@ -166,11 +166,14 @@ export function FxPanel() {
             />
           </div>
         </HexFrame>
+
+        <SidechainPanel track={track} fx={fx} onPatch={patch} />
       </div>
 
       <HexFrame title="SIGNAL PATH" variant="green">
         <div className="hud-readout" style={{ fontSize: 10, lineHeight: 1.8 }}>
-          INSTRUMENT &rarr; EQ-3 &rarr; COMP &rarr; CHORUS &rarr; CRUSH &rarr; CHANNEL &rarr; MASTER BUS
+          INSTRUMENT &rarr; EQ-3 &rarr; COMP &rarr; CHORUS &rarr; CRUSH &rarr; SIDECHAIN &rarr; CHANNEL &rarr; MASTER
+          BUS
           <br />
           REVERB / DELAY SENDS TAP POST-CHANNEL. RACK STATUS:{' '}
           <span style={{ color: fx.enabled ? 'var(--nerv-green)' : 'var(--nerv-red)' }}>
@@ -179,5 +182,78 @@ export function FxPanel() {
         </div>
       </HexFrame>
     </div>
+  );
+}
+
+/**
+ * SidechainPanel — envelope-follower ducking driven by another track's
+ * channel output. Web Audio's native compressor has no real sidechain
+ * input, so the engine builds this as `gain = 1 - depth * follower(source)`.
+ *
+ * Source dropdown lists every other track (self-routing would feedback);
+ * depth / attack / release knobs control the duck.
+ */
+function SidechainPanel({
+  track,
+  fx,
+  onPatch,
+}: {
+  track: Track;
+  fx: FxRack;
+  onPatch: (p: Partial<FxRack>) => void;
+}) {
+  const allTracks = useStore((s) => s.project.tracks);
+  const candidates = allTracks.filter((t) => t.id !== track.id);
+  const active = !!fx.sidechainSourceId && (fx.sidechainDepth ?? 0) > 0;
+
+  return (
+    <HexFrame title="SIDECHAIN" variant={active ? 'orange' : 'soft'}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        <span className="hud-readout" style={{ fontSize: 9 }}>SOURCE</span>
+        <select
+          className="display"
+          value={fx.sidechainSourceId ?? ''}
+          onChange={(e) => onPatch({ sidechainSourceId: e.target.value || undefined })}
+          style={{ flex: 1, fontSize: 10 }}
+          title="Track whose envelope ducks this one"
+        >
+          <option value="">OFF</option>
+          {candidates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        <Knob
+          label="DEPTH"
+          value={fx.sidechainDepth ?? 0}
+          min={0}
+          max={1}
+          step={0.01}
+          display={(v) => `${(v * 100).toFixed(0)}%`}
+          onChange={(v) => onPatch({ sidechainDepth: v })}
+        />
+        <Knob
+          label="ATK"
+          value={fx.sidechainAttack ?? 0.005}
+          min={0.001}
+          max={0.05}
+          step={0.001}
+          display={(v) => `${(v * 1000).toFixed(0)}ms`}
+          onChange={(v) => onPatch({ sidechainAttack: v })}
+        />
+        <Knob
+          label="REL"
+          value={fx.sidechainRelease ?? 0.15}
+          min={0.01}
+          max={0.5}
+          step={0.005}
+          display={(v) => `${(v * 1000).toFixed(0)}ms`}
+          onChange={(v) => onPatch({ sidechainRelease: v })}
+        />
+      </div>
+    </HexFrame>
   );
 }

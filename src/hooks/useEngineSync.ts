@@ -49,8 +49,16 @@ export function useEngineSync() {
       (s) => s.project,
       (project) => {
         // live per-track update — only the track(s) that changed
+        let anyTrackChanged = false;
         for (const t of project.tracks) {
-          if (prev.trackById.get(t.id) !== t) audioEngine.ensureTrack(t);
+          if (prev.trackById.get(t.id) !== t) {
+            audioEngine.ensureTrack(t);
+            anyTrackChanged = true;
+          }
+        }
+        // sidechain wiring needs every node to exist; reconcile after the per-track pass
+        if (anyTrackChanged || project.tracks.length !== prev.trackById.size) {
+          audioEngine.applySidechains(project);
         }
 
         // decide whether the transport needs a full re-schedule
