@@ -1,9 +1,10 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { shallow } from 'zustand/shallow';
 import { useStore } from '../../state/store';
 import { usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { Scope } from './Scope';
+import { getMidiSnapshot, subscribeMidi } from '../../audio/midiInput';
 
 const MESSAGES = [
   'MAGI SYSTEM ONLINE',
@@ -31,6 +32,7 @@ export function StatusBar() {
   const micRecording = useStore((s) => s.micRecording);
   const bouncing = useStore((s) => s.bouncing);
   const recording = micRecording || bouncing;
+  const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
   const isMobile = useIsMobile();
 
   if (isMobile) {
@@ -56,6 +58,7 @@ export function StatusBar() {
         </span>
         <Indicator label="PL" on={playing} color="green" />
         <Indicator label="REC" on={recording} color="red" />
+        {midi.connected && <Indicator label="MIDI" on color="green" />}
         <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 10 }}>
           <span style={{ color: 'var(--nerv-orange-bright)' }}>{bpm.toFixed(0)}</span>
@@ -89,6 +92,7 @@ export function StatusBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <Indicator label="PLAY" on={playing} color="green" />
         <Indicator label="REC" on={recording} color="red" />
+        <MidiIndicator midi={midi} />
         <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 11 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>BPM</span>
@@ -150,6 +154,21 @@ function Indicator({ label, on, color }: { label: string; on: boolean; color: 'g
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       <span className={`led ${color} ${on ? 'on' : ''}`} />
       <span className="hud-label" style={{ fontSize: 7 }}>{label}</span>
+    </div>
+  );
+}
+
+function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolean; device: string } }) {
+  if (!midi.supported) return null;
+  return (
+    <div
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+      title={midi.connected ? `MIDI: ${midi.device}` : 'No MIDI device connected'}
+    >
+      <span className={`led ${midi.connected ? 'green' : 'amber'} ${midi.connected ? 'on' : ''}`} />
+      <span className="hud-label" style={{ fontSize: 7 }}>
+        {midi.connected ? (midi.device.slice(0, 10).toUpperCase() || 'MIDI') : 'MIDI'}
+      </span>
     </div>
   );
 }

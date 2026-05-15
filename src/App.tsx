@@ -15,6 +15,7 @@ import { FxPanel } from './components/fx/FxPanel';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
 import { useEngineSync } from './hooks/useEngineSync';
 import { rehydrateSamples } from './state/samples';
+import { midiInput } from './audio/midiInput';
 
 const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
   { id: 'arrange', label: 'ARRANGE' },
@@ -54,6 +55,8 @@ export default function App() {
         audioEngine.schedule(useStore.getState().project);
       }
     });
+    // MIDI doesn't need a user gesture; arm the bridge as soon as the page loads
+    midiInput.init();
   }, []);
 
   // Auto-save every 20s

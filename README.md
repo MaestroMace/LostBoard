@@ -28,6 +28,10 @@ intended to be reachable from an iPhone over Tailscale.
   straight into an audio clip with a rendered waveform; clips are draggable
   and resizable like any other. Recorded/imported audio is persisted in
   IndexedDB and re-decoded on startup, so audio clips survive a reload
+- **Web MIDI** — plug in a controller and the StatusBar lights up with the
+  device name. Arm any synth track (`●` in the track header) and incoming
+  notes monitor live; with the transport rolling they're captured into a MIDI
+  clip on that track (creating one at the bar if none exists)
 - **Undo / redo** — an 80-deep history of every structural and musical edit
   (clips, notes, steps, tracks), with `↶` / `↷` buttons and
   Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z
@@ -111,7 +115,6 @@ bounce, HUD scopes, keyboard control.
 
 Next moves:
 
-- MIDI device input via Web MIDI
 - Automation lanes per parameter
 - Wavetable instrument + chromatic sampler
 - Project library with multiple saved slots

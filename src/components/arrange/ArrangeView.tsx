@@ -334,6 +334,13 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             updateTrack(track.id, { arm: !track.arm });
           }}
           style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
+          title={
+            track.kind === 'synth'
+              ? 'Arm — route MIDI input here and record while transport rolls'
+              : track.kind === 'audio'
+                ? 'Arm — receive mic recording'
+                : 'Arm'
+          }
         >
           ●
         </button>
