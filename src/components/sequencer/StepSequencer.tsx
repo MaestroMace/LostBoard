@@ -6,6 +6,7 @@ import { HexFrame } from '../hud/HexFrame';
 import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { EditorTip } from '../hud/EditorTip';
+import { importSample } from '../../state/samples';
 
 function cellBg(on: boolean, vel: number) {
   return on
@@ -163,8 +164,9 @@ export function StepSequencer() {
       </HexFrame>
       </div>
       <EditorTip>
-        NORM tap to toggle · NORM drag up/down for velocity · PROB tap a lit step to cycle 100/75/50/25% · pad
-        dropdown swaps the voice for any imported audio sample (◆ marks customised pads)
+        NORM tap to toggle · drag up/down for velocity · PROB tap to cycle 100/75/50/25% · pad dropdown swaps the
+        voice for any imported sample (◆ marks customised pads) · or drag an audio file straight onto a pad to
+        import + assign
       </EditorTip>
     </div>
   );
@@ -261,6 +263,7 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
   });
   const tracks = useStore((s) => s.project.tracks);
   const setPadSample = useStore((s) => s.setPadSample);
+  const [hover, setHover] = useState(false);
 
   // unique audio-clip samples available for assignment
   const samples = useMemo(() => {
@@ -277,13 +280,44 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
     return out;
   }, [tracks]);
 
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setHover(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('audio')) return;
+    try {
+      const { id } = await importSample(file);
+      setPadSample(trackId, pad, id);
+    } catch (err) {
+      console.error('Pad drop failed', err);
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch' }}>
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!hover) setHover(true);
+      }}
+      onDragLeave={() => setHover(false)}
+      onDrop={handleDrop}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        alignItems: 'stretch',
+        outline: hover ? '2px dashed var(--nerv-orange-bright)' : 'none',
+      }}
+    >
       <button
         onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
         className="nerv-btn nerv-btn--icon"
         style={{ fontSize: 9, padding: '3px 4px', width: '100%' }}
-        title={sampleId ? 'Custom sample assigned — click to preview' : 'Synth pad — click to preview'}
+        title={
+          sampleId
+            ? 'Custom sample assigned — click to preview · drop an audio file to replace'
+            : 'Synth pad — click to preview · drop an audio file to assign'
+        }
       >
         {DRUM_LABELS[pad]}
         {sampleId && <span style={{ color: 'var(--nerv-orange-bright)' }}> ◆</span>}
