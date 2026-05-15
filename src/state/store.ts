@@ -261,6 +261,7 @@ type Actions = {
   setPadSample(trackId: string, pad: DrumPad, sampleId: string | null): void;
   setPatternLength(trackId: string, clipId: string, newLength: number): void;
   quantizeClip(trackId: string, clipId: string, gridBeats: number): void;
+  humanizeClip(trackId: string, clipId: string, amount: number): void;
 
   addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
   removeNote(trackId: string, clipId: string, noteId: string): void;
@@ -767,6 +768,36 @@ export const useStore = create<Store>()(
                       notes: c.notes.map((n) => ({
                         ...n,
                         start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats),
+                      })),
+                    },
+              ),
+            },
+      );
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    /**
+     * Randomly perturb every note in a clip — velocity by ±amount, start by
+     * ±amount*0.08 beats. Mechanical loops sound more played when humanised
+     * a touch; over-humanising starts to feel sloppy. `amount` is 0..1.
+     */
+    humanizeClip: (trackId, clipId, amount) => {
+      const a = Math.max(0, Math.min(1, amount));
+      if (a === 0) return;
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) => ({
+                        ...n,
+                        velocity: Math.max(0.05, Math.min(1, n.velocity + (Math.random() - 0.5) * 2 * a * 0.3)),
+                        start: Math.max(0, n.start + (Math.random() - 0.5) * 2 * a * 0.08),
                       })),
                     },
               ),

@@ -66,6 +66,7 @@ export function PianoRoll() {
   const addNote = useStore((s) => s.addNote);
   const addClip = useStore((s) => s.addClip);
   const quantizeClip = useStore((s) => s.quantizeClip);
+  const humanizeClip = useStore((s) => s.humanizeClip);
 
   const { pool: synthTracks, active: activeTrack } = useActiveTrack('synth');
   const midiClips = useMemo(
@@ -217,6 +218,13 @@ export function PianoRoll() {
           title={`Quantize every note to the current SNAP (1/${1 / snap === 4 ? 4 : 1 / snap === 8 ? 8 : 16})`}
         >
           ⎌ QUANTIZE
+        </button>
+        <button
+          className="nerv-btn nerv-btn--ghost"
+          onClick={() => humanizeClip(activeTrack.id, activeClip.id, 0.4)}
+          title="Add small random velocity + timing wobble to every note"
+        >
+          ~ HUMANIZE
         </button>
       </div>
       <div
