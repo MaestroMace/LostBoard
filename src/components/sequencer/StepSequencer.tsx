@@ -15,7 +15,7 @@ function cellBg(on: boolean, vel: number) {
 
 export function StepSequencer() {
   const selectTrack = useStore((s) => s.selectTrack);
-  const selectedClipId = useStore((s) => s.selectedClipId);
+  const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
   const addClip = useStore((s) => s.addClip);
 

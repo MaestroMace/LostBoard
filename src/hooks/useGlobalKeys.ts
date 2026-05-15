@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from '../state/store';
 import { audioEngine } from '../audio/engine';
 import { DRUM_PADS } from '../audio/types';
-import { seek } from '../state/transportClock';
+import { seek, transportClock } from '../state/transportClock';
 
 /**
  * Global keyboard control:
@@ -47,7 +47,7 @@ export function useGlobalKeys() {
       if (isTypingTarget(e.target)) return;
       const key = e.key.toLowerCase();
 
-      // ----- undo / redo -----
+      // ----- undo / redo + clipboard -----
       const st = useStore.getState();
       if ((e.metaKey || e.ctrlKey) && key === 'z') {
         e.preventDefault();
@@ -60,8 +60,39 @@ export function useGlobalKeys() {
         st.redo();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && key === 'c') {
+        if (st.selectedClipIds.length === 0) return;
+        e.preventDefault();
+        st.copySelectedClips();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === 'x') {
+        if (st.selectedClipIds.length === 0) return;
+        e.preventDefault();
+        st.cutSelectedClips();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === 'v') {
+        if (st.clipboard.length === 0) return;
+        e.preventDefault();
+        st.pasteClipboard(transportClock.getSnapshot());
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === 'd') {
+        if (st.selectedClipIds.length === 0) return;
+        e.preventDefault();
+        st.duplicateSelectedClips();
+        return;
+      }
       // ignore other modifier combos (browser/system shortcuts)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // ----- delete selection -----
+      if ((e.code === 'Backspace' || e.code === 'Delete') && st.selectedClipIds.length > 0) {
+        e.preventDefault();
+        st.deleteSelectedClips();
+        return;
+      }
 
       // ----- transport -----
       if (e.code === 'Space') {
@@ -78,7 +109,7 @@ export function useGlobalKeys() {
         })();
         return;
       }
-      if (e.code === 'Enter' || e.code === 'Backspace') {
+      if (e.code === 'Enter') {
         e.preventDefault();
         audioEngine.stop();
         st.setPlaying(false);

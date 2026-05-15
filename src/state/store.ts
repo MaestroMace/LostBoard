@@ -178,7 +178,10 @@ type State = {
   project: Project;
   view: View;
   selectedTrackId: string | null;
-  selectedClipId: string | null;
+  /** Selected clips, in selection order. The first id is the "primary" used by per-clip editors. */
+  selectedClipIds: string[];
+  /** In-memory clip clipboard for copy/paste/duplicate. Not part of the persisted project. */
+  clipboard: Clip[];
   isPlaying: boolean;
   metronome: boolean;
   /** mic recording in progress */
@@ -194,6 +197,14 @@ type Actions = {
   setView(v: View): void;
   selectTrack(id: string): void;
   selectClip(id: string | null): void;
+  toggleClipSelected(id: string): void;
+  clearClipSelection(): void;
+  moveClipsBy(ids: string[], deltaBeats: number): void;
+  copySelectedClips(): void;
+  cutSelectedClips(): void;
+  pasteClipboard(deltaBeats: number): void;
+  duplicateSelectedClips(): void;
+  deleteSelectedClips(): void;
 
   setBpm(bpm: number): void;
   setTimeSig(n: number, d: number): void;
@@ -260,7 +271,8 @@ export const useStore = create<Store>()(
     project: makeProject(),
     view: 'arrange',
     selectedTrackId: null,
-    selectedClipId: null,
+    selectedClipIds: [],
+    clipboard: [],
     isPlaying: false,
     metronome: false,
     micRecording: false,
@@ -270,7 +282,98 @@ export const useStore = create<Store>()(
 
     setView: (v) => set({ view: v }),
     selectTrack: (id) => set({ selectedTrackId: id }),
-    selectClip: (id) => set({ selectedClipId: id }),
+    selectClip: (id) => set({ selectedClipIds: id ? [id] : [] }),
+    toggleClipSelected: (id) => {
+      const cur = get().selectedClipIds;
+      set({ selectedClipIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+    },
+    clearClipSelection: () => set({ selectedClipIds: [] }),
+    moveClipsBy: (ids, deltaBeats) => {
+      if (ids.length === 0 || deltaBeats === 0) return;
+      const idSet = new Set(ids);
+      const tracks = get().project.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          idSet.has(c.id) ? { ...c, start: Math.max(0, c.start + deltaBeats) } : c,
+        ),
+      }));
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+    copySelectedClips: () => {
+      const ids = new Set(get().selectedClipIds);
+      const clips: Clip[] = [];
+      get().project.tracks.forEach((t) => t.clips.forEach((c) => ids.has(c.id) && clips.push(c)));
+      set({ clipboard: clips });
+    },
+    cutSelectedClips: () => {
+      const s = get();
+      const ids = new Set(s.selectedClipIds);
+      const clips: Clip[] = [];
+      s.project.tracks.forEach((t) => t.clips.forEach((c) => ids.has(c.id) && clips.push(c)));
+      const tracks = s.project.tracks.map((t) => ({ ...t, clips: t.clips.filter((c) => !ids.has(c.id)) }));
+      set({ clipboard: clips });
+      commit({ ...s.project, tracks, updatedAt: Date.now() }, { selectedClipIds: [] });
+    },
+    deleteSelectedClips: () => {
+      const ids = new Set(get().selectedClipIds);
+      if (ids.size === 0) return;
+      const tracks = get().project.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.filter((c) => !ids.has(c.id)),
+      }));
+      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipIds: [] });
+    },
+    pasteClipboard: (deltaBeats) => {
+      const clips = get().clipboard;
+      if (clips.length === 0) return;
+      const minStart = clips.reduce((m, c) => Math.min(m, c.start), Infinity);
+      const newClips: Clip[] = clips.map((c) => ({
+        ...c,
+        id: newId('clp'),
+        start: Math.max(0, c.start - minStart + deltaBeats),
+      }));
+      const byTrack = new Map<string, Clip[]>();
+      newClips.forEach((c) => {
+        const arr = byTrack.get(c.trackId) ?? [];
+        arr.push(c);
+        byTrack.set(c.trackId, arr);
+      });
+      const tracks = get().project.tracks.map((t) =>
+        byTrack.has(t.id) ? { ...t, clips: [...t.clips, ...byTrack.get(t.id)!] } : t,
+      );
+      commit(
+        { ...get().project, tracks, updatedAt: Date.now() },
+        { selectedClipIds: newClips.map((c) => c.id) },
+      );
+    },
+    duplicateSelectedClips: () => {
+      const s = get();
+      const ids = new Set(s.selectedClipIds);
+      const sel: Clip[] = [];
+      s.project.tracks.forEach((t) => t.clips.forEach((c) => ids.has(c.id) && sel.push(c)));
+      if (sel.length === 0) return;
+      const minStart = sel.reduce((m, c) => Math.min(m, c.start), Infinity);
+      const maxEnd = sel.reduce((m, c) => Math.max(m, c.start + c.length), 0);
+      const delta = Math.max(0.25, maxEnd - minStart);
+      const newClips: Clip[] = sel.map((c) => ({
+        ...c,
+        id: newId('clp'),
+        start: c.start + delta,
+      }));
+      const byTrack = new Map<string, Clip[]>();
+      newClips.forEach((c) => {
+        const arr = byTrack.get(c.trackId) ?? [];
+        arr.push(c);
+        byTrack.set(c.trackId, arr);
+      });
+      const tracks = s.project.tracks.map((t) =>
+        byTrack.has(t.id) ? { ...t, clips: [...t.clips, ...byTrack.get(t.id)!] } : t,
+      );
+      commit(
+        { ...s.project, tracks, updatedAt: Date.now() },
+        { selectedClipIds: newClips.map((c) => c.id) },
+      );
+    },
 
     setBpm: (bpm) => {
       const p = { ...get().project, bpm, updatedAt: Date.now() };
@@ -397,7 +500,7 @@ export const useStore = create<Store>()(
       const tracks = get().project.tracks.map((t) =>
         t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
       );
-      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipId: clip.id });
+      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipIds: [clip.id] });
       return clip;
     },
 
@@ -421,7 +524,7 @@ export const useStore = create<Store>()(
       const tracks = get().project.tracks.map((t) =>
         t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
       );
-      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipId: clip.id });
+      commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipIds: [clip.id] });
       return clip;
     },
 
@@ -533,10 +636,10 @@ export const useStore = create<Store>()(
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
-    loadProject: (p) => set({ project: p, selectedClipId: null, selectedTrackId: null, past: [], future: [] }),
+    loadProject: (p) => set({ project: p, selectedClipIds: [], selectedTrackId: null, past: [], future: [] }),
 
     newProject: () =>
-      set({ project: makeProject(), selectedClipId: null, selectedTrackId: null, past: [], future: [] }),
+      set({ project: makeProject(), selectedClipIds: [], selectedTrackId: null, past: [], future: [] }),
 
     exportProject: () => JSON.stringify(get().project, null, 2),
     importProject: (json) => {

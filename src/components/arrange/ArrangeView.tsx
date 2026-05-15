@@ -98,8 +98,8 @@ export function ArrangeView() {
         </div>
       </div>
       <EditorTip>
-        double-click a lane to add a clip · double-click a clip to edit it · drag clips to move, drag their right
-        edge to resize · drag the strip under the ruler to set the loop
+        double-click a lane to add a clip · double-click a clip to edit it · drag to move, drag the right edge to
+        resize · shift-click to multi-select · ⌘C / ⌘V / ⌘D / Del · drag the strip under the ruler to set the loop
       </EditorTip>
     </div>
   );
@@ -416,24 +416,56 @@ const TrackLane = memo(function TrackLane({
 
 /** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
 const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {
-  const selected = useStore((s) => s.selectedClipId === clip.id);
+  const selected = useStore((s) => s.selectedClipIds.includes(clip.id));
   const selectClip = useStore((s) => s.selectClip);
+  const toggleClipSelected = useStore((s) => s.toggleClipSelected);
   const selectTrack = useStore((s) => s.selectTrack);
   const setView = useStore((s) => s.setView);
   const moveClip = useStore((s) => s.moveClip);
+  const moveClipsBy = useStore((s) => s.moveClipsBy);
   const resizeClip = useStore((s) => s.resizeClip);
   const removeClip = useStore((s) => s.removeClip);
 
   const elRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ mode: 'move' | 'resize'; startX: number; baseStart: number; baseLen: number } | null>(
-    null,
-  );
+  /** During a multi-clip drag we translate every selected clip's DOM node. */
+  const drag = useRef<
+    | {
+        mode: 'move' | 'resize';
+        startX: number;
+        baseStart: number;
+        baseLen: number;
+        groupIds: string[] | null;
+        groupEls: HTMLElement[];
+      }
+    | null
+  >(null);
 
   function down(e: React.PointerEvent, mode: 'move' | 'resize') {
     e.stopPropagation();
-    selectClip(clip.id);
+    if (e.shiftKey && mode === 'move') {
+      toggleClipSelected(clip.id);
+      return;
+    }
+    // pick up an existing multi-selection if this clip is part of it, else
+    // narrow to just this clip
+    const cur = useStore.getState().selectedClipIds;
+    const inGroup = cur.includes(clip.id) && cur.length > 1;
+    if (!inGroup) selectClip(clip.id);
+    const groupIds = inGroup && mode === 'move' ? cur : null;
+    const groupEls: HTMLElement[] = groupIds
+      ? groupIds
+          .map((id) => document.querySelector<HTMLElement>(`[data-clip-id="${id}"]`))
+          .filter((el): el is HTMLElement => !!el)
+      : [];
     elRef.current?.setPointerCapture(e.pointerId);
-    drag.current = { mode, startX: e.clientX, baseStart: clip.start, baseLen: clip.length };
+    drag.current = {
+      mode,
+      startX: e.clientX,
+      baseStart: clip.start,
+      baseLen: clip.length,
+      groupIds,
+      groupEls,
+    };
   }
   function move(e: React.PointerEvent) {
     const d = drag.current;
@@ -441,7 +473,13 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
     if (!d || !el) return;
     const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
     if (d.mode === 'move') {
-      el.style.left = `${Math.max(0, d.baseStart + dBeats) * BEAT_W}px`;
+      if (d.groupIds) {
+        // group drag — translate every selected clip's DOM element together
+        const tx = `translateX(${dBeats * BEAT_W}px)`;
+        d.groupEls.forEach((g) => (g.style.transform = tx));
+      } else {
+        el.style.left = `${Math.max(0, d.baseStart + dBeats) * BEAT_W}px`;
+      }
     } else {
       el.style.width = `${Math.max(0.5, d.baseLen + dBeats) * BEAT_W - 2}px`;
     }
@@ -450,8 +488,18 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
     const d = drag.current;
     if (!d) return;
     const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
-    if (d.mode === 'move') moveClip(clip.id, Math.max(0, d.baseStart + dBeats));
-    else resizeClip(clip.id, Math.max(0.5, d.baseLen + dBeats));
+    if (d.mode === 'move') {
+      if (d.groupIds && dBeats !== 0) {
+        d.groupEls.forEach((g) => (g.style.transform = ''));
+        moveClipsBy(d.groupIds, dBeats);
+      } else if (d.groupIds) {
+        d.groupEls.forEach((g) => (g.style.transform = ''));
+      } else {
+        moveClip(clip.id, Math.max(0, d.baseStart + dBeats));
+      }
+    } else {
+      resizeClip(clip.id, Math.max(0.5, d.baseLen + dBeats));
+    }
     drag.current = null;
     elRef.current?.releasePointerCapture(e.pointerId);
   }
@@ -459,6 +507,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
   return (
     <div
       ref={elRef}
+      data-clip-id={clip.id}
       onPointerDown={(e) => down(e, 'move')}
       onPointerMove={move}
       onPointerUp={up}

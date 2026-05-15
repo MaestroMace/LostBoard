@@ -15,7 +15,7 @@ const ROWS = HI - LO + 1;
 
 export function PianoRoll() {
   const selectTrack = useStore((s) => s.selectTrack);
-  const selectedClipId = useStore((s) => s.selectedClipId);
+  const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
   const addNote = useStore((s) => s.addNote);
   const addClip = useStore((s) => s.addClip);
