@@ -253,6 +253,7 @@ type Actions = {
 
   toggleStep(trackId: string, clipId: string, pad: DrumPad, step: number): void;
   setStepVelocity(trackId: string, clipId: string, pad: DrumPad, step: number, v: number): void;
+  setStepProbability(trackId: string, clipId: string, pad: DrumPad, step: number, p: number): void;
 
   addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
   removeNote(trackId: string, clipId: string, noteId: string): void;
@@ -651,6 +652,26 @@ export const useStore = create<Store>()(
                 const nextSteps = { ...c.pattern.steps };
                 const arr = [...nextSteps[pad]];
                 arr[step] = { ...arr[step], velocity: v };
+                nextSteps[pad] = arr;
+                return { ...c, pattern: { ...c.pattern, steps: nextSteps } };
+              }),
+            },
+      );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+
+    setStepProbability: (trackId, clipId, pad, step, p) => {
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) => {
+                if (c.id !== clipId || c.kind !== 'pattern') return c;
+                const nextSteps = { ...c.pattern.steps };
+                const arr = [...nextSteps[pad]];
+                // store undefined for p === 1 so it doesn't bloat JSON
+                arr[step] = { ...arr[step], probability: p >= 1 ? undefined : p };
                 nextSteps[pad] = arr;
                 return { ...c, pattern: { ...c.pattern, steps: nextSteps } };
               }),

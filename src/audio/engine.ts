@@ -340,6 +340,7 @@ class Engine {
         if (!steps) continue;
         steps.forEach((step, i) => {
           if (!step.on) return;
+          if (step.probability !== undefined && step.probability < 1 && Math.random() > step.probability) return;
           const off = Tone.Time(`${i * stepDurBeats}*4n`).toSeconds();
           const v = step.velocity * (step.accent ? 1.0 : 0.85);
           node.triggerAt(pad, v, 0.1, baseTime + off);
@@ -372,6 +373,8 @@ class Engine {
           if (!step.on) return;
           const beat = startBeats + i * stepDur;
           const id = t.schedule((time) => {
+            // re-roll probability at fire time so each cycle is independent
+            if (step.probability !== undefined && step.probability < 1 && Math.random() > step.probability) return;
             const v = step.velocity * (step.accent ? 1.0 : 0.85);
             node.triggerAt(pad, v, 0.1, time);
           }, beatsToBarsBeats(beat));

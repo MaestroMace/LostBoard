@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { DRUM_LABELS, DRUM_PADS, type DrumPad, type Step } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
@@ -20,6 +20,7 @@ export function StepSequencer() {
   const addClip = useStore((s) => s.addClip);
 
   const { pool: drumTracks, active: activeTrack } = useActiveTrack('drum');
+  const [mode, setMode] = useState<'normal' | 'prob'>('normal');
 
   const patternClips = useMemo(
     () => (activeTrack ? activeTrack.clips.filter((c) => c.kind === 'pattern') : []),
@@ -93,6 +94,23 @@ export function StepSequencer() {
         >
           + PATTERN
         </button>
+        <div style={{ flex: 1 }} />
+        <button
+          className={`nerv-btn ${mode === 'normal' ? 'is-active' : ''}`}
+          onClick={() => setMode('normal')}
+          aria-pressed={mode === 'normal'}
+          title="Normal mode — tap toggles, drag sets velocity"
+        >
+          NORM
+        </button>
+        <button
+          className={`nerv-btn ${mode === 'prob' ? 'is-active' : ''}`}
+          onClick={() => setMode('prob')}
+          aria-pressed={mode === 'prob'}
+          title="Probability mode — tap cycles trigger chance (100/75/50/25%)"
+        >
+          PROB
+        </button>
       </div>
 
       <HexFrame title={`PATTERN // ${activeClip.name ?? activeClip.id}`}>
@@ -111,6 +129,7 @@ export function StepSequencer() {
                 trackId={activeTrack.id}
                 clipId={activeClip.id}
                 steps={activeClip.pattern.steps[pad]}
+                mode={mode}
               />
             ))}
           </div>
@@ -122,7 +141,10 @@ export function StepSequencer() {
         </div>
       </HexFrame>
       </div>
-      <EditorTip>tap a step to toggle · drag a step up/down to set its velocity</EditorTip>
+      <EditorTip>
+        NORM mode — tap to toggle, drag up/down for velocity · PROB mode — tap a lit step to cycle its trigger
+        chance (100 / 75 / 50 / 25%); a step set below 100% shows its % in the corner
+      </EditorTip>
     </div>
   );
 }
@@ -171,11 +193,13 @@ const PadRow = memo(function PadRow({
   trackId,
   clipId,
   steps,
+  mode,
 }: {
   pad: DrumPad;
   trackId: string;
   clipId: string;
   steps: Step[];
+  mode: 'normal' | 'prob';
 }) {
   return (
     <>
@@ -191,11 +215,13 @@ const PadRow = memo(function PadRow({
           key={i}
           on={s.on}
           velocity={s.velocity}
+          probability={s.probability}
           quarter={i % 4 === 0}
           trackId={trackId}
           clipId={clipId}
           pad={pad}
           index={i}
+          mode={mode}
         />
       ))}
     </>
@@ -208,28 +234,40 @@ const PadRow = memo(function PadRow({
  * and committed to the store only on release, so dragging never re-schedules
  * the transport mid-gesture.
  */
+const PROB_CYCLE = [1, 0.75, 0.5, 0.25] as const;
+function nextProbability(current: number): number {
+  const idx = PROB_CYCLE.findIndex((v) => Math.abs(v - current) < 0.01);
+  return PROB_CYCLE[(idx + 1) % PROB_CYCLE.length];
+}
+
 const StepCell = memo(function StepCell({
   on,
   velocity,
+  probability,
   quarter,
   trackId,
   clipId,
   pad,
   index,
+  mode,
 }: {
   on: boolean;
   velocity: number;
+  probability?: number;
   quarter: boolean;
   trackId: string;
   clipId: string;
   pad: DrumPad;
   index: number;
+  mode: 'normal' | 'prob';
 }) {
   const toggleStep = useStore((s) => s.toggleStep);
   const setStepVelocity = useStore((s) => s.setStepVelocity);
+  const setStepProbability = useStore((s) => s.setStepProbability);
   const btnRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLSpanElement>(null);
   const drag = useRef<{ startY: number; startVel: number; vel: number; moved: boolean } | null>(null);
+  const prob = probability ?? 1;
 
   function down(e: React.PointerEvent) {
     btnRef.current?.setPointerCapture(e.pointerId);
@@ -251,7 +289,12 @@ const StepCell = memo(function StepCell({
     btnRef.current?.releasePointerCapture(e.pointerId);
     if (!d) return;
     if (!d.moved) {
-      toggleStep(trackId, clipId, pad, index);
+      // tap: prob mode cycles probability (on cells only), normal mode toggles
+      if (mode === 'prob' && on) {
+        setStepProbability(trackId, clipId, pad, index, nextProbability(prob));
+      } else {
+        toggleStep(trackId, clipId, pad, index);
+      }
     } else if (on && d.vel !== d.startVel) {
       setStepVelocity(trackId, clipId, pad, index, d.vel);
     }
@@ -282,8 +325,28 @@ const StepCell = memo(function StepCell({
         touchAction: 'none',
       }}
       aria-pressed={on}
-      title="Tap to toggle · drag up/down for velocity"
+      title={
+        mode === 'prob'
+          ? 'Tap to cycle trigger probability'
+          : 'Tap to toggle · drag up/down for velocity'
+      }
     >
+      {on && prob < 1 && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 2,
+            right: 3,
+            fontSize: 8,
+            lineHeight: 1,
+            color: '#fff',
+            textShadow: '0 0 3px #000',
+            pointerEvents: 'none',
+          }}
+        >
+          {Math.round(prob * 100)}
+        </span>
+      )}
       <span
         ref={barRef}
         style={{

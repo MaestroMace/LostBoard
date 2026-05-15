@@ -82,6 +82,8 @@ export type Step = {
   on: boolean;
   velocity: number; // 0..1
   accent?: boolean;
+  /** 0..1 chance of firing on each cycle. Undefined or 1 = always plays. */
+  probability?: number;
 };
 
 export type DrumPattern = {

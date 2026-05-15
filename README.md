@@ -37,6 +37,10 @@ intended to be reachable from an iPhone over Tailscale.
   scene header to launch the whole column. Session loops are transport-
   relative (follow tempo / start / stop) and override the arrangement until
   you switch back to ARRANGEMENT mode
+- **Per-step probability** — flip the sequencer to PROB mode and each lit
+  step can carry a 100 / 75 / 50 / 25% chance of firing. Re-rolled
+  independently every cycle so patterns breathe instead of looping
+  identically
 - **Undo / redo** — an 80-deep history of every structural and musical edit
   (clips, notes, steps, tracks), with `↶` / `↷` buttons and
   Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z
