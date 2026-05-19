@@ -211,10 +211,24 @@ export type Track = {
  */
 export type AutomationParam = 'volume' | 'pan' | 'cutoff' | 'reverb' | 'delay';
 
+/**
+ * Curve mode controls how the param reaches a point's value:
+ *  - 'linear':      linearRampToValueAtTime — straight line from the previous point
+ *  - 'exponential': exponentialRampToValueAtTime — curve hugging the next value
+ *  - 'hold':        setValueAtTime — keep the previous value, then jump at this point
+ *  - 'step':        setValueAtTime at this point — jump to the new value immediately
+ * The first point always uses setValueAtTime regardless of mode (no prior anchor).
+ * Exponential ramps clamp to a tiny positive minimum because Web Audio rejects
+ * 0 / negative targets.
+ */
+export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 'step';
+
 export type AutomationPoint = {
   id: string;
   beat: number;
   value: number;
+  /** Curve into this point (from the previous point). Defaults to 'linear'. */
+  curve?: AutomationCurve;
 };
 
 export type AutomationLane = {
@@ -241,13 +255,20 @@ export type TempoEvent = {
   id: string;
   beat: number;
   bpm: number;
+  /**
+   * How BPM moves from the previous event TO this one. 'step' (default)
+   * jumps; 'ramp' linearly interpolates via `Transport.bpm.linearRampToValueAtTime`.
+   * Ignored on the first event since there's nothing prior to ramp from.
+   */
+  curve?: 'step' | 'ramp';
 };
 
 /**
  * Sum wall-clock seconds across a beat range, walking through tempo
- * events. Each segment contributes `(segmentBeats / segmentBpm) * 60`.
- * `endBeat` exclusive. If the project has no tempo map, just uses
- * `project.bpm` throughout.
+ * events. Step segments contribute `(beats / bpm) * 60`; ramp segments
+ * use `(beats / avgBpm) * 60` because a linear BPM ramp from `a` to `b`
+ * across N beats lasts `N * 60 / ((a + b) / 2)` seconds.
+ * `endBeat` exclusive. Empty tempo map → just uses `project.bpm`.
  */
 export function projectDurationSec(project: Project, endBeat: number): number {
   const map = (project.tempoMap ?? []).slice().sort((a, b) => a.beat - b.beat);
@@ -257,7 +278,13 @@ export function projectDurationSec(project: Project, endBeat: number): number {
   for (const ev of map) {
     if (ev.beat <= 0) continue;
     if (ev.beat >= endBeat) break;
-    total += ((ev.beat - cursor) / bpm) * 60;
+    const segBeats = ev.beat - cursor;
+    if (ev.curve === 'ramp') {
+      const avg = (bpm + ev.bpm) / 2;
+      total += (segBeats / avg) * 60;
+    } else {
+      total += (segBeats / bpm) * 60;
+    }
     cursor = ev.beat;
     bpm = ev.bpm;
   }

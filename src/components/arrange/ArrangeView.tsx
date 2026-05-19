@@ -1,6 +1,13 @@
-import { createContext, memo, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
-import type { Clip, Track } from '../../audio/types';
+import {
+  AUTOMATION_PARAM_META,
+  type AutomationCurve,
+  type AutomationLane,
+  type AutomationParam,
+  type Clip,
+  type Track,
+} from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -9,10 +16,29 @@ import { importSample } from '../../state/samples';
 import { EditorTip } from '../hud/EditorTip';
 
 const ROW_H = 64;
+const AUTO_LANE_H = 56;
 /** Default px per beat at zoom = 1×. Consumers read the current value through BeatWidthContext. */
 const BASE_BEAT_W = 24;
 const BeatWidthContext = createContext(BASE_BEAT_W);
 const useBeatWidth = () => useContext(BeatWidthContext);
+
+/**
+ * AutomationOverlayContext — transient per-track UI state for the arrange
+ * automation overlay. Maps trackId → param being displayed underneath that
+ * track's clip lane. `null` (or missing) means hidden. Not persisted —
+ * it's a view toggle, not a property of the project.
+ */
+type AutomationOverlayState = {
+  visible: Record<string, AutomationParam | null>;
+  toggle(trackId: string, available: AutomationParam[]): void;
+  setParam(trackId: string, param: AutomationParam | null): void;
+};
+const AutomationOverlayContext = createContext<AutomationOverlayState>({
+  visible: {},
+  toggle: () => {},
+  setParam: () => {},
+});
+const useAutomationOverlay = () => useContext(AutomationOverlayContext);
 
 export function ArrangeView() {
   const tracks = useStore((s) => s.project.tracks);
@@ -25,6 +51,30 @@ export function ArrangeView() {
   const beatW = BASE_BEAT_W * zoom;
   const timelineW = totalBeats * beatW;
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [overlayVisible, setOverlayVisible] = useState<Record<string, AutomationParam | null>>({});
+  const overlayCtx: AutomationOverlayState = useMemo(
+    () => ({
+      visible: overlayVisible,
+      toggle: (trackId, available) => {
+        setOverlayVisible((cur) => {
+          const next = { ...cur };
+          if (next[trackId]) delete next[trackId];
+          else if (available.length > 0) next[trackId] = available[0];
+          return next;
+        });
+      },
+      setParam: (trackId, param) => {
+        setOverlayVisible((cur) => {
+          const next = { ...cur };
+          if (param === null) delete next[trackId];
+          else next[trackId] = param;
+          return next;
+        });
+      },
+    }),
+    [overlayVisible],
+  );
 
   // Cmd/Ctrl + wheel zooms. Native wheel listener so we can preventDefault
   // and stop the browser from zooming the whole page.
@@ -43,6 +93,7 @@ export function ArrangeView() {
 
   return (
     <BeatWidthContext.Provider value={beatW}>
+    <AutomationOverlayContext.Provider value={overlayCtx}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <div className="warning-stripe--thin warning-stripe" />
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
@@ -98,9 +149,18 @@ export function ArrangeView() {
             </div>
           </div>
           <div style={{ overflow: 'auto', flex: 1 }}>
-            {tracks.map((t) => (
-              <TrackHeader key={t.id} track={t} compact={isMobile} />
-            ))}
+            {tracks.map((t) => {
+              const param = overlayVisible[t.id];
+              const lane = param ? t.automation?.find((l) => l.param === param) : undefined;
+              return (
+                <div key={t.id}>
+                  <TrackHeader track={t} compact={isMobile} />
+                  {param && (
+                    <AutomationOverlayHeader track={t} param={param} hasLane={!!lane} compact={isMobile} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -112,10 +172,28 @@ export function ArrangeView() {
         >
           <Ruler beats={totalBeats} />
           <div style={{ position: 'relative', width: timelineW, minWidth: '100%' }}>
-            {tracks.map((t) => (
-              <TrackLane key={t.id} trackId={t.id} clips={t.clips} color={t.color} />
-            ))}
-            <Playhead height={tracks.length * ROW_H + 34} />
+            {tracks.map((t) => {
+              const param = overlayVisible[t.id];
+              const lane = param ? t.automation?.find((l) => l.param === param) : undefined;
+              return (
+                <div key={t.id}>
+                  <TrackLane trackId={t.id} clips={t.clips} color={t.color} />
+                  {param && (
+                    <AutomationOverlayLane
+                      trackId={t.id}
+                      param={param}
+                      lane={lane}
+                      totalBeats={totalBeats}
+                    />
+                  )}
+                </div>
+              );
+            })}
+            <Playhead
+              height={
+                tracks.reduce((s, t) => s + ROW_H + (overlayVisible[t.id] ? AUTO_LANE_H : 0), 0) + 34
+              }
+            />
           </div>
         </div>
       </div>
@@ -127,6 +205,7 @@ export function ArrangeView() {
       </EditorTip>
       <ZoomFloater zoom={zoom} setZoom={setZoom} />
     </div>
+    </AutomationOverlayContext.Provider>
     </BeatWidthContext.Provider>
   );
 }
@@ -324,6 +403,9 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
   const updateTrack = useStore((s) => s.updateTrack);
   const removeTrack = useStore((s) => s.removeTrack);
   const setView = useStore((s) => s.setView);
+  const overlay = useAutomationOverlay();
+  const overlayActive = !!overlay.visible[track.id];
+  const availableParams: AutomationParam[] = (track.automation ?? []).map((l) => l.param);
 
   return (
     <div
@@ -373,6 +455,27 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             ✎
           </button>
         )}
+        <button
+          className={`nerv-btn nerv-btn--icon ${overlayActive ? 'is-active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (availableParams.length === 0) {
+              selectTrack(track.id);
+              useStore.getState().setView('automation');
+              return;
+            }
+            overlay.toggle(track.id, availableParams);
+          }}
+          title={
+            availableParams.length === 0
+              ? 'No automation lanes — opens AUTOMATION tab'
+              : overlayActive
+                ? 'Hide automation lane'
+                : 'Show automation lane'
+          }
+        >
+          A
+        </button>
         <button
           className="nerv-btn nerv-btn--icon"
           onClick={(e) => {
@@ -492,6 +595,217 @@ const TrackLane = memo(function TrackLane({
     </div>
   );
 });
+
+/**
+ * AutomationOverlayHeader — left-column counterpart to AutomationOverlayLane.
+ * Lives directly under the track's main header row so the heights stay
+ * aligned with the timeline column. Lets the user switch which param this
+ * track's overlay shows.
+ */
+function AutomationOverlayHeader({
+  track,
+  param,
+  hasLane,
+  compact,
+}: {
+  track: Track;
+  param: AutomationParam;
+  hasLane: boolean;
+  compact: boolean;
+}) {
+  const overlay = useAutomationOverlay();
+  const setView = useStore((s) => s.setView);
+  const selectTrack = useStore((s) => s.selectTrack);
+  const params: AutomationParam[] = (track.automation ?? []).map((l) => l.param);
+  return (
+    <div
+      style={{
+        height: AUTO_LANE_H,
+        padding: '2px 6px 4px',
+        background: 'rgba(0,0,0,0.55)',
+        borderBottom: '1px solid rgba(255,106,0,0.25)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        justifyContent: 'center',
+      }}
+    >
+      <span className="hud-readout--dim hud-readout" style={{ fontSize: 9, letterSpacing: 1 }}>
+        AUTO {hasLane ? '●' : '○'}
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <select
+          className="display"
+          value={param}
+          onChange={(e) => overlay.setParam(track.id, e.target.value as AutomationParam)}
+          style={{ flex: 1, fontSize: 9, minWidth: 0 }}
+        >
+          {params.map((p) => (
+            <option key={p} value={p}>
+              {AUTOMATION_PARAM_META[p].label}
+            </option>
+          ))}
+        </select>
+        {!compact && (
+          <button
+            className="nerv-btn nerv-btn--icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              selectTrack(track.id);
+              setView('automation');
+            }}
+            title="Open AUTOMATION tab for this track"
+            style={{ minWidth: 0, padding: '2px 4px', fontSize: 9 }}
+          >
+            ⇲
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AutomationOverlayLane — timeline-aligned strip showing the selected
+ * param's curve for this track. Click empty space to drop a point, drag
+ * to move a point, double-click to delete. Same data + scheduling path
+ * as the AUTOMATION tab; this is purely a placement convenience so the
+ * user doesn't have to context-switch while arranging.
+ *
+ * Curve rendering mirrors `LaneEditor`: linear → straight, step/hold →
+ * right-angle, exponential → quadratic bezier.
+ */
+function AutomationOverlayLane({
+  trackId,
+  param,
+  lane,
+  totalBeats,
+}: {
+  trackId: string;
+  param: AutomationParam;
+  lane: AutomationLane | undefined;
+  totalBeats: number;
+}) {
+  const BEAT_W = useBeatWidth();
+  const addAutomationPoint = useStore((s) => s.addAutomationPoint);
+  const updateAutomationPoint = useStore((s) => s.updateAutomationPoint);
+  const removeAutomationPoint = useStore((s) => s.removeAutomationPoint);
+  const meta = AUTOMATION_PARAM_META[param];
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragging = useRef<string | null>(null);
+
+  const width = Math.max(1, totalBeats * BEAT_W);
+
+  function clientToData(clientX: number, clientY: number): { beat: number; value: number } | null {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const r = svg.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const beat = Math.max(0, Math.min(totalBeats, (x / r.width) * totalBeats));
+    const t = 1 - y / r.height;
+    const value = meta.min + Math.max(0, Math.min(1, t)) * (meta.max - meta.min);
+    return { beat, value };
+  }
+
+  function background(e: React.PointerEvent<SVGSVGElement>) {
+    if (e.target !== e.currentTarget) return;
+    const d = clientToData(e.clientX, e.clientY);
+    if (!d) return;
+    addAutomationPoint(trackId, param, d.beat, d.value);
+  }
+  function pointDown(e: React.PointerEvent, pointId: string) {
+    e.stopPropagation();
+    dragging.current = pointId;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  }
+  function pointMove(e: React.PointerEvent) {
+    if (!dragging.current) return;
+    const d = clientToData(e.clientX, e.clientY);
+    if (!d) return;
+    updateAutomationPoint(trackId, param, dragging.current, d);
+  }
+  function pointUp() {
+    dragging.current = null;
+  }
+
+  const xFor = (beat: number) => (beat / totalBeats) * 100;
+  const yFor = (value: number) => {
+    const t = (value - meta.min) / (meta.max - meta.min);
+    return (1 - Math.max(0, Math.min(1, t))) * 100;
+  };
+
+  const sorted = [...(lane?.points ?? [])].sort((a, b) => a.beat - b.beat);
+  const pathD = (() => {
+    if (sorted.length === 0) return '';
+    const segs: string[] = [`M ${xFor(sorted[0].beat)} ${yFor(sorted[0].value)}`];
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const pt = sorted[i];
+      const x1 = xFor(pt.beat);
+      const y0 = yFor(prev.value);
+      const y1 = yFor(pt.value);
+      const curve: AutomationCurve = pt.curve ?? 'linear';
+      if (curve === 'step' || curve === 'hold') {
+        segs.push(`L ${x1} ${y0}`, `L ${x1} ${y1}`);
+      } else if (curve === 'exponential') {
+        segs.push(`Q ${x1} ${y0} ${x1} ${y1}`);
+      } else {
+        segs.push(`L ${x1} ${y1}`);
+      }
+    }
+    return segs.join(' ');
+  })();
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        height: AUTO_LANE_H,
+        width,
+        borderBottom: '1px solid rgba(255,106,0,0.18)',
+        background: 'rgba(0,0,0,0.35)',
+        contain: 'layout style',
+      }}
+    >
+      <svg
+        ref={svgRef}
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        width="100%"
+        height={AUTO_LANE_H}
+        onPointerDown={background}
+        onPointerMove={pointMove}
+        onPointerUp={pointUp}
+        onPointerCancel={pointUp}
+        style={{ display: 'block', cursor: 'crosshair', touchAction: 'none' }}
+      >
+        <line x1={0} y1={50} x2={100} y2={50} stroke="rgba(255,106,0,0.15)" strokeWidth={0.2} strokeDasharray="1 1" />
+        {sorted.length > 1 && (
+          <path d={pathD} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+        )}
+        {sorted.map((pt) => (
+          <circle
+            key={pt.id}
+            cx={xFor(pt.beat)}
+            cy={yFor(pt.value)}
+            r={1.8}
+            fill="var(--nerv-orange-bright)"
+            stroke="#000"
+            strokeWidth={0.3}
+            vectorEffect="non-scaling-stroke"
+            style={{ cursor: 'grab', touchAction: 'none' }}
+            onPointerDown={(e) => pointDown(e, pt.id)}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              removeAutomationPoint(trackId, param, pt.id);
+            }}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 /** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
 const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {

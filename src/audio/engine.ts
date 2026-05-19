@@ -422,10 +422,34 @@ class Engine {
       if (!param) continue;
       const points = [...lane.points].sort((a, b) => a.beat - b.beat);
       points.forEach((pt, i) => {
+        const curve = pt.curve ?? 'linear';
+        const prev = points[i - 1];
         const id = t.schedule((time) => {
           try {
-            if (i === 0) param.setValueAtTime(pt.value, time);
-            else param.linearRampToValueAtTime(pt.value, time);
+            if (i === 0) {
+              param.setValueAtTime(pt.value, time);
+              return;
+            }
+            switch (curve) {
+              case 'step':
+                param.setValueAtTime(pt.value, time);
+                break;
+              case 'hold':
+                // keep the previous value all the way until `time`, then jump
+                if (prev) param.setValueAtTime(prev.value, time);
+                param.setValueAtTime(pt.value, time);
+                break;
+              case 'exponential': {
+                // exponentialRampToValueAtTime rejects 0/negative — clamp.
+                const target = pt.value === 0 ? 0.00001 : Math.sign(pt.value) * Math.max(Math.abs(pt.value), 0.00001);
+                param.exponentialRampToValueAtTime(target, time);
+                break;
+              }
+              case 'linear':
+              default:
+                param.linearRampToValueAtTime(pt.value, time);
+                break;
+            }
           } catch {
             /* param may have been disposed mid-schedule */
           }
@@ -458,7 +482,14 @@ class Engine {
     for (const ev of sorted) {
       if (ev.beat <= 0.0001) continue;
       const id = t.schedule((time) => {
-        t.bpm.setValueAtTime(ev.bpm, time);
+        if (ev.curve === 'ramp') {
+          // chains from whatever was scheduled before — Web Audio ramps
+          // from the prior automation event's value, so consecutive ramp
+          // events produce piecewise-linear BPM glides
+          t.bpm.linearRampToValueAtTime(ev.bpm, time);
+        } else {
+          t.bpm.setValueAtTime(ev.bpm, time);
+        }
       }, beatsToBarsBeats(ev.beat));
       this.scheduledIds.push(id);
     }
@@ -975,7 +1006,7 @@ class TrackNode {
 // -----------------------------------------------------------
 
 /**
- * Anything that exposes the two scheduling methods we need — both Web Audio
+ * Anything that exposes the four scheduling methods we need — both Web Audio
  * AudioParam and Tone's Signal/Param wrappers satisfy this shape, so the
  * automation scheduler doesn't need to care which side of the wrapper it's
  * driving.
@@ -983,6 +1014,7 @@ class TrackNode {
 type Automatable = {
   setValueAtTime(value: number, time: number): unknown;
   linearRampToValueAtTime(value: number, time: number): unknown;
+  exponentialRampToValueAtTime(value: number, time: number): unknown;
 };
 
 type Instrument = {

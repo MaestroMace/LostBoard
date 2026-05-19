@@ -3,10 +3,19 @@ import { useStore } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import {
   AUTOMATION_PARAM_META,
+  type AutomationCurve,
   type AutomationLane,
   type AutomationParam,
   type Track,
 } from '../../audio/types';
+
+const CURVE_MODES: AutomationCurve[] = ['linear', 'exponential', 'hold', 'step'];
+const CURVE_GLYPH: Record<AutomationCurve, string> = {
+  linear: '╱',
+  exponential: '⌒',
+  hold: '⎺',
+  step: '⌐',
+};
 
 const ALL_PARAMS: AutomationParam[] = ['volume', 'pan', 'cutoff', 'reverb', 'delay'];
 
@@ -162,6 +171,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
   const project = useStore((s) => s.project);
   const addAutomationPoint = useStore((s) => s.addAutomationPoint);
   const updateAutomationPoint = useStore((s) => s.updateAutomationPoint);
+  const setAutomationPointCurve = useStore((s) => s.setAutomationPointCurve);
   const removeAutomationPoint = useStore((s) => s.removeAutomationPoint);
   const removeAutomationLane = useStore((s) => s.removeAutomationLane);
 
@@ -211,7 +221,41 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
   };
 
   const sorted = [...lane.points].sort((a, b) => a.beat - b.beat);
-  const polyline = sorted.map((p) => `${xFor(p.beat)},${yFor(p.value)}`).join(' ');
+
+  // Build the path so each segment reflects its destination point's curve:
+  // linear → straight line, step → vertical jump at the new point, hold →
+  // horizontal then vertical at the new point, exponential → quadratic
+  // bezier biased toward the destination y.
+  const pathD = (() => {
+    if (sorted.length === 0) return '';
+    const segs: string[] = [`M ${xFor(sorted[0].beat)} ${yFor(sorted[0].value)}`];
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const pt = sorted[i];
+      const x0 = xFor(prev.beat);
+      const y0 = yFor(prev.value);
+      const x1 = xFor(pt.beat);
+      const y1 = yFor(pt.value);
+      const curve = pt.curve ?? 'linear';
+      switch (curve) {
+        case 'step':
+          segs.push(`L ${x1} ${y0}`, `L ${x1} ${y1}`);
+          break;
+        case 'hold':
+          segs.push(`L ${x1} ${y0}`, `L ${x1} ${y1}`);
+          break;
+        case 'exponential':
+          // bezier with control point on the destination's vertical line
+          segs.push(`Q ${x1} ${y0} ${x1} ${y1}`);
+          break;
+        case 'linear':
+        default:
+          segs.push(`L ${x1} ${y1}`);
+          break;
+      }
+    }
+    return segs.join(' ');
+  })();
 
   return (
     <HexFrame title={`LANE // ${meta.label}`}>
@@ -264,7 +308,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
           {/* horizontal mid line */}
           <line x1={0} y1={50} x2={100} y2={50} stroke="rgba(255,106,0,0.18)" strokeWidth={0.2} strokeDasharray="1 1" />
           {sorted.length > 1 && (
-            <polyline points={polyline} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+            <path d={pathD} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           )}
           {sorted.map((pt) => (
             <circle
@@ -297,7 +341,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
               key={pt.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '60px 1fr 1fr 50px',
+                gridTemplateColumns: '60px 1fr 1fr 110px 50px',
                 gap: 6,
                 padding: '2px 6px',
                 background: 'rgba(0,0,0,0.4)',
@@ -329,6 +373,22 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
                 }
                 style={{ width: '100%' }}
               />
+              <select
+                className="display"
+                value={pt.curve ?? 'linear'}
+                onChange={(e) =>
+                  setAutomationPointCurve(track.id, lane.param, pt.id, e.target.value as AutomationCurve)
+                }
+                disabled={i === 0}
+                title={i === 0 ? 'First point — no curve into it' : 'Curve from previous point'}
+                style={{ width: '100%' }}
+              >
+                {CURVE_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {CURVE_GLYPH[m]} {m}
+                  </option>
+                ))}
+              </select>
               <button
                 className="nerv-btn nerv-btn--icon nerv-btn--rec"
                 onClick={() => removeAutomationPoint(track.id, lane.param, pt.id)}

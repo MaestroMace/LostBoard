@@ -394,7 +394,7 @@ function TempoMapEditor() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '80px 1fr 1fr 60px',
+                gridTemplateColumns: '70px 1fr 1fr 100px 60px',
                 gap: 6,
                 padding: '4px 8px',
                 fontSize: 9,
@@ -404,6 +404,7 @@ function TempoMapEditor() {
               <span>#</span>
               <span>BEAT</span>
               <span>BPM</span>
+              <span>CURVE</span>
               <span></span>
             </div>
             {events.map((ev, i) => (
@@ -411,7 +412,7 @@ function TempoMapEditor() {
                 key={ev.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '80px 1fr 1fr 60px',
+                  gridTemplateColumns: '70px 1fr 1fr 100px 60px',
                   gap: 6,
                   padding: '4px 8px',
                   background: 'rgba(0,0,0,0.4)',
@@ -439,6 +440,17 @@ function TempoMapEditor() {
                   onChange={(e) => updateTempoEvent(ev.id, { bpm: parseFloat(e.target.value) || project.bpm })}
                   style={{ width: '100%' }}
                 />
+                <select
+                  className="display"
+                  value={ev.curve ?? 'step'}
+                  onChange={(e) => updateTempoEvent(ev.id, { curve: e.target.value as 'step' | 'ramp' })}
+                  disabled={i === 0}
+                  title={i === 0 ? 'First event — no curve into it' : 'Step jumps; ramp glides linearly from previous BPM'}
+                  style={{ width: '100%' }}
+                >
+                  <option value="step">⌐ step</option>
+                  <option value="ramp">╱ ramp</option>
+                </select>
                 <button
                   className="nerv-btn nerv-btn--icon nerv-btn--rec"
                   onClick={() => removeTempoEvent(ev.id)}

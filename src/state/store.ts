@@ -4,6 +4,7 @@ import {
   DEFAULT_SYNTH,
   DEFAULT_FX,
   DRUM_PADS,
+  type AutomationCurve,
   type AutomationParam,
   type AutomationPoint,
   type Clip,
@@ -225,7 +226,7 @@ type Actions = {
   setBpm(bpm: number): void;
   setTimeSig(n: number, d: number): void;
   addTempoEvent(beat: number, bpm: number): TempoEvent;
-  updateTempoEvent(id: string, patch: Partial<Pick<TempoEvent, 'beat' | 'bpm'>>): void;
+  updateTempoEvent(id: string, patch: Partial<Pick<TempoEvent, 'beat' | 'bpm' | 'curve'>>): void;
   removeTempoEvent(id: string): void;
   clearTempoMap(): void;
   setMasterVolume(db: number): void;
@@ -254,7 +255,8 @@ type Actions = {
   setSamplerSample(id: string, sampleId: string | null, rootPitch?: number): void;
 
   addAutomationPoint(trackId: string, param: AutomationParam, beat: number, value: number): AutomationPoint | null;
-  updateAutomationPoint(trackId: string, param: AutomationParam, pointId: string, patch: Partial<Pick<AutomationPoint, 'beat' | 'value'>>): void;
+  updateAutomationPoint(trackId: string, param: AutomationParam, pointId: string, patch: Partial<Pick<AutomationPoint, 'beat' | 'value' | 'curve'>>): void;
+  setAutomationPointCurve(trackId: string, param: AutomationParam, pointId: string, curve: AutomationCurve): void;
   removeAutomationPoint(trackId: string, param: AutomationParam, pointId: string): void;
   removeAutomationLane(trackId: string, param: AutomationParam): void;
   updateFx(id: string, patch: Partial<FxRack>): void;
@@ -439,6 +441,7 @@ export const useStore = create<Store>()(
               ...ev,
               beat: patch.beat !== undefined ? Math.max(0, patch.beat) : ev.beat,
               bpm: patch.bpm !== undefined ? Math.max(20, Math.min(400, patch.bpm)) : ev.bpm,
+              curve: patch.curve !== undefined ? patch.curve : ev.curve,
             },
       );
       map.sort((a, b) => a.beat - b.beat);
@@ -613,6 +616,7 @@ export const useStore = create<Store>()(
                     ...p,
                     beat: patch.beat !== undefined ? Math.max(0, patch.beat) : p.beat,
                     value: patch.value !== undefined ? patch.value : p.value,
+                    curve: patch.curve !== undefined ? patch.curve : p.curve,
                   },
             )
             .sort((a, b) => a.beat - b.beat);
@@ -622,6 +626,21 @@ export const useStore = create<Store>()(
       });
       // not history-tracked — point drags are knob-like
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    setAutomationPointCurve: (trackId, param, pointId, curve) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? []).map((lane) =>
+          lane.param !== param
+            ? lane
+            : {
+                ...lane,
+                points: lane.points.map((p) => (p.id === pointId ? { ...p, curve } : p)),
+              },
+        );
+        return { ...t, automation: lanes };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
     removeAutomationPoint: (trackId, param, pointId) => {
       const tracks = get().project.tracks.map((t) => {
