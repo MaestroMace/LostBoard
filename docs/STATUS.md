@@ -43,6 +43,9 @@ out here is wired into the running app — type-check + build pass clean.
 
 | Commit | Feature | Notes |
 | --- | --- | --- |
+| `6401c4f` | **Global swing / groove** | Project.swing (0..1) + swingSubdivision drive Tone.Transport's built-in swing; applies live to scheduled events. SWING slider in PROJECT settings. |
+| `49ad6c8` | **Tempo curve preview + sample GC** | Read-only BPM sparkline above the tempo events table. `gcOrphanedSamples` deletes IndexedDB blobs no slot/project references (⌫ GC SAMPLES button). |
+| `c5c6cfc` | **FX-rack automation targets** | eqLow/Mid/High + compThreshold/Ratio added to AutomationParam; applyFx/applySends skip params under automation so a knob tweak can't stomp scheduled values. |
 | `1527d59` | **MAGI ticker telemetry + PWA install** | Ticker rotates through live engine readings (master peak dB, transport state, BPM, mode, track/clip/automation/tempo counts, MIDI device) plus a smaller pool of flavor lines. PROJECT view captures `beforeinstallprompt` and surfaces a ⬇ INSTALL TO HOME button on Chromium PWAs. |
 | `901a267` | **Per-note humanise/quantise + audio time-stretch** | Piano-roll notes are selectable (click / Cmd+click toggles / shift still deletes); QUANTIZE / HUMANIZE honour the selection. Audio clips gain `stretchMode: 'pitch' \| 'time'` — 'time' builds a Tone.GrainPlayer so pitch is preserved across tempo changes. |
 | `2caf4db` | **Curve modes + tempo ramps + arrange-view automation overlay** | AutomationPoint.curve dispatches setValueAtTime / linear / exponential / hold/step ramps. TempoEvent.curve adds 'ramp' (linear BPM glides via Transport.bpm.linearRampToValueAtTime). Each track in Arrange gets an "A" toggle that opens an inline lane with the same click/drag/dbl-click semantics as the AUTOMATION tab. |
@@ -132,32 +135,27 @@ Things that work but have a trade-off worth flagging:
 
 Highest-leverage to lowest:
 
-1. **FX-rack params automatable.** Currently only volume / pan / cutoff
-   / reverb / delay are automation targets — extending to EQ bands,
-   comp threshold/ratio, chorus depth, bitcrush bits would round out
-   the lane parameter list.
-2. **Multi-zone sampler.** Velocity layers + key zones. The drum-pad
+1. **Multi-zone sampler.** Velocity layers + key zones. The drum-pad
    sample swap already proves out per-pad routing.
-3. **MIDI punch-in with pre-roll.** Today the MIDI bridge writes into
+2. **MIDI punch-in with pre-roll.** Today the MIDI bridge writes into
    the armed synth track's active clip — wire a dedicated punch-in mode
    with a pre-roll countdown.
-4. **Web MIDI output / external sync.** Send notes to a hardware synth
+3. **Web MIDI output / external sync.** Send notes to a hardware synth
    over MIDI; sync transport to MIDI clock.
-5. **Sidechain attack/release split.** Replace the geometric-mean follower
-   with two followers fed through `Tone.Max`. Needs careful DSP wiring
-   because Tone.Follower's smoothing is symmetric.
-6. **Per-lane overlay.** Today the Arrange overlay shows one param per
+4. **Sidechain attack/release split.** Replace the geometric-mean follower
+   with two followers fed through a signal-domain max. Needs careful DSP
+   wiring because Tone.Follower's smoothing is symmetric.
+5. **Per-lane overlay.** Today the Arrange overlay shows one param per
    track; stacking N lanes vertically would let users see and edit
    multiple curves at once.
-7. **Curve preview on tempo map.** Add a small BPM sparkline alongside
-   the events table so accel/rit shapes are visible without scrubbing
-   the transport.
-8. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
+6. **Chorus depth / bitcrush bits automation.** chorus.depth is a plain
+   number (not a signal), so it needs a different scheduling path than
+   the EQ/comp params just added.
+7. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
    controls on iOS Safari (the install banner already covers the
    Chromium PWA path).
-9. **Garbage-collect orphaned samples from IndexedDB.** Samples no
-   longer referenced by any audio clip / pad / sampler accumulate over
-   time.
+8. **Per-track / per-clip groove.** Swing is global today; a per-clip
+   groove amount would let one part shuffle while another stays straight.
 
 ## Repo layout cheatsheet
 

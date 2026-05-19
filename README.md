@@ -141,17 +141,20 @@ changelog and known limitations):
   clip / automation / tempo counts, and MIDI device
 - **PWA install prompt** on Chromium browsers (⬇ INSTALL TO HOME in
   the PROJECT view)
+- **FX-rack automation** — EQ bands + compressor threshold/ratio are
+  automation targets alongside volume / pan / cutoff / sends
+- **Tempo curve preview** — a BPM sparkline over the tempo events
+- **Orphaned-sample GC** — drop persisted audio nothing references
+- **Global swing / groove** via the transport
 
 Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
 full ranked roadmap):
 
-- FX-rack params automatable (EQ bands, compressor threshold/ratio,
-  chorus depth, bitcrush bits)
 - Multi-zone sampler (velocity layers + key zones)
 - MIDI punch-in with pre-roll
 - Web MIDI output / external sync
 - Sidechain attack/release split
-- Garbage-collect orphaned samples from IndexedDB
+- Per-track / per-clip groove
 
 ## Status & handoff
 
