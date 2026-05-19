@@ -1,6 +1,6 @@
 # LostBoard — branch status & handoff notes
 
-Branch: `claude/evangelion-daw-app-tdqb7` (PR #1)
+Branch: `claude/plan-next-features-UGd6m` (post-PR-#1 follow-up round)
 
 A running record of what's been built on this branch, what's known to be
 incomplete or rough, and where to pick up next. Update this file when you
@@ -38,6 +38,15 @@ out here is wired into the running app — type-check + build pass clean.
   the Arrange highlight and the editors can never disagree.
 - **Consistency pass** (`840ed4f`) — shared `EditorTip` component, unified
   empty-state copy, MAGI codename added to the Synth panel for parity.
+
+### Feature rounds (this branch, recent → older)
+
+| Commit | Feature | Notes |
+| --- | --- | --- |
+| `3f144ba` | **Automation lanes** | Per-track AutomationLane[] for volume / pan / cutoff / reverb / delay; engine chains `linearRampToValueAtTime` between points so the curve survives tempo changes. AUTOMATION tab: SVG sparkline (click-add, drag, dbl-click delete) + numeric points table. |
+| `4acf052` | **Tempo map** | Optional Project.tempoMap of (beat, bpm) events; engine queues `Transport.bpm.setValueAtTime` per event. PROJECT view sparse table editor. Offline bounce duration walks the map. |
+| `9a63ca4` | **Wavetable + chromatic sampler** | Two new SynthEngine values plugged into the synth track. Wavetable morphs partials across 4 frames via a POSITION knob; sampler uses Tone.Sampler over the runtime bank with a root-pitch knob and upload picker. |
+| `f1647c0` | **Offline bounce** | `Engine.bounceOffline` builds a parallel Engine inside `Tone.Offline` so the global Tone context swap binds new nodes to the offline destination. Master + per-track offline stems (16-bit PCM WAV). Tone.Recorder skipped when context isn't realtime. |
 
 ### Feature rounds (PR #1, recent → older)
 
@@ -94,23 +103,51 @@ Things that work but have a trade-off worth flagging:
 - **Stem export is real-time.** No `Tone.Offline` bounce yet; long
   projects bounce in their own length.
 
+## Known limitations / rough edges on the new round
+
+- **Automation lanes are arrange-tab-only.** No drawn curve on the
+  Arrange view itself — points live in the AUTOMATION tab. A click-and-
+  drag overlay under each track is the obvious next step.
+- **Automation is piecewise-linear only.** No curve / hold / step
+  interpolation modes yet. `linearRampToValueAtTime` is the only ramp
+  the scheduler issues.
+- **Cutoff automation only targets the instrument lowpass.** The FX
+  rack's EQ bands and the compressor aren't yet automatable params.
+- **Wavetable engine uses a fixed 4-frame morph.** No user-loaded
+  wavetables and no per-voice unison spread; POSITION simply lerps
+  through partials sets.
+- **Sampler is single-zone.** One sample mapped to one root pitch is
+  resampled across the keyboard. No multi-sample / velocity layers.
+  ADSR's decay folds into release because Tone.Sampler doesn't expose
+  separate decay/sustain.
+- **Tempo map is step-only.** No ramps between events; BPM changes
+  jump. Good enough for arrangement breaks; not enough for a true
+  tempo-curve accel/rit.
+- **Offline render rebuilds the full graph per stem.** N stems = N
+  separate Tone.Offline passes (one per track, others muted). Still
+  much faster than realtime on any non-trivial project, but a
+  single-pass multi-channel renderer would be cheaper.
+
 ## Roadmap — what's next, ranked
 
 Highest-leverage to lowest, based on what I'd reach for after this:
 
-1. **Automation lanes per parameter.** The single biggest missing DAW
-   feature. Would need a per-track automation model, a curve UI in Arrange,
-   and engine `scheduleAutomation` that ramps params over time.
-2. **Offline bounce via `Tone.Offline`.** Faster-than-real-time master and
-   stem export. Mostly mechanical given the existing recorder paths.
-3. **Tempo automation / tempo map.** BPM changes over time.
-4. **Wavetable instrument + chromatic sampler.** Round out the synth side
-   beyond subtractive and FM.
-5. **Note humanise/quantise per-note, not whole-clip.** Honour
+1. **Arrange-view automation overlay.** Draw the current track's lanes
+   on top of the clip strip with the same click-add / drag-move
+   semantics as the AutomationView, so users don't have to context-
+   switch to the tab to nudge a curve.
+2. **Curve modes for automation points.** hold / step / exponential in
+   addition to linear; scheduler dispatches between
+   `setValueAtTime` / `exponentialRampToValueAtTime`.
+3. **Tempo ramps.** Replace BPM jumps with linear ramps between tempo
+   events.
+4. **Note humanise/quantise per-note, not whole-clip.** Honour
    `selectedNoteIds` (which doesn't exist yet — would mirror the clip
    selection refactor we did).
-6. **Audio time-stretch (real, not varispeed).** Drop in `GrainPlayer` or
+5. **Audio time-stretch (real, not varispeed).** Drop in `GrainPlayer` or
    build a small offline-resampled cache per source-BPM.
+6. **Multi-zone sampler.** Velocity layers + key zones; a small drum-
+   sampler patch is mostly already there with `padSamples`.
 7. **MIDI clip from arrange recording.** Today the MIDI bridge writes into
    the armed synth track's active clip — wire a dedicated punch-in mode
    with a pre-roll countdown.

@@ -122,13 +122,27 @@ Done so far: full arrange/sequencer/piano-roll/mixer, dual-engine synth,
 per-track FX rack, audio tracks with mic recording + file import, master
 bounce, HUD scopes, keyboard control.
 
-Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
-full ranked roadmap, known limitations, and per-commit changelog):
+Recently landed (see [`docs/STATUS.md`](docs/STATUS.md) for the full per-commit
+changelog and known limitations):
 
-- Automation lanes per parameter
-- Offline (faster-than-real-time) bounce via `Tone.Offline`
-- Tempo automation / tempo map
-- Wavetable instrument + chromatic sampler
+- **Offline bounce** via `Tone.Offline` — master + per-track stems as WAVs,
+  faster-than-real-time
+- **Wavetable** synth engine (4-frame partials morph) + **chromatic
+  sampler** engine (Tone.Sampler over the runtime bank)
+- **Tempo map** — sparse (beat, BPM) events drive `Transport.bpm` step
+  changes mid-arrangement
+- **Automation lanes** per track for volume / pan / cutoff / reverb /
+  delay; SVG sparkline editor in a new AUTOMATION tab, engine chains
+  `linearRampToValueAtTime` between points
+
+Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
+full ranked roadmap):
+
+- Arrange-view automation overlay (currently lanes live only in the
+  AUTOMATION tab)
+- Curve modes for automation points (hold / step / exponential)
+- Tempo ramps between events (current map is step-only)
+- Per-note humanise/quantise (vs. the current whole-clip)
 - Real audio time-stretch (vs. the current varispeed warp)
 - Sync the MAGI ticker to actual engine + transport telemetry
 - Garbage-collect orphaned samples from IndexedDB
