@@ -146,11 +146,13 @@ changelog and known limitations):
 - **Tempo curve preview** — a BPM sparkline over the tempo events
 - **Orphaned-sample GC** — drop persisted audio nothing references
 - **Global swing / groove** via the transport
+- **Multi-zone sampler** — multiple samples key-mapped across the
+  keyboard, interpolated by Tone.Sampler
 
 Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
 full ranked roadmap):
 
-- Multi-zone sampler (velocity layers + key zones)
+- Sampler velocity layers
 - MIDI punch-in with pre-roll
 - Web MIDI output / external sync
 - Sidechain attack/release split

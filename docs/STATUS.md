@@ -43,6 +43,7 @@ out here is wired into the running app — type-check + build pass clean.
 
 | Commit | Feature | Notes |
 | --- | --- | --- |
+| `d2cc938` | **Multi-zone sampler** | Sampler engine takes a SamplerZone[] (sampleId + rootPitch); Tone.Sampler interpolates between zones. Legacy single-sample fields migrate on the fly. Zone-table UI. |
 | `6401c4f` | **Global swing / groove** | Project.swing (0..1) + swingSubdivision drive Tone.Transport's built-in swing; applies live to scheduled events. SWING slider in PROJECT settings. |
 | `49ad6c8` | **Tempo curve preview + sample GC** | Read-only BPM sparkline above the tempo events table. `gcOrphanedSamples` deletes IndexedDB blobs no slot/project references (⌫ GC SAMPLES button). |
 | `c5c6cfc` | **FX-rack automation targets** | eqLow/Mid/High + compThreshold/Ratio added to AutomationParam; applyFx/applySends skip params under automation so a knob tweak can't stomp scheduled values. |
@@ -119,10 +120,10 @@ Things that work but have a trade-off worth flagging:
 - **Wavetable engine uses a fixed 4-frame morph.** No user-loaded
   wavetables and no per-voice unison spread; POSITION simply lerps
   through partials sets.
-- **Sampler is single-zone.** One sample mapped to one root pitch is
-  resampled across the keyboard. No multi-sample / velocity layers.
-  ADSR's decay folds into release because Tone.Sampler doesn't expose
-  separate decay/sustain.
+- **Sampler has key zones but no velocity layers.** Multiple samples
+  map across the keyboard by root pitch, but a zone can't be picked by
+  note velocity. ADSR's decay still folds into release because
+  Tone.Sampler doesn't expose separate decay/sustain.
 - **GrainPlayer time-stretch isn't free.** The granular path has more
   CPU cost than the varispeed Player and audible grain artifacts on
   large stretch ratios. Default stretchMode stays 'pitch'.
@@ -135,8 +136,8 @@ Things that work but have a trade-off worth flagging:
 
 Highest-leverage to lowest:
 
-1. **Multi-zone sampler.** Velocity layers + key zones. The drum-pad
-   sample swap already proves out per-pad routing.
+1. **Sampler velocity layers.** Key zones are done; velocity layers
+   would need parallel Tone.Samplers picked by note velocity.
 2. **MIDI punch-in with pre-roll.** Today the MIDI bridge writes into
    the armed synth track's active clip — wire a dedicated punch-in mode
    with a pre-roll countdown.
@@ -150,7 +151,7 @@ Highest-leverage to lowest:
    multiple curves at once.
 6. **Chorus depth / bitcrush bits automation.** chorus.depth is a plain
    number (not a signal), so it needs a different scheduling path than
-   the EQ/comp params just added.
+   the EQ/comp params.
 7. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
    controls on iOS Safari (the install banner already covers the
    Chromium PWA path).
