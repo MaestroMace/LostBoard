@@ -39,6 +39,7 @@ async function bootEngine() {
   const p = st.project;
   audioEngine.setBpm(p.bpm);
   audioEngine.setTimeSig(p.numerator, p.denominator);
+  audioEngine.setSwing(p.swing ?? 0, p.swingSubdivision ?? '8n');
   audioEngine.setMasterVolume(p.master.volume);
   audioEngine.setLoop(p.loopEnabled, p.loopStart, p.loopEnd);
   audioEngine.startMetronome(st.metronome);

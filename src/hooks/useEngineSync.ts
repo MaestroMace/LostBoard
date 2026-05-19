@@ -20,13 +20,23 @@ type Snapshot = {
   numerator: number;
   denominator: number;
   tempoMap: Project['tempoMap'];
+  swing: number;
+  swingSubdivision: string;
   trackById: Map<string, Track>;
 };
 
 function snapshot(p: Project): Snapshot {
   const trackById = new Map<string, Track>();
   for (const t of p.tracks) trackById.set(t.id, t);
-  return { bpm: p.bpm, numerator: p.numerator, denominator: p.denominator, tempoMap: p.tempoMap, trackById };
+  return {
+    bpm: p.bpm,
+    numerator: p.numerator,
+    denominator: p.denominator,
+    tempoMap: p.tempoMap,
+    swing: p.swing ?? 0,
+    swingSubdivision: p.swingSubdivision ?? '8n',
+    trackById,
+  };
 }
 
 function recordToMap(rec: Record<string, string>): Map<string, string> {
@@ -60,6 +70,13 @@ export function useEngineSync() {
         // sidechain wiring needs every node to exist; reconcile after the per-track pass
         if (anyTrackChanged || project.tracks.length !== prev.trackById.size) {
           audioEngine.applySidechains(project);
+        }
+
+        // swing applies to already-scheduled events live — no re-schedule needed
+        const swing = project.swing ?? 0;
+        const swingSub = project.swingSubdivision ?? '8n';
+        if (swing !== prev.swing || swingSub !== prev.swingSubdivision) {
+          audioEngine.setSwing(swing, swingSub);
         }
 
         // decide whether the transport needs a full re-schedule

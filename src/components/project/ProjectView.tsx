@@ -20,6 +20,7 @@ export function ProjectView() {
   const exportProject = useStore((s) => s.exportProject);
   const setBpm = useStore((s) => s.setBpm);
   const setTimeSig = useStore((s) => s.setTimeSig);
+  const setSwing = useStore((s) => s.setSwing);
 
   const [json, setJson] = useState('');
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -102,6 +103,29 @@ export function ProjectView() {
               onChange={(e) => useStore.setState({ project: { ...project, lengthBars: Math.max(1, parseInt(e.target.value) || 16), updatedAt: Date.now() } })}
               style={{ width: '100%' }}
             />
+          </Field>
+          <Field label={`SWING ${Math.round((project.swing ?? 0) * 100)}%`}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input
+                type="range"
+                className="nerv-slider"
+                min={0}
+                max={1}
+                step={0.01}
+                value={project.swing ?? 0}
+                onChange={(e) => setSwing(parseFloat(e.target.value), project.swingSubdivision ?? '8n')}
+                style={{ flex: 1 }}
+              />
+              <select
+                className="display"
+                value={project.swingSubdivision ?? '8n'}
+                onChange={(e) => setSwing(project.swing ?? 0, e.target.value)}
+                title="Swing grid"
+              >
+                <option value="8n">1/8</option>
+                <option value="16n">1/16</option>
+              </select>
+            </div>
           </Field>
         </div>
       </HexFrame>

@@ -93,6 +93,17 @@ class Engine {
     Tone.getTransport().timeSignature = [num, den];
   }
 
+  /**
+   * Global groove via Tone.Transport's built-in swing. `amount` 0..1
+   * delays every other `subdivision`-grid event toward a triplet feel;
+   * 0 is dead straight.
+   */
+  setSwing(amount: number, subdivision = '8n') {
+    const t = Tone.getTransport();
+    t.swing = Math.max(0, Math.min(1, amount));
+    t.swingSubdivision = subdivision as typeof t.swingSubdivision;
+  }
+
   setMasterVolume(db: number) {
     if (!this.inited) return;
     const v = Tone.dbToGain(db);
@@ -310,6 +321,7 @@ class Engine {
       await offline.init();
       offline.setBpm(project.bpm);
       offline.setTimeSig(project.numerator, project.denominator);
+      offline.setSwing(project.swing ?? 0, project.swingSubdivision ?? '8n');
       offline.setMasterVolume(project.master.volume);
       const renderedTracks = muted
         ? project.tracks.map((t) =>

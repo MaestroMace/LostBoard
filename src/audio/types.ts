@@ -332,6 +332,10 @@ export type Project = {
   scenes?: { name: string }[];
   /** Optional tempo automation. When present and non-empty, the project's `bpm` is treated as the fallback for the very start, with events overriding from their beat onward. */
   tempoMap?: TempoEvent[];
+  /** Global swing amount 0..1, applied via Tone.Transport.swing. 0 = straight. */
+  swing?: number;
+  /** Note value the swing offsets — '8n' (default) or '16n'. */
+  swingSubdivision?: string;
   loopStart: number;
   loopEnd: number;
   loopEnabled: boolean;

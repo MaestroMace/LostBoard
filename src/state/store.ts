@@ -231,6 +231,7 @@ type Actions = {
   updateTempoEvent(id: string, patch: Partial<Pick<TempoEvent, 'beat' | 'bpm' | 'curve'>>): void;
   removeTempoEvent(id: string): void;
   clearTempoMap(): void;
+  setSwing(amount: number, subdivision?: string): void;
   setMasterVolume(db: number): void;
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
@@ -461,6 +462,17 @@ export const useStore = create<Store>()(
     },
     clearTempoMap: () => {
       commit({ ...get().project, tempoMap: undefined, updatedAt: Date.now() });
+    },
+    setSwing: (amount, subdivision) => {
+      const p = get().project;
+      set({
+        project: {
+          ...p,
+          swing: Math.max(0, Math.min(1, amount)),
+          swingSubdivision: subdivision ?? p.swingSubdivision ?? '8n',
+          updatedAt: Date.now(),
+        },
+      });
     },
     setMasterVolume: (db) =>
       set({ project: { ...get().project, master: { ...get().project.master, volume: db }, updatedAt: Date.now() } }),
