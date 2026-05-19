@@ -11,6 +11,7 @@ import {
 import { rehydrateSamples } from '../../state/samples';
 import { audioEngine } from '../../audio/engine';
 import { audioBufferToWav } from '../../audio/wav';
+import { projectDurationSec, type TempoEvent } from '../../audio/types';
 
 export function ProjectView() {
   const project = useStore((s) => s.project);
@@ -104,6 +105,8 @@ export function ProjectView() {
           </Field>
         </div>
       </HexFrame>
+
+      <TempoMapEditor />
 
       <SlotLibrary />
 
@@ -348,6 +351,115 @@ function SlotLibrary() {
 }
 
 /**
+ * TempoMapEditor — sparse list of (beat, BPM) events. Empty list means the
+ * project uses its single `bpm` everywhere; any events take precedence
+ * from their beat onward. We keep editing as a flat table (no curves /
+ * ramps) because step changes are good enough for most arrangement
+ * tempo moves and the engine only needs to know step values to schedule
+ * `Transport.bpm.setValueAtTime`.
+ */
+function TempoMapEditor() {
+  const project = useStore((s) => s.project);
+  const addTempoEvent = useStore((s) => s.addTempoEvent);
+  const updateTempoEvent = useStore((s) => s.updateTempoEvent);
+  const removeTempoEvent = useStore((s) => s.removeTempoEvent);
+  const clearTempoMap = useStore((s) => s.clearTempoMap);
+
+  const events: TempoEvent[] = project.tempoMap ?? [];
+  const projectBeats = project.lengthBars * project.numerator;
+
+  return (
+    <HexFrame title="TEMPO MAP // BPM AUTOMATION">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="nerv-btn nerv-btn--green"
+            onClick={() => addTempoEvent(events.length === 0 ? 0 : projectBeats / 2, project.bpm)}
+          >
+            + ADD EVENT
+          </button>
+          {events.length > 0 && (
+            <button className="nerv-btn nerv-btn--ghost" onClick={() => clearTempoMap()}>
+              ✕ CLEAR MAP
+            </button>
+          )}
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+            {events.length === 0
+              ? `flat — using ${project.bpm.toFixed(1)} BPM throughout`
+              : `${events.length} event${events.length === 1 ? '' : 's'}`}
+          </span>
+        </div>
+        {events.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '80px 1fr 1fr 60px',
+                gap: 6,
+                padding: '4px 8px',
+                fontSize: 9,
+              }}
+              className="hud-readout--dim hud-readout"
+            >
+              <span>#</span>
+              <span>BEAT</span>
+              <span>BPM</span>
+              <span></span>
+            </div>
+            {events.map((ev, i) => (
+              <div
+                key={ev.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '80px 1fr 1fr 60px',
+                  gap: 6,
+                  padding: '4px 8px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,106,0,0.2)',
+                  alignItems: 'center',
+                }}
+              >
+                <span className="hud-value" style={{ fontSize: 11 }}>EV-{String(i + 1).padStart(2, '0')}</span>
+                <input
+                  className="display"
+                  type="number"
+                  min={0}
+                  step={0.25}
+                  value={ev.beat}
+                  onChange={(e) => updateTempoEvent(ev.id, { beat: parseFloat(e.target.value) || 0 })}
+                  style={{ width: '100%' }}
+                />
+                <input
+                  className="display"
+                  type="number"
+                  min={20}
+                  max={400}
+                  step={0.5}
+                  value={ev.bpm}
+                  onChange={(e) => updateTempoEvent(ev.id, { bpm: parseFloat(e.target.value) || project.bpm })}
+                  style={{ width: '100%' }}
+                />
+                <button
+                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  onClick={() => removeTempoEvent(ev.id)}
+                  title="Remove this tempo event"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
+          Events fire on their beat. An event at beat 0 overrides the project
+          BPM as the starting tempo. Affects offline bounce duration too.
+        </p>
+      </div>
+    </HexFrame>
+  );
+}
+
+/**
  * OfflineBounceButton — renders the full project to a WAV via Tone.Offline,
  * usually many times faster than real-time. The audio doesn't play out of
  * speakers during the render; the live transport keeps running unaffected,
@@ -360,7 +472,7 @@ function OfflineBounceButton() {
   const [running, setRunning] = useState(false);
 
   const beats = project.lengthBars * project.numerator;
-  const durationSec = (beats / project.bpm) * 60 + 0.5;
+  const durationSec = projectDurationSec(project, beats) + 0.5;
 
   async function bounce() {
     if (sessionMode) {
@@ -410,7 +522,7 @@ function OfflineStemsButton() {
   const [progress, setProgress] = useState(0);
 
   const beats = project.lengthBars * project.numerator;
-  const durationSec = (beats / project.bpm) * 60 + 0.5;
+  const durationSec = projectDurationSec(project, beats) + 0.5;
 
   async function bounce() {
     if (sessionMode) {
@@ -471,7 +583,7 @@ function StemBounceButton() {
 
   const busy = running || bouncing || playing;
   const beats = project.lengthBars * project.numerator;
-  const durationSec = (beats / project.bpm) * 60 + 0.5;
+  const durationSec = projectDurationSec(project, beats) + 0.5;
 
   async function bounce() {
     if (sessionMode) {

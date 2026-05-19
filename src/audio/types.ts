@@ -195,6 +195,41 @@ export type Track = {
   samplerRootPitch?: number;
 };
 
+/**
+ * Tempo-map event — step change in BPM at a given beat position. Engine
+ * applies these via `Transport.bpm.setValueAtTime` so subsequent
+ * bar-relative events automatically run at the new tempo. Events are
+ * sorted by beat; the first one (typically at beat 0) acts as the
+ * starting tempo.
+ */
+export type TempoEvent = {
+  id: string;
+  beat: number;
+  bpm: number;
+};
+
+/**
+ * Sum wall-clock seconds across a beat range, walking through tempo
+ * events. Each segment contributes `(segmentBeats / segmentBpm) * 60`.
+ * `endBeat` exclusive. If the project has no tempo map, just uses
+ * `project.bpm` throughout.
+ */
+export function projectDurationSec(project: Project, endBeat: number): number {
+  const map = (project.tempoMap ?? []).slice().sort((a, b) => a.beat - b.beat);
+  let bpm = map.length > 0 && map[0].beat <= 0 ? map[0].bpm : project.bpm;
+  let cursor = 0;
+  let total = 0;
+  for (const ev of map) {
+    if (ev.beat <= 0) continue;
+    if (ev.beat >= endBeat) break;
+    total += ((ev.beat - cursor) / bpm) * 60;
+    cursor = ev.beat;
+    bpm = ev.bpm;
+  }
+  total += ((endBeat - cursor) / bpm) * 60;
+  return total;
+}
+
 export type Project = {
   id: string;
   name: string;
@@ -208,6 +243,8 @@ export type Project = {
   tracks: Track[];
   /** Scene names for the session view. Sessions are columns in the launcher grid; each track's sessionSlots indexes into this array. */
   scenes?: { name: string }[];
+  /** Optional tempo automation. When present and non-empty, the project's `bpm` is treated as the fallback for the very start, with events overriding from their beat onward. */
+  tempoMap?: TempoEvent[];
   loopStart: number;
   loopEnd: number;
   loopEnabled: boolean;

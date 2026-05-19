@@ -13,6 +13,7 @@ import {
   type Step,
   type SynthEngine,
   type SynthParams,
+  type TempoEvent,
   type Track,
   type TrackKind,
 } from '../audio/types';
@@ -220,6 +221,10 @@ type Actions = {
 
   setBpm(bpm: number): void;
   setTimeSig(n: number, d: number): void;
+  addTempoEvent(beat: number, bpm: number): TempoEvent;
+  updateTempoEvent(id: string, patch: Partial<Pick<TempoEvent, 'beat' | 'bpm'>>): void;
+  removeTempoEvent(id: string): void;
+  clearTempoMap(): void;
   setMasterVolume(db: number): void;
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
@@ -412,6 +417,33 @@ export const useStore = create<Store>()(
       set({ project: p });
     },
     setTimeSig: (n, d) => set({ project: { ...get().project, numerator: n, denominator: d, updatedAt: Date.now() } }),
+    addTempoEvent: (beat, bpm) => {
+      const ev: TempoEvent = { id: newId('tmp'), beat: Math.max(0, beat), bpm: Math.max(20, Math.min(400, bpm)) };
+      const map = [...(get().project.tempoMap ?? []), ev].sort((a, b) => a.beat - b.beat);
+      commit({ ...get().project, tempoMap: map, updatedAt: Date.now() });
+      return ev;
+    },
+    updateTempoEvent: (id, patch) => {
+      const map = (get().project.tempoMap ?? []).map((ev) =>
+        ev.id !== id
+          ? ev
+          : {
+              ...ev,
+              beat: patch.beat !== undefined ? Math.max(0, patch.beat) : ev.beat,
+              bpm: patch.bpm !== undefined ? Math.max(20, Math.min(400, patch.bpm)) : ev.bpm,
+            },
+      );
+      map.sort((a, b) => a.beat - b.beat);
+      // not history-tracked — treat tempo-event tweaks like knob drags
+      set({ project: { ...get().project, tempoMap: map, updatedAt: Date.now() } });
+    },
+    removeTempoEvent: (id) => {
+      const map = (get().project.tempoMap ?? []).filter((ev) => ev.id !== id);
+      commit({ ...get().project, tempoMap: map.length > 0 ? map : undefined, updatedAt: Date.now() });
+    },
+    clearTempoMap: () => {
+      commit({ ...get().project, tempoMap: undefined, updatedAt: Date.now() });
+    },
     setMasterVolume: (db) =>
       set({ project: { ...get().project, master: { ...get().project.master, volume: db }, updatedAt: Date.now() } }),
     setLoop: (enabled, start, end) =>

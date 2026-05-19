@@ -19,13 +19,14 @@ type Snapshot = {
   bpm: number;
   numerator: number;
   denominator: number;
+  tempoMap: Project['tempoMap'];
   trackById: Map<string, Track>;
 };
 
 function snapshot(p: Project): Snapshot {
   const trackById = new Map<string, Track>();
   for (const t of p.tracks) trackById.set(t.id, t);
-  return { bpm: p.bpm, numerator: p.numerator, denominator: p.denominator, trackById };
+  return { bpm: p.bpm, numerator: p.numerator, denominator: p.denominator, tempoMap: p.tempoMap, trackById };
 }
 
 function recordToMap(rec: Record<string, string>): Map<string, string> {
@@ -66,6 +67,7 @@ export function useEngineSync() {
           project.bpm !== prev.bpm ||
           project.numerator !== prev.numerator ||
           project.denominator !== prev.denominator ||
+          project.tempoMap !== prev.tempoMap ||
           project.tracks.length !== prev.trackById.size;
         if (!needsSchedule) {
           for (const t of project.tracks) {

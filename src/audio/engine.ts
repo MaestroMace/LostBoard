@@ -386,6 +386,8 @@ class Engine {
     if (!this.inited) return;
     this.clearArrangement();
 
+    this.scheduleTempoMap(project);
+
     for (const track of project.tracks) {
       const node = this.ensureTrack(track);
       if (!node) continue;
@@ -393,6 +395,35 @@ class Engine {
       for (const clip of track.clips) {
         this.scheduleClip(clip, node, project);
       }
+    }
+  }
+
+  /**
+   * Apply the project's tempo map onto the transport. The earliest event
+   * (typically at beat 0) sets the starting BPM immediately; later events
+   * fire as the transport reaches their beat position via
+   * `Transport.bpm.setValueAtTime`, so all bar-relative scheduling beyond
+   * that point automatically runs at the new tempo.
+   *
+   * Skips silently if the map is empty / absent — callers stick with
+   * `project.bpm` set imperatively.
+   */
+  private scheduleTempoMap(project: Project) {
+    const map = project.tempoMap;
+    if (!map || map.length === 0) return;
+    const sorted = [...map].sort((a, b) => a.beat - b.beat);
+    const t = Tone.getTransport();
+    // immediate apply for the earliest event so the first note is at the
+    // right tempo even before the scheduler fires
+    if (sorted[0].beat <= 0.0001) {
+      t.bpm.value = sorted[0].bpm;
+    }
+    for (const ev of sorted) {
+      if (ev.beat <= 0.0001) continue;
+      const id = t.schedule((time) => {
+        t.bpm.setValueAtTime(ev.bpm, time);
+      }, beatsToBarsBeats(ev.beat));
+      this.scheduledIds.push(id);
     }
   }
 
