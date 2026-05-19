@@ -185,6 +185,8 @@ export function ProjectView() {
         </div>
       </HexFrame>
 
+      <InstallBanner />
+
       <HexFrame title="TAILSCALE // iOS NOTE" variant="green">
         <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6 }}>
           The dev server binds to <span className="hud-value">0.0.0.0:5173</span>. From your iPhone connected to the
@@ -194,6 +196,73 @@ export function ProjectView() {
         </p>
       </HexFrame>
     </div>
+  );
+}
+
+/**
+ * InstallBanner — captures the browser's `beforeinstallprompt` event so we
+ * can offer a one-click PWA install on Chromium-family browsers. iOS Safari
+ * doesn't fire this event (Add-to-Home-Screen is manual there); we leave
+ * the existing iOS note in place for that path. Hidden once the app is
+ * already running in standalone display mode.
+ */
+type BeforeInstallPromptEvent = Event & {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+};
+
+function InstallBanner() {
+  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setPrompt(e as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setPrompt(null);
+    };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches ||
+      // Safari iOS legacy flag
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true);
+
+  if (standalone || installed || !prompt) return null;
+
+  return (
+    <HexFrame title="INSTALL // PWA" variant="green">
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          className="nerv-btn nerv-btn--green"
+          onClick={async () => {
+            await prompt.prompt();
+            try {
+              await prompt.userChoice;
+            } catch {
+              /* user dismissed */
+            }
+            setPrompt(null);
+          }}
+        >
+          ⬇ INSTALL TO HOME
+        </button>
+        <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+          Run LOSTBOARD as a standalone app, with safe-area insets honored on
+          phone screens.
+        </span>
+      </div>
+    </HexFrame>
   );
 }
 
