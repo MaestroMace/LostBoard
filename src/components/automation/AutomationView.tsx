@@ -17,7 +17,18 @@ const CURVE_GLYPH: Record<AutomationCurve, string> = {
   step: '⌐',
 };
 
-const ALL_PARAMS: AutomationParam[] = ['volume', 'pan', 'cutoff', 'reverb', 'delay'];
+const ALL_PARAMS: AutomationParam[] = [
+  'volume',
+  'pan',
+  'cutoff',
+  'reverb',
+  'delay',
+  'eqLow',
+  'eqMid',
+  'eqHigh',
+  'compThreshold',
+  'compRatio',
+];
 
 /**
  * AutomationView — per-track, per-parameter sparse breakpoint editor.
@@ -113,6 +124,16 @@ function currentValueFor(track: Track, param: AutomationParam): number {
       return track.synth?.reverb ?? 0.15;
     case 'delay':
       return track.synth?.delay ?? 0.1;
+    case 'eqLow':
+      return track.fx?.eqLow ?? 0;
+    case 'eqMid':
+      return track.fx?.eqMid ?? 0;
+    case 'eqHigh':
+      return track.fx?.eqHigh ?? 0;
+    case 'compThreshold':
+      return track.fx?.compThreshold ?? -18;
+    case 'compRatio':
+      return track.fx?.compRatio ?? 3;
   }
 }
 

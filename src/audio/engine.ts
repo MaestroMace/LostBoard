@@ -726,8 +726,9 @@ class TrackNode {
 
     this.instrument = buildInstrument(track, this.sampleBank);
     this.instrument.output.connect(this.fxInput);
-    this.applySends(track);
-    this.applyFx(track.fx);
+    const automated = automatedParams(track);
+    this.applySends(track, automated);
+    this.applyFx(track.fx, automated);
   }
 
   update(track: Track) {
@@ -761,8 +762,9 @@ class TrackNode {
         (this.instrument as SamplerInstrument).applyParams(track.synth, track.samplerRootPitch ?? 60);
       }
     }
-    this.applySends(track);
-    this.applyFx(track.fx);
+    const automated = automatedParams(track);
+    this.applySends(track, automated);
+    this.applyFx(track.fx, automated);
     this.applyPadSamples(track);
   }
 
@@ -796,33 +798,44 @@ class TrackNode {
     }
   }
 
-  applyFx(fx?: FxRack) {
+  /**
+   * Apply the FX rack. `automated` carries the set of params currently
+   * driven by an automation lane — those are skipped here so a stray knob
+   * tweak elsewhere doesn't trigger a `rampTo` that stomps the automation's
+   * scheduled values. (The automation scheduler owns the param during
+   * playback; applyFx still owns it when no lane exists.)
+   */
+  applyFx(fx?: FxRack, automated?: Set<AutomationParam>) {
     if (!fx || !fx.enabled) {
-      this.eq.low.rampTo(0, 0.05);
-      this.eq.mid.rampTo(0, 0.05);
-      this.eq.high.rampTo(0, 0.05);
-      this.comp.threshold.rampTo(0, 0.05);
-      this.comp.ratio.rampTo(1, 0.05);
+      if (!automated?.has('eqLow')) this.eq.low.rampTo(0, 0.05);
+      if (!automated?.has('eqMid')) this.eq.mid.rampTo(0, 0.05);
+      if (!automated?.has('eqHigh')) this.eq.high.rampTo(0, 0.05);
+      if (!automated?.has('compThreshold')) this.comp.threshold.rampTo(0, 0.05);
+      if (!automated?.has('compRatio')) this.comp.ratio.rampTo(1, 0.05);
       this.chorus.wet.rampTo(0, 0.05);
       this.crusher.wet.rampTo(0, 0.05);
       return;
     }
-    this.eq.low.rampTo(fx.eqLow, 0.05);
-    this.eq.mid.rampTo(fx.eqMid, 0.05);
-    this.eq.high.rampTo(fx.eqHigh, 0.05);
-    this.comp.threshold.rampTo(fx.compOn ? fx.compThreshold : 0, 0.05);
-    this.comp.ratio.rampTo(fx.compOn ? fx.compRatio : 1, 0.05);
+    if (!automated?.has('eqLow')) this.eq.low.rampTo(fx.eqLow, 0.05);
+    if (!automated?.has('eqMid')) this.eq.mid.rampTo(fx.eqMid, 0.05);
+    if (!automated?.has('eqHigh')) this.eq.high.rampTo(fx.eqHigh, 0.05);
+    if (!automated?.has('compThreshold')) {
+      this.comp.threshold.rampTo(fx.compOn ? fx.compThreshold : 0, 0.05);
+    }
+    if (!automated?.has('compRatio')) {
+      this.comp.ratio.rampTo(fx.compOn ? fx.compRatio : 1, 0.05);
+    }
     this.chorus.depth = fx.chorusOn ? fx.chorusDepth : 0;
     this.chorus.wet.rampTo(fx.chorusOn ? 1 : 0, 0.05);
     this.crusher.bits.value = fx.bitcrush;
     this.crusher.wet.rampTo(fx.bitcrushOn ? 1 : 0, 0.05);
   }
 
-  applySends(track: Track) {
+  applySends(track: Track, automated?: Set<AutomationParam>) {
     const rev = track.synth?.reverb ?? 0.15;
     const dly = track.synth?.delay ?? 0.1;
-    this.reverbSend.gain.rampTo(rev, 0.05);
-    this.delaySend.gain.rampTo(dly, 0.05);
+    if (!automated?.has('reverb')) this.reverbSend.gain.rampTo(rev, 0.05);
+    if (!automated?.has('delay')) this.delaySend.gain.rampTo(dly, 0.05);
   }
 
   // audio clip players
@@ -979,6 +992,16 @@ class TrackNode {
         return this.delaySend.gain as unknown as Automatable;
       case 'cutoff':
         return this.instrument.getFilterFreq?.();
+      case 'eqLow':
+        return this.eq.low as unknown as Automatable;
+      case 'eqMid':
+        return this.eq.mid as unknown as Automatable;
+      case 'eqHigh':
+        return this.eq.high as unknown as Automatable;
+      case 'compThreshold':
+        return this.comp.threshold as unknown as Automatable;
+      case 'compRatio':
+        return this.comp.ratio as unknown as Automatable;
       default:
         return undefined;
     }
@@ -1540,6 +1563,15 @@ function buildInstrument(track: Track, sampleBank?: Map<string, AudioBuffer>): I
     return new SynthInstrument(params);
   }
   return new SynthInstrument(FALLBACK_SYNTH);
+}
+
+/** Set of automation params with at least one non-empty lane on a track. */
+function automatedParams(track: Track): Set<AutomationParam> {
+  const set = new Set<AutomationParam>();
+  for (const lane of track.automation ?? []) {
+    if (lane.points.length > 0) set.add(lane.param);
+  }
+  return set;
 }
 
 function isRealtimeContext(): boolean {

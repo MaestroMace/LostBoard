@@ -210,13 +210,26 @@ export type Track = {
  * ramps between consecutive points using Web Audio AudioParam scheduling.
  *
  * Supported params and their unit conventions:
- *   - volume:  dB, suggested range -60..+6
- *   - pan:     -1..+1 (linear)
- *   - cutoff:  Hz (50..18000), applied to the instrument's lowpass
- *   - reverb:  0..1 send level
- *   - delay:   0..1 send level
+ *   - volume:        dB, suggested range -60..+6
+ *   - pan:           -1..+1 (linear)
+ *   - cutoff:        Hz (50..18000), applied to the instrument's lowpass
+ *   - reverb:        0..1 send level
+ *   - delay:         0..1 send level
+ *   - eqLow/Mid/High: dB (-24..+24), FX-rack 3-band EQ
+ *   - compThreshold: dB (-60..0), FX-rack compressor
+ *   - compRatio:     1..20, FX-rack compressor
  */
-export type AutomationParam = 'volume' | 'pan' | 'cutoff' | 'reverb' | 'delay';
+export type AutomationParam =
+  | 'volume'
+  | 'pan'
+  | 'cutoff'
+  | 'reverb'
+  | 'delay'
+  | 'eqLow'
+  | 'eqMid'
+  | 'eqHigh'
+  | 'compThreshold'
+  | 'compRatio';
 
 /**
  * Curve mode controls how the param reaches a point's value:
@@ -249,6 +262,11 @@ export const AUTOMATION_PARAM_META: Record<AutomationParam, { label: string; min
   cutoff: { label: 'CUTOFF', min: 50, max: 18000, step: 10, unit: 'Hz' },
   reverb: { label: 'REVERB', min: 0, max: 1, step: 0.01, unit: '' },
   delay: { label: 'DELAY', min: 0, max: 1, step: 0.01, unit: '' },
+  eqLow: { label: 'EQ LOW', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  eqMid: { label: 'EQ MID', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  eqHigh: { label: 'EQ HIGH', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  compThreshold: { label: 'COMP THRES', min: -60, max: 0, step: 0.5, unit: 'dB' },
+  compRatio: { label: 'COMP RATIO', min: 1, max: 20, step: 0.5, unit: '' },
 };
 
 /**
