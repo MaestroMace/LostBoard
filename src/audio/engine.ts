@@ -61,8 +61,14 @@ class Engine {
     this.master.connect(this.fft);
     this.master.connect(this.masterMeter);
     this.master.toDestination();
-    this.masterRecorder = new Tone.Recorder();
-    this.master.connect(this.masterRecorder);
+    // Tone.Recorder wraps MediaRecorder, which doesn't exist on
+    // OfflineAudioContext. Inside Tone.Offline the global context is offline
+    // for the duration of the callback — skip the recorder there so a fresh
+    // Engine() can be init'd offline without throwing.
+    if (isRealtimeContext()) {
+      this.masterRecorder = new Tone.Recorder();
+      this.master.connect(this.masterRecorder);
+    }
     this.inited = true;
   }
 
@@ -265,6 +271,74 @@ class Engine {
   async stopMasterBounce(): Promise<Blob | null> {
     if (!this.masterRecorder) return null;
     return await this.masterRecorder.stop();
+  }
+
+  /**
+   * Render the project faster-than-real-time via `Tone.Offline`.
+   *
+   * `Tone.Offline` swaps Tone's default context to an `OfflineAudioContext`
+   * for the duration of the callback, so any `new Tone.*` constructed inside
+   * binds to that offline graph. We exploit that by spinning up a fresh
+   * `Engine` *inside* the callback, copying our sample bank into it, and
+   * scheduling the project against the offline transport. AudioBuffers are
+   * shareable across contexts so the sample bank copy is just reference
+   * passing.
+   *
+   * `mutedTrackIds` is used by the stems variant to render one track at a
+   * time without disposing/rebuilding the offline graph for each.
+   */
+  async bounceOffline(
+    project: Project,
+    durationSec: number,
+    options?: { mutedTrackIds?: Set<string> },
+  ): Promise<AudioBuffer> {
+    const sampleEntries = Array.from(this.sampleBank.entries());
+    const muted = options?.mutedTrackIds;
+    const toneBuf = await Tone.Offline(async ({ transport }) => {
+      const offline = new Engine();
+      for (const [id, buf] of sampleEntries) offline.registerSample(id, buf);
+      await offline.init();
+      offline.setBpm(project.bpm);
+      offline.setTimeSig(project.numerator, project.denominator);
+      offline.setMasterVolume(project.master.volume);
+      const renderedTracks = muted
+        ? project.tracks.map((t) =>
+            muted.has(t.id) ? { ...t, mute: true } : t,
+          )
+        : project.tracks;
+      const renderedProject = muted ? { ...project, tracks: renderedTracks } : project;
+      for (const t of renderedTracks) offline.ensureTrack(t);
+      offline.applySidechains(renderedProject);
+      offline.schedule(renderedProject);
+      transport.start(0);
+    }, durationSec);
+    return toneBuf.get() as AudioBuffer;
+  }
+
+  /**
+   * Offline stems: bounce each track individually by running N offline
+   * renders, muting every other track. Each render is faster-than-real-time,
+   * so the total wall-clock cost is roughly N × (renderRatio · projectDur)
+   * — still vastly faster than the real-time `bounceStems` path on long
+   * projects, and unlike the real-time path the result is a clean WAV per
+   * track with no transport jitter.
+   */
+  async bounceStemsOffline(
+    project: Project,
+    durationSec: number,
+    onProgress?: (i: number, total: number, name: string) => void,
+  ): Promise<{ name: string; buffer: AudioBuffer }[]> {
+    const out: { name: string; buffer: AudioBuffer }[] = [];
+    const total = project.tracks.length;
+    for (let i = 0; i < total; i++) {
+      const target = project.tracks[i];
+      onProgress?.(i, total, target.name || target.id);
+      const muted = new Set(project.tracks.filter((t) => t.id !== target.id).map((t) => t.id));
+      const buffer = await this.bounceOffline(project, durationSec, { mutedTrackIds: muted });
+      out.push({ name: target.name || target.id, buffer });
+    }
+    onProgress?.(total, total, '');
+    return out;
   }
 
   // ---------- TRACK MANAGEMENT ----------
@@ -1097,6 +1171,11 @@ function buildInstrument(track: Track): Instrument {
     return new SynthInstrument(params);
   }
   return new SynthInstrument(FALLBACK_SYNTH);
+}
+
+function isRealtimeContext(): boolean {
+  const raw = Tone.getContext().rawContext as unknown as { constructor: { name: string } };
+  return raw.constructor.name !== 'OfflineAudioContext';
 }
 
 function beatsToBarsBeats(beats: number): string {

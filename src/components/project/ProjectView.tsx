@@ -10,6 +10,7 @@ import {
 } from '../../state/projectSlots';
 import { rehydrateSamples } from '../../state/samples';
 import { audioEngine } from '../../audio/engine';
+import { audioBufferToWav } from '../../audio/wav';
 
 export function ProjectView() {
   const project = useStore((s) => s.project);
@@ -126,6 +127,8 @@ export function ProjectView() {
             ⤓ LOAD FROM BROWSER
           </button>
           <button className="nerv-btn" onClick={exportFile}>⬇ EXPORT JSON</button>
+          <OfflineBounceButton />
+          <OfflineStemsButton />
           <StemBounceButton />
           <label className="nerv-btn" style={{ cursor: 'pointer' }}>
             ⬆ IMPORT JSON
@@ -341,6 +344,113 @@ function SlotLibrary() {
         )}
       </div>
     </HexFrame>
+  );
+}
+
+/**
+ * OfflineBounceButton — renders the full project to a WAV via Tone.Offline,
+ * usually many times faster than real-time. The audio doesn't play out of
+ * speakers during the render; the live transport keeps running unaffected,
+ * since Tone.Offline builds a parallel offline graph for the duration of
+ * the callback.
+ */
+function OfflineBounceButton() {
+  const project = useStore((s) => s.project);
+  const sessionMode = useStore((s) => s.sessionMode);
+  const [running, setRunning] = useState(false);
+
+  const beats = project.lengthBars * project.numerator;
+  const durationSec = (beats / project.bpm) * 60 + 0.5;
+
+  async function bounce() {
+    if (sessionMode) {
+      alert('Switch back to ARRANGEMENT mode in the SESSION tab first.');
+      return;
+    }
+    setRunning(true);
+    try {
+      const buffer = await audioEngine.bounceOffline(project, durationSec);
+      const blob = audioBufferToWav(buffer);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.name.replace(/\s+/g, '_')}__master_${Date.now()}.wav`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Offline bounce failed', e);
+      alert('Offline bounce failed; see console.');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <button
+      className="nerv-btn"
+      onClick={bounce}
+      disabled={running}
+      title="Render the full project to WAV faster-than-real-time (Tone.Offline)"
+    >
+      {running ? '⌛ RENDERING…' : '⚡ BOUNCE WAV'}
+    </button>
+  );
+}
+
+/**
+ * OfflineStemsButton — one offline render per track (every other track
+ * muted), each encoded as a WAV. Faster-than-real-time overall on any
+ * non-trivial project; produces clean per-track WAVs suitable for an
+ * external DAW remix.
+ */
+function OfflineStemsButton() {
+  const project = useStore((s) => s.project);
+  const sessionMode = useStore((s) => s.sessionMode);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const beats = project.lengthBars * project.numerator;
+  const durationSec = (beats / project.bpm) * 60 + 0.5;
+
+  async function bounce() {
+    if (sessionMode) {
+      alert('Switch back to ARRANGEMENT mode in the SESSION tab first.');
+      return;
+    }
+    if (!confirm(`Render ${project.tracks.length} offline stems? Usually faster than real-time.`)) return;
+    setRunning(true);
+    setProgress(0);
+    try {
+      const stems = await audioEngine.bounceStemsOffline(project, durationSec, (i, total) => {
+        setProgress(total > 0 ? i / total : 0);
+      });
+      for (const stem of stems) {
+        const blob = audioBufferToWav(stem.buffer);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.name.replace(/\s+/g, '_')}__${stem.name.replace(/[^\w]+/g, '_')}.wav`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      console.error('Offline stems failed', e);
+      alert('Offline stems failed; see console.');
+    } finally {
+      setRunning(false);
+      setProgress(0);
+    }
+  }
+
+  return (
+    <button
+      className="nerv-btn"
+      onClick={bounce}
+      disabled={running}
+      title="Render each track to its own WAV faster-than-real-time"
+    >
+      {running ? `⌛ STEMS ${Math.round(progress * 100)}%` : '⚡⬇ OFFLINE STEMS'}
+    </button>
   );
 }
 
