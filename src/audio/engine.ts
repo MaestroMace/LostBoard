@@ -175,6 +175,11 @@ class Engine {
     return Array.from(this.sampleBank.keys());
   }
 
+  /** Drop a sample from the runtime bank (used by orphaned-sample GC). */
+  dropSample(id: string): void {
+    this.sampleBank.delete(id);
+  }
+
   /** Decode an arbitrary audio File/Blob into the bank under a fresh id. */
   async loadAudioFile(file: Blob): Promise<{ id: string; duration: number }> {
     const id = `smp_${Math.random().toString(36).slice(2, 10)}`;

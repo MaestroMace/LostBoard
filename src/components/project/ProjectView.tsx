@@ -8,7 +8,7 @@ import {
   putSlot,
   type ProjectSlot,
 } from '../../state/projectSlots';
-import { rehydrateSamples } from '../../state/samples';
+import { rehydrateSamples, gcOrphanedSamples } from '../../state/samples';
 import { audioEngine } from '../../audio/engine';
 import { audioBufferToWav } from '../../audio/wav';
 import { projectDurationSec, type TempoEvent } from '../../audio/types';
@@ -353,6 +353,17 @@ function SlotLibrary() {
           <button className="nerv-btn nerv-btn--ghost" onClick={refresh} title="Re-read the slot list">
             ↻ REFRESH
           </button>
+          <button
+            className="nerv-btn nerv-btn--ghost"
+            onClick={async () => {
+              if (!confirm('Delete persisted audio samples not referenced by any slot or the current project?')) return;
+              const n = await gcOrphanedSamples();
+              alert(n === 0 ? 'No orphaned samples found.' : `Removed ${n} orphaned sample${n === 1 ? '' : 's'}.`);
+            }}
+            title="Garbage-collect audio samples no project references any more"
+          >
+            ⌫ GC SAMPLES
+          </button>
           <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
             {slots.length} slot{slots.length === 1 ? '' : 's'} · stored in browser IndexedDB
           </span>
@@ -420,12 +431,86 @@ function SlotLibrary() {
 }
 
 /**
+ * TempoCurve — read-only BPM-over-beats sparkline for the tempo map.
+ * Step events draw as a horizontal hold + vertical jump; ramp events
+ * draw as a diagonal. The first event seeds the starting BPM, and the
+ * curve extends flat to the end of the project so accel/rit shapes are
+ * legible at a glance without scrubbing the transport.
+ */
+function TempoCurve({
+  events,
+  projectBpm,
+  projectBeats,
+}: {
+  events: TempoEvent[];
+  projectBpm: number;
+  projectBeats: number;
+}) {
+  const sorted = [...events].sort((a, b) => a.beat - b.beat);
+  // build (beat, bpm) vertices that already encode step vs ramp
+  const verts: { beat: number; bpm: number }[] = [];
+  let bpm = sorted[0].beat <= 0 ? sorted[0].bpm : projectBpm;
+  verts.push({ beat: 0, bpm });
+  for (const ev of sorted) {
+    if (ev.beat <= 0) {
+      bpm = ev.bpm;
+      verts[0] = { beat: 0, bpm };
+      continue;
+    }
+    if (ev.curve === 'ramp') {
+      verts.push({ beat: ev.beat, bpm: ev.bpm });
+    } else {
+      verts.push({ beat: ev.beat, bpm }); // hold previous
+      verts.push({ beat: ev.beat, bpm: ev.bpm }); // jump
+    }
+    bpm = ev.bpm;
+  }
+  verts.push({ beat: projectBeats, bpm });
+
+  const bpms = verts.map((v) => v.bpm);
+  const lo = Math.min(...bpms) - 4;
+  const hi = Math.max(...bpms) + 4;
+  const span = Math.max(1, hi - lo);
+  const x = (beat: number) => (beat / Math.max(1, projectBeats)) * 100;
+  const y = (b: number) => (1 - (b - lo) / span) * 100;
+  const path = verts.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(v.beat)} ${y(v.bpm)}`).join(' ');
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        border: '1px solid rgba(255,106,0,0.3)',
+        background: 'linear-gradient(180deg, rgba(255,106,0,0.04), rgba(255,106,0,0.1))',
+      }}
+    >
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height={64} style={{ display: 'block' }}>
+        <path d={path} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
+        {verts.map((v, i) => (
+          <circle key={i} cx={x(v.beat)} cy={y(v.bpm)} r={1} fill="var(--nerv-amber)" vectorEffect="non-scaling-stroke" />
+        ))}
+      </svg>
+      <span
+        className="hud-readout--dim hud-readout"
+        style={{ position: 'absolute', top: 2, left: 4, fontSize: 8 }}
+      >
+        {hi.toFixed(0)} BPM
+      </span>
+      <span
+        className="hud-readout--dim hud-readout"
+        style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 8 }}
+      >
+        {lo.toFixed(0)} BPM
+      </span>
+    </div>
+  );
+}
+
+/**
  * TempoMapEditor — sparse list of (beat, BPM) events. Empty list means the
  * project uses its single `bpm` everywhere; any events take precedence
- * from their beat onward. We keep editing as a flat table (no curves /
- * ramps) because step changes are good enough for most arrangement
- * tempo moves and the engine only needs to know step values to schedule
- * `Transport.bpm.setValueAtTime`.
+ * from their beat onward. Each event can step-jump or ramp into its BPM;
+ * the engine schedules `Transport.bpm.setValueAtTime` /
+ * `linearRampToValueAtTime` accordingly.
  */
 function TempoMapEditor() {
   const project = useStore((s) => s.project);
@@ -458,6 +543,7 @@ function TempoMapEditor() {
               : `${events.length} event${events.length === 1 ? '' : 's'}`}
           </span>
         </div>
+        {events.length > 0 && <TempoCurve events={events} projectBpm={project.bpm} projectBeats={projectBeats} />}
         {events.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div
