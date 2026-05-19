@@ -273,7 +273,7 @@ type Actions = {
   updateSynth(id: string, patch: Partial<SynthParams>): void;
   setSynthEngine(id: string, engine: SynthEngine): void;
   addSamplerZone(trackId: string, sampleId: string, rootPitch?: number): void;
-  updateSamplerZone(trackId: string, zoneId: string, patch: Partial<Pick<SamplerZone, 'sampleId' | 'rootPitch'>>): void;
+  updateSamplerZone(trackId: string, zoneId: string, patch: Partial<Pick<SamplerZone, 'sampleId' | 'rootPitch' | 'velMin' | 'velMax'>>): void;
   removeSamplerZone(trackId: string, zoneId: string): void;
 
   addAutomationPoint(trackId: string, param: AutomationParam, beat: number, value: number): AutomationPoint | null;

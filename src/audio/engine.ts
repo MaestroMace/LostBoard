@@ -1452,32 +1452,44 @@ class WavetableInstrument implements Instrument {
   }
 }
 
+type ResolvedZone = { sampleId: string; rootPitch: number; velMin: number; velMax: number };
+
 /** Resolve a track's sampler zones, falling back to the legacy single-zone fields. */
-function resolveSamplerZones(track: Track): { sampleId: string; rootPitch: number }[] {
+function resolveSamplerZones(track: Track): ResolvedZone[] {
   if (track.samplerZones && track.samplerZones.length > 0) {
-    return track.samplerZones.map((z) => ({ sampleId: z.sampleId, rootPitch: z.rootPitch }));
+    return track.samplerZones.map((z) => ({
+      sampleId: z.sampleId,
+      rootPitch: z.rootPitch,
+      velMin: z.velMin ?? 0,
+      velMax: z.velMax ?? 1,
+    }));
   }
   if (track.samplerSampleId) {
-    return [{ sampleId: track.samplerSampleId, rootPitch: track.samplerRootPitch ?? 60 }];
+    return [{ sampleId: track.samplerSampleId, rootPitch: track.samplerRootPitch ?? 60, velMin: 0, velMax: 1 }];
   }
   return [];
 }
 
 /** Stable signature of a zone list — drives the "rebuild on change" check. */
-function samplerZoneSignature(zones: { sampleId: string; rootPitch: number }[]): string {
+function samplerZoneSignature(zones: ResolvedZone[]): string {
   return zones
-    .map((z) => `${z.rootPitch}:${z.sampleId}`)
+    .map((z) => `${z.rootPitch}:${z.sampleId}:${z.velMin}:${z.velMax}`)
     .sort()
     .join('|');
 }
 
 /**
- * Multi-zone chromatic sampler — Tone.Sampler maps one buffer per key zone
- * (each anchored at a root MIDI pitch) and interpolates between them across
- * the keyboard by resampling. With a single zone it behaves like a basic
- * one-shot sampler; with several it covers a wider range cleanly (e.g. a
- * piano sampled every octave). Useful for one-shots, vocal chops, melodic
- * stabs, multi-sampled instruments.
+ * Multi-zone chromatic sampler with velocity layers.
+ *
+ * Zones sharing a velocity range form one layer; each layer is its own
+ * Tone.Sampler (Tone.Sampler can't switch buffers by velocity, so we run
+ * one per layer). Within a layer, Tone.Sampler maps one buffer per key
+ * zone at its root pitch and interpolates across the keyboard. With a
+ * single full-range zone it behaves like a basic one-shot sampler.
+ *
+ * On trigger, the layer whose velocity range contains the note velocity
+ * plays; if velocity falls in a coverage gap, the nearest layer by range
+ * midpoint is used so a note never goes silent.
  *
  * Reuses the shared filter / ADSR-shaped amplitude envelope so the same
  * SynthParams knobs still mean something. ADSR maps onto Tone.Sampler's
@@ -1491,32 +1503,43 @@ function samplerZoneSignature(zones: { sampleId: string; rootPitch: number }[]):
 class SamplerInstrument implements Instrument {
   kind = 'sampler' as const;
   output: Tone.Gain;
-  private sampler?: Tone.Sampler;
+  private layers: { velMin: number; velMax: number; sampler: Tone.Sampler }[] = [];
   private filter: Tone.Filter;
   private sourceId: string;
 
   constructor(
     params: SynthParams,
-    zones: { sampleId: string; rootPitch: number }[],
+    zones: ResolvedZone[],
     sampleBank: Map<string, AudioBuffer>,
   ) {
     this.output = new Tone.Gain(1);
     this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
     this.filter.connect(this.output);
     this.sourceId = samplerZoneSignature(zones);
-    const urls: Record<string, Tone.ToneAudioBuffer> = {};
-    for (const zone of zones) {
-      const buf = sampleBank.get(zone.sampleId);
-      if (!buf) continue;
-      urls[Tone.Frequency(zone.rootPitch, 'midi').toNote()] = new Tone.ToneAudioBuffer(buf);
+
+    // group zones by velocity range → one Tone.Sampler per layer
+    const groups = new Map<string, ResolvedZone[]>();
+    for (const z of zones) {
+      const key = `${z.velMin}_${z.velMax}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(z);
+      groups.set(key, arr);
     }
-    if (Object.keys(urls).length > 0) {
-      this.sampler = new Tone.Sampler({
+    for (const group of groups.values()) {
+      const urls: Record<string, Tone.ToneAudioBuffer> = {};
+      for (const zone of group) {
+        const buf = sampleBank.get(zone.sampleId);
+        if (!buf) continue;
+        urls[Tone.Frequency(zone.rootPitch, 'midi').toNote()] = new Tone.ToneAudioBuffer(buf);
+      }
+      if (Object.keys(urls).length === 0) continue;
+      const sampler = new Tone.Sampler({
         urls,
         attack: params.attack,
         release: Math.max(params.release, params.decay),
       });
-      this.sampler.connect(this.filter);
+      sampler.connect(this.filter);
+      this.layers.push({ velMin: group[0].velMin, velMax: group[0].velMax, sampler });
     }
   }
 
@@ -1524,25 +1547,48 @@ class SamplerInstrument implements Instrument {
     return this.sourceId;
   }
 
+  /** Pick the layer for a note velocity: containing layer, else nearest by midpoint. */
+  private layerFor(vel: number): Tone.Sampler | undefined {
+    if (this.layers.length === 0) return undefined;
+    const inside = this.layers.filter((l) => vel >= l.velMin && vel <= l.velMax);
+    if (inside.length > 0) {
+      // narrowest containing range wins when layers overlap
+      inside.sort((a, b) => a.velMax - a.velMin - (b.velMax - b.velMin));
+      return inside[0].sampler;
+    }
+    let best = this.layers[0];
+    let bestDist = Infinity;
+    for (const l of this.layers) {
+      const dist = Math.abs(vel - (l.velMin + l.velMax) / 2);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = l;
+      }
+    }
+    return best.sampler;
+  }
+
   applyParams(p: SynthParams) {
     this.filter.frequency.rampTo(p.cutoff, 0.05);
     this.filter.Q.rampTo(p.resonance, 0.05);
-    if (this.sampler) {
-      this.sampler.attack = p.attack;
-      this.sampler.release = Math.max(p.release, p.decay);
+    for (const l of this.layers) {
+      l.sampler.attack = p.attack;
+      l.sampler.release = Math.max(p.release, p.decay);
     }
   }
 
   trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
-    if (!this.sampler || typeof pitch !== 'number') return;
-    const note = Tone.Frequency(pitch, 'midi').toNote();
-    this.sampler.triggerAttackRelease(note, dur, undefined, vel);
+    if (typeof pitch !== 'number') return;
+    const sampler = this.layerFor(vel);
+    if (!sampler) return;
+    sampler.triggerAttackRelease(Tone.Frequency(pitch, 'midi').toNote(), dur, undefined, vel);
   }
 
   triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
-    if (!this.sampler || typeof pitch !== 'number') return;
-    const note = Tone.Frequency(pitch, 'midi').toNote();
-    this.sampler.triggerAttackRelease(note, dur, time, vel);
+    if (typeof pitch !== 'number') return;
+    const sampler = this.layerFor(vel);
+    if (!sampler) return;
+    sampler.triggerAttackRelease(Tone.Frequency(pitch, 'midi').toNote(), dur, time, vel);
   }
 
   getFilterFreq(): Automatable {
@@ -1550,7 +1596,7 @@ class SamplerInstrument implements Instrument {
   }
 
   dispose() {
-    this.sampler?.dispose();
+    for (const l of this.layers) l.sampler.dispose();
     this.filter.dispose();
     this.output.dispose();
   }

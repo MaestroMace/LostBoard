@@ -347,7 +347,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
                 key={zone.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '52px 1fr 96px 40px',
+                  gridTemplateColumns: '52px 1fr 96px 120px 40px',
                   gap: 6,
                   alignItems: 'center',
                   padding: '4px 6px',
@@ -388,6 +388,34 @@ function SamplerSource({ trackId }: { trackId: string }) {
                     {midiToName(zone.rootPitch)}
                   </span>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Velocity range this zone responds to (%)">
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>VEL</span>
+                  <input
+                    className="display"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={Math.round((zone.velMin ?? 0) * 100)}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) / 100;
+                      updateSamplerZone(trackId, zone.id, { velMin: Math.min(v, zone.velMax ?? 1) });
+                    }}
+                    style={{ width: 38 }}
+                  />
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>–</span>
+                  <input
+                    className="display"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={Math.round((zone.velMax ?? 1) * 100)}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) / 100;
+                      updateSamplerZone(trackId, zone.id, { velMax: Math.max(v, zone.velMin ?? 0) });
+                    }}
+                    style={{ width: 38 }}
+                  />
+                </div>
                 <button
                   className="nerv-btn nerv-btn--icon nerv-btn--rec"
                   onClick={() => removeSamplerZone(trackId, zone.id)}
@@ -400,8 +428,9 @@ function SamplerSource({ trackId }: { trackId: string }) {
           </div>
         )}
         <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
-          ROOT = MIDI pitch a zone's sample plays at unity rate. Tone.Sampler interpolates
-          between zones for every other note.
+          ROOT = MIDI pitch a zone's sample plays at unity rate. VEL = velocity range
+          (%) the zone responds to — give zones different ranges for velocity layers.
+          Zones sharing a range key-map together.
         </p>
       </div>
     </HexFrame>

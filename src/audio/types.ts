@@ -206,11 +206,14 @@ export type Track = {
   samplerZones?: SamplerZone[];
 };
 
-/** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch. */
+/** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch, optionally restricted to a velocity range. */
 export type SamplerZone = {
   id: string;
   sampleId: string;
   rootPitch: number;
+  /** Velocity range this zone responds to, 0..1. Omitted = full range (0..1). Zones sharing a range form one velocity layer. */
+  velMin?: number;
+  velMax?: number;
 };
 
 /**
