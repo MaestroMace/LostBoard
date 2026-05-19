@@ -129,6 +129,13 @@ export type Clip =
       sourceBpm?: number;
       /** When true, clip plays back at currentBpm/sourceBpm so it stays in tempo. */
       warp?: boolean;
+      /**
+       * How warp is achieved:
+       *  - 'pitch' (default): Tone.Player + playbackRate — fast, pitch follows tempo (varispeed).
+       *  - 'time': Tone.GrainPlayer — granular time-stretch, pitch is preserved across tempo changes.
+       * Only meaningful when `warp` is on.
+       */
+      stretchMode?: 'pitch' | 'time';
       color?: string;
       name?: string;
     };

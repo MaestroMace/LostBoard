@@ -67,6 +67,8 @@ export function PianoRoll() {
   const addClip = useStore((s) => s.addClip);
   const quantizeClip = useStore((s) => s.quantizeClip);
   const humanizeClip = useStore((s) => s.humanizeClip);
+  const selectedNoteIds = useStore((s) => s.selectedNoteIds);
+  const clearNoteSelection = useStore((s) => s.clearNoteSelection);
 
   const { pool: synthTracks, active: activeTrack } = useActiveTrack('synth');
   const midiClips = useMemo(
@@ -126,7 +128,10 @@ export function PianoRoll() {
   usePinchZoom(gridRef, setZoom);
 
   function gridDown(e: React.PointerEvent) {
-    if (tool !== 'draw' || !activeTrack || !activeClip) return;
+    if (!activeTrack || !activeClip) return;
+    // clicking the empty grid clears any note selection (Ableton/Logic style)
+    if (selectedNoteIds.length > 0) clearNoteSelection();
+    if (tool !== 'draw') return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const beat = Math.floor((e.clientX - r.left) / BEAT_W / snap) * snap;
     const rawPitch = HI - Math.floor((e.clientY - r.top) / ROW_H);
@@ -214,18 +219,49 @@ export function PianoRoll() {
         </select>
         <button
           className="nerv-btn nerv-btn--ghost"
-          onClick={() => quantizeClip(activeTrack.id, activeClip.id, snap)}
-          title={`Quantize every note to the current SNAP (1/${1 / snap === 4 ? 4 : 1 / snap === 8 ? 8 : 16})`}
+          onClick={() =>
+            quantizeClip(
+              activeTrack.id,
+              activeClip.id,
+              snap,
+              selectedNoteIds.length > 0 ? selectedNoteIds : undefined,
+            )
+          }
+          title={
+            selectedNoteIds.length > 0
+              ? `Quantize ${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? '' : 's'} to the current SNAP`
+              : `Quantize every note to the current SNAP (1/${1 / snap === 4 ? 4 : 1 / snap === 8 ? 8 : 16})`
+          }
         >
-          ⎌ QUANTIZE
+          ⎌ QUANTIZE{selectedNoteIds.length > 0 ? ` SEL` : ''}
         </button>
         <button
           className="nerv-btn nerv-btn--ghost"
-          onClick={() => humanizeClip(activeTrack.id, activeClip.id, 0.4)}
-          title="Add small random velocity + timing wobble to every note"
+          onClick={() =>
+            humanizeClip(
+              activeTrack.id,
+              activeClip.id,
+              0.4,
+              selectedNoteIds.length > 0 ? selectedNoteIds : undefined,
+            )
+          }
+          title={
+            selectedNoteIds.length > 0
+              ? `Humanize ${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? '' : 's'}`
+              : 'Add small random velocity + timing wobble to every note'
+          }
         >
-          ~ HUMANIZE
+          ~ HUMANIZE{selectedNoteIds.length > 0 ? ` SEL` : ''}
         </button>
+        {selectedNoteIds.length > 0 && (
+          <button
+            className="nerv-btn nerv-btn--ghost"
+            onClick={clearNoteSelection}
+            title="Clear note selection"
+          >
+            ✕ DESEL ({selectedNoteIds.length})
+          </button>
+        )}
       </div>
       <div
         ref={gridRef}
@@ -259,6 +295,7 @@ export function PianoRoll() {
               color={activeTrack.color}
               snap={snap}
               tool={tool}
+              selected={selectedNoteIds.includes(n.id)}
             />
           ))}
           <PianoRollPlayhead clipStart={activeClip.start} />
@@ -430,6 +467,7 @@ const NoteEl = memo(function NoteEl({
   color,
   snap,
   tool,
+  selected,
 }: {
   note: Note;
   trackId: string;
@@ -437,11 +475,14 @@ const NoteEl = memo(function NoteEl({
   color: string;
   snap: number;
   tool: 'draw' | 'erase';
+  selected: boolean;
 }) {
   const BEAT_W = useBeatWidth();
   const { root, scale } = useScale();
   const updateNote = useStore((s) => s.updateNote);
   const removeNote = useStore((s) => s.removeNote);
+  const selectNote = useStore((s) => s.selectNote);
+  const toggleNoteSelected = useStore((s) => s.toggleNoteSelected);
   const elRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{
     resizing: boolean;
@@ -457,10 +498,21 @@ const NoteEl = memo(function NoteEl({
 
   function down(e: React.PointerEvent, resizing: boolean) {
     e.stopPropagation();
-    if (tool === 'erase' || e.shiftKey || e.button === 2) {
+    if (tool === 'erase' || e.button === 2) {
       removeNote(trackId, clipId, note.id);
       return;
     }
+    // Cmd/Ctrl-click toggles multi-select; shift-click deletes (preserves
+    // the old shortcut); plain click selects-just-this then begins drag.
+    if (e.shiftKey) {
+      removeNote(trackId, clipId, note.id);
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) {
+      toggleNoteSelected(note.id);
+      return;
+    }
+    if (!selected) selectNote(note.id);
     elRef.current?.setPointerCapture(e.pointerId);
     drag.current = {
       resizing,
@@ -518,8 +570,10 @@ const NoteEl = memo(function NoteEl({
         width: Math.max(8, note.length * BEAT_W),
         height: ROW_H - 2,
         background: `linear-gradient(180deg, ${color}cc, ${color}77)`,
-        border: '1px solid #fff',
-        boxShadow: '0 0 6px rgba(255,255,255,0.4)',
+        border: selected ? '1px solid var(--nerv-green)' : '1px solid #fff',
+        boxShadow: selected
+          ? '0 0 8px var(--nerv-green), inset 0 0 0 1px rgba(120,255,140,0.4)'
+          : '0 0 6px rgba(255,255,255,0.4)',
         cursor: 'move',
         borderRadius: 1,
         touchAction: 'none',

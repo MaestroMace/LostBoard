@@ -630,9 +630,11 @@ class Engine {
     } else if (clip.kind === 'audio') {
       const buffer = this.sampleBank.get(clip.sampleId);
       if (!buffer) return;
-      const player = node.addPlayer(clip.id, buffer, clip.gain);
-      // warp playback rate to match current project tempo if the clip carries a source BPM
       const warp = clip.warp !== false && clip.sourceBpm && clip.sourceBpm > 0;
+      const player = node.addPlayer(clip.id, buffer, clip.gain, clip.stretchMode ?? 'pitch');
+      // Both Tone.Player and Tone.GrainPlayer accept the same playbackRate
+      // assignment — the difference is whether pitch shifts with it
+      // (Player = varispeed) or stays put (GrainPlayer = granular stretch).
       player.playbackRate = warp ? project.bpm / clip.sourceBpm! : 1;
       const id = t.schedule((time) => {
         try {
@@ -679,8 +681,8 @@ class TrackNode {
   private sidechainSourceId?: string;
   private sidechainState: { depth: number; attack: number; release: number } = { depth: 0, attack: 0.005, release: 0.15 };
 
-  // audio clip players
-  private players = new Map<string, Tone.Player>();
+  // audio clip players — either Tone.Player (varispeed) or Tone.GrainPlayer (time-stretch)
+  private players = new Map<string, Tone.Player | Tone.GrainPlayer>();
   // drum-pad sample players (per-pad one-shot, replaces the drum-synth voice for that pad when set)
   private padPlayers = new Map<DrumPad, Tone.Player>();
   private padSampleIds = new Map<DrumPad, string>();
@@ -824,12 +826,21 @@ class TrackNode {
   }
 
   // audio clip players
-  addPlayer(clipId: string, buffer: AudioBuffer, gain: number): Tone.Player {
-    let player = this.players.get(clipId);
-    if (player) {
-      player.dispose();
-    }
-    player = new Tone.Player(buffer);
+  addPlayer(
+    clipId: string,
+    buffer: AudioBuffer,
+    gain: number,
+    mode: 'pitch' | 'time' = 'pitch',
+  ): Tone.Player | Tone.GrainPlayer {
+    const existing = this.players.get(clipId);
+    if (existing) existing.dispose();
+    // GrainPlayer does real time-stretch (pitch preserved) via overlapping
+    // grain windows; Player is the cheap varispeed path. We pick at build
+    // time so callers can swap by disposing + re-adding.
+    const player =
+      mode === 'time'
+        ? new Tone.GrainPlayer({ url: buffer, grainSize: 0.1, overlap: 0.05 })
+        : new Tone.Player(buffer);
     player.volume.value = Tone.gainToDb(Math.max(0.0001, gain));
     player.connect(this.fxInput);
     this.players.set(clipId, player);

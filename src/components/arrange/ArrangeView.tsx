@@ -1164,6 +1164,23 @@ const AudioClipInspector = memo(function AudioClipInspector() {
       >
         ⇄ WARP
       </button>
+      <span className="hud-readout">MODE</span>
+      <button
+        className={`nerv-btn ${(found.stretchMode ?? 'pitch') === 'pitch' ? 'is-active' : ''}`}
+        onClick={() => updateAudioClip(found.id, { stretchMode: 'pitch' })}
+        title="Varispeed — pitch follows tempo (cheap, instant)"
+        disabled={!warp}
+      >
+        PITCH
+      </button>
+      <button
+        className={`nerv-btn ${found.stretchMode === 'time' ? 'is-active' : ''}`}
+        onClick={() => updateAudioClip(found.id, { stretchMode: 'time' })}
+        title="Granular time-stretch — pitch preserved across tempo changes (Tone.GrainPlayer)"
+        disabled={!warp}
+      >
+        TIME
+      </button>
       <span className="hud-readout">SRC BPM</span>
       <input
         type="number"

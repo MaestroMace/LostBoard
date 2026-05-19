@@ -191,6 +191,8 @@ type State = {
   selectedTrackId: string | null;
   /** Selected clips, in selection order. The first id is the "primary" used by per-clip editors. */
   selectedClipIds: string[];
+  /** Selected MIDI note ids (in the currently-open piano-roll clip). Not persisted — UI state for selection-aware actions like per-note humanise / quantise. */
+  selectedNoteIds: string[];
   /** In-memory clip clipboard for copy/paste/duplicate. Not part of the persisted project. */
   clipboard: Clip[];
   isPlaying: boolean;
@@ -266,7 +268,7 @@ type Actions = {
   removeClip(clipId: string): void;
   moveClip(clipId: string, newStart: number): void;
   resizeClip(clipId: string, newLength: number): void;
-  updateAudioClip(clipId: string, patch: { sourceBpm?: number; warp?: boolean; gain?: number; offset?: number }): void;
+  updateAudioClip(clipId: string, patch: { sourceBpm?: number; warp?: boolean; gain?: number; offset?: number; stretchMode?: 'pitch' | 'time' }): void;
 
   setMicRecording(b: boolean): void;
   setBouncing(b: boolean): void;
@@ -276,8 +278,12 @@ type Actions = {
   setStepProbability(trackId: string, clipId: string, pad: DrumPad, step: number, p: number): void;
   setPadSample(trackId: string, pad: DrumPad, sampleId: string | null): void;
   setPatternLength(trackId: string, clipId: string, newLength: number): void;
-  quantizeClip(trackId: string, clipId: string, gridBeats: number): void;
-  humanizeClip(trackId: string, clipId: string, amount: number): void;
+  quantizeClip(trackId: string, clipId: string, gridBeats: number, noteIds?: string[]): void;
+  humanizeClip(trackId: string, clipId: string, amount: number, noteIds?: string[]): void;
+
+  selectNote(noteId: string | null): void;
+  toggleNoteSelected(noteId: string): void;
+  clearNoteSelection(): void;
 
   addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
   removeNote(trackId: string, clipId: string, noteId: string): void;
@@ -316,6 +322,7 @@ export const useStore = create<Store>()(
     view: 'arrange',
     selectedTrackId: null,
     selectedClipIds: [],
+    selectedNoteIds: [],
     clipboard: [],
     isPlaying: false,
     metronome: false,
@@ -889,9 +896,15 @@ export const useStore = create<Store>()(
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
-    /** Snap every note's start in a MIDI clip to the nearest `gridBeats` boundary. */
-    quantizeClip: (trackId, clipId, gridBeats) => {
+    /**
+     * Snap notes' starts in a MIDI clip to the nearest `gridBeats` boundary.
+     * If `noteIds` is provided, only those notes are quantized; otherwise the
+     * whole clip is. Same shape as `humanizeClip` so selection-aware UI can
+     * pass through the active set from the piano roll.
+     */
+    quantizeClip: (trackId, clipId, gridBeats, noteIds) => {
       if (gridBeats <= 0) return;
+      const idSet = noteIds && noteIds.length > 0 ? new Set(noteIds) : null;
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -902,10 +915,11 @@ export const useStore = create<Store>()(
                   ? c
                   : {
                       ...c,
-                      notes: c.notes.map((n) => ({
-                        ...n,
-                        start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats),
-                      })),
+                      notes: c.notes.map((n) =>
+                        idSet && !idSet.has(n.id)
+                          ? n
+                          : { ...n, start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats) },
+                      ),
                     },
               ),
             },
@@ -914,13 +928,15 @@ export const useStore = create<Store>()(
     },
 
     /**
-     * Randomly perturb every note in a clip — velocity by ±amount, start by
+     * Randomly perturb notes in a clip — velocity by ±amount, start by
      * ±amount*0.08 beats. Mechanical loops sound more played when humanised
      * a touch; over-humanising starts to feel sloppy. `amount` is 0..1.
+     * If `noteIds` is provided, only those notes are perturbed.
      */
-    humanizeClip: (trackId, clipId, amount) => {
+    humanizeClip: (trackId, clipId, amount, noteIds) => {
       const a = Math.max(0, Math.min(1, amount));
       if (a === 0) return;
+      const idSet = noteIds && noteIds.length > 0 ? new Set(noteIds) : null;
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -931,17 +947,28 @@ export const useStore = create<Store>()(
                   ? c
                   : {
                       ...c,
-                      notes: c.notes.map((n) => ({
-                        ...n,
-                        velocity: Math.max(0.05, Math.min(1, n.velocity + (Math.random() - 0.5) * 2 * a * 0.3)),
-                        start: Math.max(0, n.start + (Math.random() - 0.5) * 2 * a * 0.08),
-                      })),
+                      notes: c.notes.map((n) =>
+                        idSet && !idSet.has(n.id)
+                          ? n
+                          : {
+                              ...n,
+                              velocity: Math.max(0.05, Math.min(1, n.velocity + (Math.random() - 0.5) * 2 * a * 0.3)),
+                              start: Math.max(0, n.start + (Math.random() - 0.5) * 2 * a * 0.08),
+                            },
+                      ),
                     },
               ),
             },
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
+
+    selectNote: (noteId) => set({ selectedNoteIds: noteId ? [noteId] : [] }),
+    toggleNoteSelected: (noteId) => {
+      const cur = get().selectedNoteIds;
+      set({ selectedNoteIds: cur.includes(noteId) ? cur.filter((x) => x !== noteId) : [...cur, noteId] });
+    },
+    clearNoteSelection: () => set({ selectedNoteIds: [] }),
 
     addNote: (trackId, clipId, note) => {
       const tracks = get().project.tracks.map((t) =>
