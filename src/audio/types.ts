@@ -189,10 +189,45 @@ export type Track = {
   sessionSlots?: (string | null)[];
   /** For drum tracks: map of pad → sampleId. When set, the pad fires that sample instead of the built-in drum synth voice. */
   padSamples?: Partial<Record<DrumPad, string>>;
+  /** Per-track automation lanes. Each lane targets one parameter and stores a sorted list of (beat, value) breakpoints; the engine queues linear ramps between consecutive points so the param moves smoothly across the arrangement. */
+  automation?: AutomationLane[];
   /** For the sampler synth-engine: id of the sample to play chromatically. The sample is treated as the "root" pitch (samplerRootPitch) and resampled for other notes. */
   samplerSampleId?: string;
   /** MIDI pitch the sample was recorded at; other pitches are resampled from there. Defaults to 60 (middle C). */
   samplerRootPitch?: number;
+};
+
+/**
+ * Automation lanes — per-track, per-parameter sparse breakpoint lists.
+ * Each lane targets one parameter on the track; the engine queues linear
+ * ramps between consecutive points using Web Audio AudioParam scheduling.
+ *
+ * Supported params and their unit conventions:
+ *   - volume:  dB, suggested range -60..+6
+ *   - pan:     -1..+1 (linear)
+ *   - cutoff:  Hz (50..18000), applied to the instrument's lowpass
+ *   - reverb:  0..1 send level
+ *   - delay:   0..1 send level
+ */
+export type AutomationParam = 'volume' | 'pan' | 'cutoff' | 'reverb' | 'delay';
+
+export type AutomationPoint = {
+  id: string;
+  beat: number;
+  value: number;
+};
+
+export type AutomationLane = {
+  param: AutomationParam;
+  points: AutomationPoint[];
+};
+
+export const AUTOMATION_PARAM_META: Record<AutomationParam, { label: string; min: number; max: number; step: number; unit: string }> = {
+  volume: { label: 'VOLUME', min: -60, max: 6, step: 0.5, unit: 'dB' },
+  pan: { label: 'PAN', min: -1, max: 1, step: 0.05, unit: '' },
+  cutoff: { label: 'CUTOFF', min: 50, max: 18000, step: 10, unit: 'Hz' },
+  reverb: { label: 'REVERB', min: 0, max: 1, step: 0.01, unit: '' },
+  delay: { label: 'DELAY', min: 0, max: 1, step: 0.01, unit: '' },
 };
 
 /**

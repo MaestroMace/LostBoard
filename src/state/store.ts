@@ -4,6 +4,8 @@ import {
   DEFAULT_SYNTH,
   DEFAULT_FX,
   DRUM_PADS,
+  type AutomationParam,
+  type AutomationPoint,
   type Clip,
   type DrumPad,
   type DrumPattern,
@@ -179,6 +181,7 @@ export type View =
   | 'pianoroll'
   | 'sequencer'
   | 'fx'
+  | 'automation'
   | 'project';
 
 type State = {
@@ -249,6 +252,11 @@ type Actions = {
   updateSynth(id: string, patch: Partial<SynthParams>): void;
   setSynthEngine(id: string, engine: SynthEngine): void;
   setSamplerSample(id: string, sampleId: string | null, rootPitch?: number): void;
+
+  addAutomationPoint(trackId: string, param: AutomationParam, beat: number, value: number): AutomationPoint | null;
+  updateAutomationPoint(trackId: string, param: AutomationParam, pointId: string, patch: Partial<Pick<AutomationPoint, 'beat' | 'value'>>): void;
+  removeAutomationPoint(trackId: string, param: AutomationParam, pointId: string): void;
+  removeAutomationLane(trackId: string, param: AutomationParam): void;
   updateFx(id: string, patch: Partial<FxRack>): void;
 
   addClip(trackId: string, atBeat: number, lengthBeats?: number): Clip | null;
@@ -573,6 +581,71 @@ export const useStore = create<Store>()(
       );
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
+    addAutomationPoint: (trackId, param, beat, value) => {
+      const trackIdx = get().project.tracks.findIndex((t) => t.id === trackId);
+      if (trackIdx < 0) return null;
+      const pt: AutomationPoint = { id: newId('ap'), beat: Math.max(0, beat), value };
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = [...(t.automation ?? [])];
+        const li = lanes.findIndex((l) => l.param === param);
+        if (li < 0) {
+          lanes.push({ param, points: [pt] });
+        } else {
+          const points = [...lanes[li].points, pt].sort((a, b) => a.beat - b.beat);
+          lanes[li] = { ...lanes[li], points };
+        }
+        return { ...t, automation: lanes };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+      return pt;
+    },
+    updateAutomationPoint: (trackId, param, pointId, patch) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? []).map((lane) => {
+          if (lane.param !== param) return lane;
+          const points = lane.points
+            .map((p) =>
+              p.id !== pointId
+                ? p
+                : {
+                    ...p,
+                    beat: patch.beat !== undefined ? Math.max(0, patch.beat) : p.beat,
+                    value: patch.value !== undefined ? patch.value : p.value,
+                  },
+            )
+            .sort((a, b) => a.beat - b.beat);
+          return { ...lane, points };
+        });
+        return { ...t, automation: lanes };
+      });
+      // not history-tracked — point drags are knob-like
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    removeAutomationPoint: (trackId, param, pointId) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? [])
+          .map((lane) =>
+            lane.param !== param
+              ? lane
+              : { ...lane, points: lane.points.filter((p) => p.id !== pointId) },
+          )
+          .filter((lane) => lane.points.length > 0);
+        return { ...t, automation: lanes.length > 0 ? lanes : undefined };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+    removeAutomationLane: (trackId, param) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? []).filter((lane) => lane.param !== param);
+        return { ...t, automation: lanes.length > 0 ? lanes : undefined };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
     setSamplerSample: (id, sampleId, rootPitch) => {
       const tracks = get().project.tracks.map((t) =>
         t.id === id

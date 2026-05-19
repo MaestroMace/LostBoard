@@ -7,6 +7,7 @@ import type {
   Clip,
   FxRack,
   SynthEngine,
+  AutomationParam,
 } from './types';
 
 /**
@@ -395,6 +396,42 @@ class Engine {
       for (const clip of track.clips) {
         this.scheduleClip(clip, node, project);
       }
+      this.scheduleAutomation(track, node);
+    }
+  }
+
+  /**
+   * Wire each automation lane onto its target AudioParam. Per breakpoint we
+   * queue a transport callback at the right beat that calls either
+   * `setValueAtTime` (first point) or `linearRampToValueAtTime` (subsequent
+   * points). Web Audio guarantees the ramp starts from the value of the
+   * previous scheduled event, so chaining linear ramps yields a piecewise-
+   * linear curve that survives tempo changes too — the callback fires at
+   * the right audio time regardless of how bpm shifts in between.
+   *
+   * Lanes with fewer than 1 point are skipped; param lookup that returns
+   * undefined (e.g. cutoff on an audio track with no filter) is silently
+   * ignored so projects with stale automation don't break.
+   */
+  private scheduleAutomation(track: Track, node: TrackNode) {
+    const lanes = track.automation;
+    if (!lanes || lanes.length === 0) return;
+    const t = Tone.getTransport();
+    for (const lane of lanes) {
+      const param = node.getAutomationParam(lane.param);
+      if (!param) continue;
+      const points = [...lane.points].sort((a, b) => a.beat - b.beat);
+      points.forEach((pt, i) => {
+        const id = t.schedule((time) => {
+          try {
+            if (i === 0) param.setValueAtTime(pt.value, time);
+            else param.linearRampToValueAtTime(pt.value, time);
+          } catch {
+            /* param may have been disposed mid-schedule */
+          }
+        }, beatsToBarsBeats(pt.beat));
+        this.scheduledIds.push(id);
+      });
     }
   }
 
@@ -883,6 +920,28 @@ class TrackNode {
     return this.sidechainState;
   }
 
+  /**
+   * Resolve an automation-lane target to the right scheduling-capable param.
+   * Returns undefined for params that don't apply to this track (cutoff on
+   * a drum or audio track, etc.) — the scheduler silently skips those.
+   */
+  getAutomationParam(param: AutomationParam): Automatable | undefined {
+    switch (param) {
+      case 'volume':
+        return this.channel.volume as unknown as Automatable;
+      case 'pan':
+        return this.channel.pan as unknown as Automatable;
+      case 'reverb':
+        return this.reverbSend.gain as unknown as Automatable;
+      case 'delay':
+        return this.delaySend.gain as unknown as Automatable;
+      case 'cutoff':
+        return this.instrument.getFilterFreq?.();
+      default:
+        return undefined;
+    }
+  }
+
   clearPadPlayers() {
     for (const p of this.padPlayers.values()) p.dispose();
     this.padPlayers.clear();
@@ -915,12 +974,25 @@ class TrackNode {
 
 // -----------------------------------------------------------
 
+/**
+ * Anything that exposes the two scheduling methods we need — both Web Audio
+ * AudioParam and Tone's Signal/Param wrappers satisfy this shape, so the
+ * automation scheduler doesn't need to care which side of the wrapper it's
+ * driving.
+ */
+type Automatable = {
+  setValueAtTime(value: number, time: number): unknown;
+  linearRampToValueAtTime(value: number, time: number): unknown;
+};
+
 type Instrument = {
   kind: 'synth' | 'fm' | 'wavetable' | 'sampler' | 'drum' | 'null';
   output: Tone.ToneAudioNode;
   trigger(pitch: number | DrumPad, vel: number, dur: string | number): void;
   triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number): void;
   dispose(): void;
+  /** Filter cutoff param for automation, if the instrument has one. */
+  getFilterFreq?(): Automatable | undefined;
 };
 
 /** Map a SynthEngine value to its corresponding Instrument.kind. */
@@ -992,6 +1064,10 @@ class SynthInstrument implements Instrument {
     this.poly.triggerAttackRelease(freq, dur, time, vel);
   }
 
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
+  }
+
   dispose() {
     this.poly.dispose();
     this.filter.dispose();
@@ -1058,6 +1134,10 @@ class FmInstrument implements Instrument {
     if (typeof pitch !== 'number') return;
     const freq = Tone.Frequency(pitch, 'midi').toFrequency();
     this.poly.triggerAttackRelease(freq, dur, time, vel);
+  }
+
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
   }
 
   dispose() {
@@ -1276,6 +1356,10 @@ class WavetableInstrument implements Instrument {
     this.poly.triggerAttackRelease(freq, dur, time, vel);
   }
 
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
+  }
+
   dispose() {
     this.poly.dispose();
     this.filter.dispose();
@@ -1349,6 +1433,10 @@ class SamplerInstrument implements Instrument {
     if (!this.sampler || typeof pitch !== 'number') return;
     const note = Tone.Frequency(pitch, 'midi').toNote();
     this.sampler.triggerAttackRelease(note, dur, time, vel);
+  }
+
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
   }
 
   dispose() {
