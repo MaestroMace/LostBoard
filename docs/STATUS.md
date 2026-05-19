@@ -43,6 +43,9 @@ out here is wired into the running app — type-check + build pass clean.
 
 | Commit | Feature | Notes |
 | --- | --- | --- |
+| `1527d59` | **MAGI ticker telemetry + PWA install** | Ticker rotates through live engine readings (master peak dB, transport state, BPM, mode, track/clip/automation/tempo counts, MIDI device) plus a smaller pool of flavor lines. PROJECT view captures `beforeinstallprompt` and surfaces a ⬇ INSTALL TO HOME button on Chromium PWAs. |
+| `901a267` | **Per-note humanise/quantise + audio time-stretch** | Piano-roll notes are selectable (click / Cmd+click toggles / shift still deletes); QUANTIZE / HUMANIZE honour the selection. Audio clips gain `stretchMode: 'pitch' \| 'time'` — 'time' builds a Tone.GrainPlayer so pitch is preserved across tempo changes. |
+| `2caf4db` | **Curve modes + tempo ramps + arrange-view automation overlay** | AutomationPoint.curve dispatches setValueAtTime / linear / exponential / hold/step ramps. TempoEvent.curve adds 'ramp' (linear BPM glides via Transport.bpm.linearRampToValueAtTime). Each track in Arrange gets an "A" toggle that opens an inline lane with the same click/drag/dbl-click semantics as the AUTOMATION tab. |
 | `3f144ba` | **Automation lanes** | Per-track AutomationLane[] for volume / pan / cutoff / reverb / delay; engine chains `linearRampToValueAtTime` between points so the curve survives tempo changes. AUTOMATION tab: SVG sparkline (click-add, drag, dbl-click delete) + numeric points table. |
 | `4acf052` | **Tempo map** | Optional Project.tempoMap of (beat, bpm) events; engine queues `Transport.bpm.setValueAtTime` per event. PROJECT view sparse table editor. Offline bounce duration walks the map. |
 | `9a63ca4` | **Wavetable + chromatic sampler** | Two new SynthEngine values plugged into the synth track. Wavetable morphs partials across 4 frames via a POSITION knob; sampler uses Tone.Sampler over the runtime bank with a root-pitch knob and upload picker. |
@@ -105,14 +108,11 @@ Things that work but have a trade-off worth flagging:
 
 ## Known limitations / rough edges on the new round
 
-- **Automation lanes are arrange-tab-only.** No drawn curve on the
-  Arrange view itself — points live in the AUTOMATION tab. A click-and-
-  drag overlay under each track is the obvious next step.
-- **Automation is piecewise-linear only.** No curve / hold / step
-  interpolation modes yet. `linearRampToValueAtTime` is the only ramp
-  the scheduler issues.
 - **Cutoff automation only targets the instrument lowpass.** The FX
   rack's EQ bands and the compressor aren't yet automatable params.
+- **Arrange automation overlay is one-param-per-track.** Multiple
+  active lanes on a track stack in the AUTOMATION tab but the
+  arrange overlay shows one at a time via the dropdown.
 - **Wavetable engine uses a fixed 4-frame morph.** No user-loaded
   wavetables and no per-voice unison spread; POSITION simply lerps
   through partials sets.
@@ -120,9 +120,9 @@ Things that work but have a trade-off worth flagging:
   resampled across the keyboard. No multi-sample / velocity layers.
   ADSR's decay folds into release because Tone.Sampler doesn't expose
   separate decay/sustain.
-- **Tempo map is step-only.** No ramps between events; BPM changes
-  jump. Good enough for arrangement breaks; not enough for a true
-  tempo-curve accel/rit.
+- **GrainPlayer time-stretch isn't free.** The granular path has more
+  CPU cost than the varispeed Player and audible grain artifacts on
+  large stretch ratios. Default stretchMode stays 'pitch'.
 - **Offline render rebuilds the full graph per stem.** N stems = N
   separate Tone.Offline passes (one per track, others muted). Still
   much faster than realtime on any non-trivial project, but a
@@ -130,33 +130,34 @@ Things that work but have a trade-off worth flagging:
 
 ## Roadmap — what's next, ranked
 
-Highest-leverage to lowest, based on what I'd reach for after this:
+Highest-leverage to lowest:
 
-1. **Arrange-view automation overlay.** Draw the current track's lanes
-   on top of the clip strip with the same click-add / drag-move
-   semantics as the AutomationView, so users don't have to context-
-   switch to the tab to nudge a curve.
-2. **Curve modes for automation points.** hold / step / exponential in
-   addition to linear; scheduler dispatches between
-   `setValueAtTime` / `exponentialRampToValueAtTime`.
-3. **Tempo ramps.** Replace BPM jumps with linear ramps between tempo
-   events.
-4. **Note humanise/quantise per-note, not whole-clip.** Honour
-   `selectedNoteIds` (which doesn't exist yet — would mirror the clip
-   selection refactor we did).
-5. **Audio time-stretch (real, not varispeed).** Drop in `GrainPlayer` or
-   build a small offline-resampled cache per source-BPM.
-6. **Multi-zone sampler.** Velocity layers + key zones; a small drum-
-   sampler patch is mostly already there with `padSamples`.
-7. **MIDI clip from arrange recording.** Today the MIDI bridge writes into
+1. **FX-rack params automatable.** Currently only volume / pan / cutoff
+   / reverb / delay are automation targets — extending to EQ bands,
+   comp threshold/ratio, chorus depth, bitcrush bits would round out
+   the lane parameter list.
+2. **Multi-zone sampler.** Velocity layers + key zones. The drum-pad
+   sample swap already proves out per-pad routing.
+3. **MIDI punch-in with pre-roll.** Today the MIDI bridge writes into
    the armed synth track's active clip — wire a dedicated punch-in mode
    with a pre-roll countdown.
-8. **Web MIDI output / external sync.** Send notes to a hardware synth
+4. **Web MIDI output / external sync.** Send notes to a hardware synth
    over MIDI; sync transport to MIDI clock.
-9. **Sidechain attack/release split.** Replace the geometric-mean follower
-   with two followers fed through `Tone.Max`.
-10. **PWA install prompt + iOS silent-audio hack.** For lock-screen
-    transport on iOS specifically.
+5. **Sidechain attack/release split.** Replace the geometric-mean follower
+   with two followers fed through `Tone.Max`. Needs careful DSP wiring
+   because Tone.Follower's smoothing is symmetric.
+6. **Per-lane overlay.** Today the Arrange overlay shows one param per
+   track; stacking N lanes vertically would let users see and edit
+   multiple curves at once.
+7. **Curve preview on tempo map.** Add a small BPM sparkline alongside
+   the events table so accel/rit shapes are visible without scrubbing
+   the transport.
+8. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
+   controls on iOS Safari (the install banner already covers the
+   Chromium PWA path).
+9. **Garbage-collect orphaned samples from IndexedDB.** Samples no
+   longer referenced by any audio clip / pad / sampler accumulate over
+   time.
 
 ## Repo layout cheatsheet
 

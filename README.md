@@ -127,24 +127,30 @@ changelog and known limitations):
 
 - **Offline bounce** via `Tone.Offline` — master + per-track stems as WAVs,
   faster-than-real-time
-- **Wavetable** synth engine (4-frame partials morph) + **chromatic
-  sampler** engine (Tone.Sampler over the runtime bank)
-- **Tempo map** — sparse (beat, BPM) events drive `Transport.bpm` step
-  changes mid-arrangement
+- **Wavetable** synth engine + **chromatic sampler** engine
+- **Tempo map** with per-event step / ramp curves
 - **Automation lanes** per track for volume / pan / cutoff / reverb /
-  delay; SVG sparkline editor in a new AUTOMATION tab, engine chains
-  `linearRampToValueAtTime` between points
+  delay with linear / exponential / hold / step curve modes; SVG
+  sparkline editor in a new AUTOMATION tab AND an inline overlay
+  under each track in the Arrange view
+- **Per-note humanise / quantise** in the piano roll (select notes
+  with click / Cmd+click, then run the action on just the selection)
+- **Real time-stretch** on audio clips via `Tone.GrainPlayer` — pitch
+  preserved across tempo changes
+- **Live MAGI ticker** reporting master peak, transport state, track /
+  clip / automation / tempo counts, and MIDI device
+- **PWA install prompt** on Chromium browsers (⬇ INSTALL TO HOME in
+  the PROJECT view)
 
 Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
 full ranked roadmap):
 
-- Arrange-view automation overlay (currently lanes live only in the
-  AUTOMATION tab)
-- Curve modes for automation points (hold / step / exponential)
-- Tempo ramps between events (current map is step-only)
-- Per-note humanise/quantise (vs. the current whole-clip)
-- Real audio time-stretch (vs. the current varispeed warp)
-- Sync the MAGI ticker to actual engine + transport telemetry
+- FX-rack params automatable (EQ bands, compressor threshold/ratio,
+  chorus depth, bitcrush bits)
+- Multi-zone sampler (velocity layers + key zones)
+- MIDI punch-in with pre-roll
+- Web MIDI output / external sync
+- Sidechain attack/release split
 - Garbage-collect orphaned samples from IndexedDB
 
 ## Status & handoff
