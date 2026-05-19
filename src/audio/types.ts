@@ -198,10 +198,19 @@ export type Track = {
   padSamples?: Partial<Record<DrumPad, string>>;
   /** Per-track automation lanes. Each lane targets one parameter and stores a sorted list of (beat, value) breakpoints; the engine queues linear ramps between consecutive points so the param moves smoothly across the arrangement. */
   automation?: AutomationLane[];
-  /** For the sampler synth-engine: id of the sample to play chromatically. The sample is treated as the "root" pitch (samplerRootPitch) and resampled for other notes. */
+  /** For the sampler synth-engine: id of the sample to play chromatically. The sample is treated as the "root" pitch (samplerRootPitch) and resampled for other notes. Legacy single-zone field — `samplerZones` supersedes it when present. */
   samplerSampleId?: string;
-  /** MIDI pitch the sample was recorded at; other pitches are resampled from there. Defaults to 60 (middle C). */
+  /** MIDI pitch the sample was recorded at; other pitches are resampled from there. Defaults to 60 (middle C). Legacy single-zone field. */
   samplerRootPitch?: number;
+  /** Multi-zone sampler map. When present and non-empty, each zone's sample is mapped at its root pitch and Tone.Sampler interpolates between them across the keyboard. Supersedes samplerSampleId / samplerRootPitch. */
+  samplerZones?: SamplerZone[];
+};
+
+/** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch. */
+export type SamplerZone = {
+  id: string;
+  sampleId: string;
+  rootPitch: number;
 };
 
 /**

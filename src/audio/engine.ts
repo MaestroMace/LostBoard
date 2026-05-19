@@ -760,7 +760,8 @@ class TrackNode {
       const samplerSourceChanged =
         wantKind === 'sampler' &&
         this.instrument.kind === 'sampler' &&
-        (this.instrument as SamplerInstrument).getSourceId() !== (track.samplerSampleId ?? '');
+        (this.instrument as SamplerInstrument).getSourceId() !==
+          samplerZoneSignature(resolveSamplerZones(track));
       if (this.instrument.kind !== wantKind || samplerSourceChanged) {
         this.instrument.dispose();
         this.instrument = buildInstrument(track, this.sampleBank);
@@ -776,7 +777,7 @@ class TrackNode {
       } else if (this.instrument.kind === 'wavetable') {
         (this.instrument as WavetableInstrument).applyParams(track.synth);
       } else if (this.instrument.kind === 'sampler') {
-        (this.instrument as SamplerInstrument).applyParams(track.synth, track.samplerRootPitch ?? 60);
+        (this.instrument as SamplerInstrument).applyParams(track.synth);
       }
     }
     const automated = automatedParams(track);
@@ -1451,21 +1452,41 @@ class WavetableInstrument implements Instrument {
   }
 }
 
+/** Resolve a track's sampler zones, falling back to the legacy single-zone fields. */
+function resolveSamplerZones(track: Track): { sampleId: string; rootPitch: number }[] {
+  if (track.samplerZones && track.samplerZones.length > 0) {
+    return track.samplerZones.map((z) => ({ sampleId: z.sampleId, rootPitch: z.rootPitch }));
+  }
+  if (track.samplerSampleId) {
+    return [{ sampleId: track.samplerSampleId, rootPitch: track.samplerRootPitch ?? 60 }];
+  }
+  return [];
+}
+
+/** Stable signature of a zone list — drives the "rebuild on change" check. */
+function samplerZoneSignature(zones: { sampleId: string; rootPitch: number }[]): string {
+  return zones
+    .map((z) => `${z.rootPitch}:${z.sampleId}`)
+    .sort()
+    .join('|');
+}
+
 /**
- * Chromatic sampler — Tone.Sampler plays a single source buffer at every
- * pitch by resampling. The buffer's "root" pitch (samplerRootPitch on the
- * Track, default C4 / MIDI 60) is the unity-rate note; every other pitch
- * shifts playback rate up or down. Useful for one-shot piano hits, vocal
- * chops, melodic stab samples, etc.
+ * Multi-zone chromatic sampler — Tone.Sampler maps one buffer per key zone
+ * (each anchored at a root MIDI pitch) and interpolates between them across
+ * the keyboard by resampling. With a single zone it behaves like a basic
+ * one-shot sampler; with several it covers a wider range cleanly (e.g. a
+ * piano sampled every octave). Useful for one-shots, vocal chops, melodic
+ * stabs, multi-sampled instruments.
  *
  * Reuses the shared filter / ADSR-shaped amplitude envelope so the same
  * SynthParams knobs still mean something. ADSR maps onto Tone.Sampler's
  * built-in attack/release; sustain/decay aren't exposed on Sampler so they
  * fold into release (still musical for one-shots).
  *
- * If the referenced sampleId isn't present in the bank (e.g. project
- * loaded before audio rehydrates), the instrument outputs silence rather
- * than throwing — the engine update pass rebuilds it once the sample lands.
+ * Zones whose sampleId isn't in the bank yet (project loaded before audio
+ * rehydrates) are skipped; the engine update pass rebuilds the instrument
+ * once the samples land.
  */
 class SamplerInstrument implements Instrument {
   kind = 'sampler' as const;
@@ -1474,22 +1495,28 @@ class SamplerInstrument implements Instrument {
   private filter: Tone.Filter;
   private sourceId: string;
 
-  constructor(params: SynthParams, rootPitch: number, sampleId: string | undefined, sampleBank: Map<string, AudioBuffer>) {
+  constructor(
+    params: SynthParams,
+    zones: { sampleId: string; rootPitch: number }[],
+    sampleBank: Map<string, AudioBuffer>,
+  ) {
     this.output = new Tone.Gain(1);
     this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
     this.filter.connect(this.output);
-    this.sourceId = sampleId ?? '';
-    if (sampleId) {
-      const buf = sampleBank.get(sampleId);
-      if (buf) {
-        const rootName = Tone.Frequency(rootPitch, 'midi').toNote();
-        this.sampler = new Tone.Sampler({
-          urls: { [rootName]: new Tone.ToneAudioBuffer(buf) },
-          attack: params.attack,
-          release: Math.max(params.release, params.decay),
-        });
-        this.sampler.connect(this.filter);
-      }
+    this.sourceId = samplerZoneSignature(zones);
+    const urls: Record<string, Tone.ToneAudioBuffer> = {};
+    for (const zone of zones) {
+      const buf = sampleBank.get(zone.sampleId);
+      if (!buf) continue;
+      urls[Tone.Frequency(zone.rootPitch, 'midi').toNote()] = new Tone.ToneAudioBuffer(buf);
+    }
+    if (Object.keys(urls).length > 0) {
+      this.sampler = new Tone.Sampler({
+        urls,
+        attack: params.attack,
+        release: Math.max(params.release, params.decay),
+      });
+      this.sampler.connect(this.filter);
     }
   }
 
@@ -1497,7 +1524,7 @@ class SamplerInstrument implements Instrument {
     return this.sourceId;
   }
 
-  applyParams(p: SynthParams, _rootPitch: number) {
+  applyParams(p: SynthParams) {
     this.filter.frequency.rampTo(p.cutoff, 0.05);
     this.filter.Q.rampTo(p.resonance, 0.05);
     if (this.sampler) {
@@ -1570,12 +1597,7 @@ function buildInstrument(track: Track, sampleBank?: Map<string, AudioBuffer>): I
     if (track.synthEngine === 'fm') return new FmInstrument(params);
     if (track.synthEngine === 'wavetable') return new WavetableInstrument(params);
     if (track.synthEngine === 'sampler') {
-      return new SamplerInstrument(
-        params,
-        track.samplerRootPitch ?? 60,
-        track.samplerSampleId,
-        sampleBank ?? new Map(),
-      );
+      return new SamplerInstrument(params, resolveSamplerZones(track), sampleBank ?? new Map());
     }
     return new SynthInstrument(params);
   }

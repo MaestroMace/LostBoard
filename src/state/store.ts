@@ -14,6 +14,7 @@ import {
   type Note,
   type Project,
   type Step,
+  type SamplerZone,
   type SynthEngine,
   type SynthParams,
   type TempoEvent,
@@ -24,6 +25,22 @@ import {
 const NERV_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
 
 export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
+
+/**
+ * Effective sampler zones for a track, migrating the legacy single-sample
+ * fields (samplerSampleId / samplerRootPitch) into a one-element zone list
+ * so the UI and store actions only ever deal with the array form. Returns
+ * a fresh array each call — safe to mutate.
+ */
+export function currentSamplerZones(track: Track): SamplerZone[] {
+  if (track.samplerZones && track.samplerZones.length > 0) {
+    return track.samplerZones.map((z) => ({ ...z }));
+  }
+  if (track.samplerSampleId) {
+    return [{ id: newId('zn'), sampleId: track.samplerSampleId, rootPitch: track.samplerRootPitch ?? 60 }];
+  }
+  return [];
+}
 
 /** Default scene list when a project doesn't carry one (old projects, fresh `makeProject`). */
 export function defaultScenes() {
@@ -255,7 +272,9 @@ type Actions = {
   updateTrack(id: string, patch: Partial<Track>): void;
   updateSynth(id: string, patch: Partial<SynthParams>): void;
   setSynthEngine(id: string, engine: SynthEngine): void;
-  setSamplerSample(id: string, sampleId: string | null, rootPitch?: number): void;
+  addSamplerZone(trackId: string, sampleId: string, rootPitch?: number): void;
+  updateSamplerZone(trackId: string, zoneId: string, patch: Partial<Pick<SamplerZone, 'sampleId' | 'rootPitch'>>): void;
+  removeSamplerZone(trackId: string, zoneId: string): void;
 
   addAutomationPoint(trackId: string, param: AutomationParam, beat: number, value: number): AutomationPoint | null;
   updateAutomationPoint(trackId: string, param: AutomationParam, pointId: string, patch: Partial<Pick<AutomationPoint, 'beat' | 'value' | 'curve'>>): void;
@@ -684,16 +703,36 @@ export const useStore = create<Store>()(
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
-    setSamplerSample: (id, sampleId, rootPitch) => {
-      const tracks = get().project.tracks.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              samplerSampleId: sampleId ?? undefined,
-              samplerRootPitch: rootPitch ?? t.samplerRootPitch ?? 60,
-            }
-          : t,
-      );
+    addSamplerZone: (trackId, sampleId, rootPitch) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const zones = currentSamplerZones(t);
+        zones.push({ id: newId('zn'), sampleId, rootPitch: rootPitch ?? 60 });
+        return { ...t, samplerZones: zones, samplerSampleId: undefined, samplerRootPitch: undefined };
+      });
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    updateSamplerZone: (trackId, zoneId, patch) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const zones = currentSamplerZones(t).map((z) =>
+          z.id === zoneId ? { ...z, ...patch } : z,
+        );
+        return { ...t, samplerZones: zones, samplerSampleId: undefined, samplerRootPitch: undefined };
+      });
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    removeSamplerZone: (trackId, zoneId) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const zones = currentSamplerZones(t).filter((z) => z.id !== zoneId);
+        return {
+          ...t,
+          samplerZones: zones.length > 0 ? zones : undefined,
+          samplerSampleId: undefined,
+          samplerRootPitch: undefined,
+        };
+      });
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
     updateFx: (id, patch) => {

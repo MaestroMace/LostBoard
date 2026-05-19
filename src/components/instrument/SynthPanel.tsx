@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useStore } from '../../state/store';
+import { useStore, currentSamplerZones } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
 import { DEFAULT_SYNTH, type SynthParams, type SynthEngine } from '../../audio/types';
@@ -268,19 +268,21 @@ function midiToName(m: number) {
 }
 
 /**
- * SamplerSource — UI for the sampler engine. Picks/loads the source sample
- * and the MIDI pitch the buffer represents at unity playback rate. The
- * sample picker pulls from the engine's runtime bank so anything already
- * imported elsewhere in the project (audio clips, pad samples) shows up
- * here too.
+ * SamplerSource — multi-zone editor for the sampler engine. Each zone is a
+ * sample anchored at a root MIDI pitch; Tone.Sampler interpolates between
+ * zones across the keyboard, so one zone behaves like a basic one-shot and
+ * several cover a wider range cleanly.
  *
- * Re-reads the bank when the track changes or when an upload completes —
- * the bank itself isn't a React store, so we poll on a tiny interval
- * while mounted to catch background-rehydrated samples.
+ * The sample picker pulls from the engine's runtime bank so anything
+ * already imported elsewhere (audio clips, pad samples) shows up. The bank
+ * isn't a React store, so we poll on a small interval while mounted to
+ * catch background-rehydrated samples.
  */
 function SamplerSource({ trackId }: { trackId: string }) {
   const track = useStore((s) => s.project.tracks.find((t) => t.id === trackId));
-  const setSamplerSample = useStore((s) => s.setSamplerSample);
+  const addSamplerZone = useStore((s) => s.addSamplerZone);
+  const updateSamplerZone = useStore((s) => s.updateSamplerZone);
+  const removeSamplerZone = useStore((s) => s.removeSamplerZone);
   const [sampleIds, setSampleIds] = useState<string[]>(audioEngine.listSampleIds());
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -291,14 +293,14 @@ function SamplerSource({ trackId }: { trackId: string }) {
     return () => clearInterval(tick);
   }, []);
 
-  const currentId = track?.samplerSampleId;
-  const root = track?.samplerRootPitch ?? 60;
+  const zones = track ? currentSamplerZones(track) : [];
 
   async function handleUpload(file: File) {
     try {
       const { id } = await importSample(file);
       setSampleIds(audioEngine.listSampleIds());
-      setSamplerSample(trackId, id, root);
+      // new zone defaults a sensible root pitch one octave up per existing zone
+      addSamplerZone(trackId, id, 60 + zones.length * 12);
     } catch (e) {
       console.error('Sample import failed', e);
       alert('Could not import sample.');
@@ -306,11 +308,11 @@ function SamplerSource({ trackId }: { trackId: string }) {
   }
 
   return (
-    <HexFrame title="SAMPLER SOURCE">
+    <HexFrame title="SAMPLER ZONES">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()}>
-            ⬆ LOAD SAMPLE
+            ⬆ LOAD + ADD ZONE
           </button>
           <input
             ref={fileRef}
@@ -323,42 +325,83 @@ function SamplerSource({ trackId }: { trackId: string }) {
               e.target.value = '';
             }}
           />
-          {currentId && (
+          {sampleIds.length > 0 && (
             <button
-              className="nerv-btn nerv-btn--ghost"
-              onClick={() => setSamplerSample(trackId, null)}
+              className="nerv-btn"
+              onClick={() => addSamplerZone(trackId, sampleIds[0], 60 + zones.length * 12)}
             >
-              ✕ CLEAR
+              + ZONE
             </button>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="hud-readout" style={{ fontSize: 10 }}>SAMPLE:</span>
-          <select
-            className="display"
-            value={currentId ?? ''}
-            onChange={(e) => setSamplerSample(trackId, e.target.value || null, root)}
-            style={{ minWidth: 180 }}
-          >
-            <option value="">— none —</option>
-            {sampleIds.map((id) => (
-              <option key={id} value={id}>{id}</option>
+
+        {zones.length === 0 ? (
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
+            No zones yet. Load a sample to start — add more zones at different root pitches
+            for a cleanly multi-sampled instrument.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {zones.map((zone, i) => (
+              <div
+                key={zone.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '52px 1fr 96px 40px',
+                  gap: 6,
+                  alignItems: 'center',
+                  padding: '4px 6px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,106,0,0.2)',
+                }}
+              >
+                <span className="hud-value" style={{ fontSize: 10 }}>ZN-{String(i + 1).padStart(2, '0')}</span>
+                <select
+                  className="display"
+                  value={zone.sampleId}
+                  onChange={(e) => updateSamplerZone(trackId, zone.id, { sampleId: e.target.value })}
+                  style={{ minWidth: 0 }}
+                >
+                  {!sampleIds.includes(zone.sampleId) && (
+                    <option value={zone.sampleId}>{zone.sampleId} (missing)</option>
+                  )}
+                  {sampleIds.map((id) => (
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>ROOT</span>
+                  <input
+                    className="display"
+                    type="number"
+                    min={12}
+                    max={108}
+                    value={zone.rootPitch}
+                    onChange={(e) =>
+                      updateSamplerZone(trackId, zone.id, {
+                        rootPitch: Math.max(12, Math.min(108, parseInt(e.target.value) || 60)),
+                      })
+                    }
+                    style={{ width: 44 }}
+                  />
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9, minWidth: 28 }}>
+                    {midiToName(zone.rootPitch)}
+                  </span>
+                </div>
+                <button
+                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  onClick={() => removeSamplerZone(trackId, zone.id)}
+                  title="Remove zone"
+                >
+                  ✕
+                </button>
+              </div>
             ))}
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-          <Knob
-            label="ROOT"
-            value={root}
-            min={24}
-            max={96}
-            step={1}
-            display={(v) => midiToName(Math.round(v))}
-            onChange={(v) => setSamplerSample(trackId, currentId ?? null, Math.round(v))}
-          />
-        </div>
+          </div>
+        )}
         <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
-          ROOT = MIDI pitch the sample plays at unity rate. Notes above transpose up by resampling.
+          ROOT = MIDI pitch a zone's sample plays at unity rate. Tone.Sampler interpolates
+          between zones for every other note.
         </p>
       </div>
     </HexFrame>
