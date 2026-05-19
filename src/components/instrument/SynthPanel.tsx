@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
-import { DEFAULT_SYNTH, type SynthParams } from '../../audio/types';
+import { DEFAULT_SYNTH, type SynthParams, type SynthEngine } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { importSample } from '../../state/samples';
 
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
@@ -58,18 +59,15 @@ export function SynthPanel() {
           ))}
         </select>
         <span className="hud-readout">ENGINE:</span>
-        <button
-          className={`nerv-btn ${engine === 'subtractive' ? 'is-active' : ''}`}
-          onClick={() => setSynthEngine(active.id, 'subtractive')}
-        >
-          SUBTRACTIVE
-        </button>
-        <button
-          className={`nerv-btn ${engine === 'fm' ? 'is-active' : ''}`}
-          onClick={() => setSynthEngine(active.id, 'fm')}
-        >
-          FM
-        </button>
+        {(['subtractive', 'fm', 'wavetable', 'sampler'] as SynthEngine[]).map((e) => (
+          <button
+            key={e}
+            className={`nerv-btn ${engine === e ? 'is-active' : ''}`}
+            onClick={() => setSynthEngine(active.id, e)}
+          >
+            {e === 'subtractive' ? 'SUBTRACTIVE' : e === 'fm' ? 'FM' : e === 'wavetable' ? 'WAVETABLE' : 'SAMPLER'}
+          </button>
+        ))}
         <div style={{ flex: 1 }} />
         <span className="hud-readout">PRESET:</span>
         {Object.keys(PRESETS).map((k) => (
@@ -120,6 +118,27 @@ export function SynthPanel() {
               />
             </div>
           </HexFrame>
+        ) : engine === 'wavetable' ? (
+          <HexFrame title="WAVETABLE">
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+              <Knob
+                label="POSITION"
+                value={s.wavePosition ?? 0.33}
+                min={0}
+                max={1}
+                step={0.01}
+                display={(v) => `${(v * 100).toFixed(0)}%`}
+                onChange={(v) => patch({ wavePosition: v })}
+              />
+              <Knob label="DETUNE" value={s.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
+              <Knob label="GLIDE" value={s.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
+            </div>
+            <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: '8px 0 0' }}>
+              POSITION morphs sine → hollow → bright → saw.
+            </p>
+          </HexFrame>
+        ) : engine === 'sampler' ? (
+          <SamplerSource trackId={active.id} />
         ) : (
         <HexFrame title="OSC">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -240,5 +259,108 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
         })}
       </div>
     </div>
+  );
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function midiToName(m: number) {
+  return `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
+}
+
+/**
+ * SamplerSource — UI for the sampler engine. Picks/loads the source sample
+ * and the MIDI pitch the buffer represents at unity playback rate. The
+ * sample picker pulls from the engine's runtime bank so anything already
+ * imported elsewhere in the project (audio clips, pad samples) shows up
+ * here too.
+ *
+ * Re-reads the bank when the track changes or when an upload completes —
+ * the bank itself isn't a React store, so we poll on a tiny interval
+ * while mounted to catch background-rehydrated samples.
+ */
+function SamplerSource({ trackId }: { trackId: string }) {
+  const track = useStore((s) => s.project.tracks.find((t) => t.id === trackId));
+  const setSamplerSample = useStore((s) => s.setSamplerSample);
+  const [sampleIds, setSampleIds] = useState<string[]>(audioEngine.listSampleIds());
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const refresh = () => setSampleIds(audioEngine.listSampleIds());
+    refresh();
+    const tick = window.setInterval(refresh, 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const currentId = track?.samplerSampleId;
+  const root = track?.samplerRootPitch ?? 60;
+
+  async function handleUpload(file: File) {
+    try {
+      const { id } = await importSample(file);
+      setSampleIds(audioEngine.listSampleIds());
+      setSamplerSample(trackId, id, root);
+    } catch (e) {
+      console.error('Sample import failed', e);
+      alert('Could not import sample.');
+    }
+  }
+
+  return (
+    <HexFrame title="SAMPLER SOURCE">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()}>
+            ⬆ LOAD SAMPLE
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+              e.target.value = '';
+            }}
+          />
+          {currentId && (
+            <button
+              className="nerv-btn nerv-btn--ghost"
+              onClick={() => setSamplerSample(trackId, null)}
+            >
+              ✕ CLEAR
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="hud-readout" style={{ fontSize: 10 }}>SAMPLE:</span>
+          <select
+            className="display"
+            value={currentId ?? ''}
+            onChange={(e) => setSamplerSample(trackId, e.target.value || null, root)}
+            style={{ minWidth: 180 }}
+          >
+            <option value="">— none —</option>
+            {sampleIds.map((id) => (
+              <option key={id} value={id}>{id}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+          <Knob
+            label="ROOT"
+            value={root}
+            min={24}
+            max={96}
+            step={1}
+            display={(v) => midiToName(Math.round(v))}
+            onChange={(v) => setSamplerSample(trackId, currentId ?? null, Math.round(v))}
+          />
+        </div>
+        <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
+          ROOT = MIDI pitch the sample plays at unity rate. Notes above transpose up by resampling.
+        </p>
+      </div>
+    </HexFrame>
   );
 }

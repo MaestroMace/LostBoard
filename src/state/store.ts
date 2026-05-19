@@ -243,6 +243,7 @@ type Actions = {
   updateTrack(id: string, patch: Partial<Track>): void;
   updateSynth(id: string, patch: Partial<SynthParams>): void;
   setSynthEngine(id: string, engine: SynthEngine): void;
+  setSamplerSample(id: string, sampleId: string | null, rootPitch?: number): void;
   updateFx(id: string, patch: Partial<FxRack>): void;
 
   addClip(trackId: string, atBeat: number, lengthBeats?: number): Clip | null;
@@ -537,6 +538,18 @@ export const useStore = create<Store>()(
     setSynthEngine: (id, engine) => {
       const tracks = get().project.tracks.map((t) =>
         t.id === id ? { ...t, synthEngine: engine } : t,
+      );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    setSamplerSample: (id, sampleId, rootPitch) => {
+      const tracks = get().project.tracks.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              samplerSampleId: sampleId ?? undefined,
+              samplerRootPitch: rootPitch ?? t.samplerRootPitch ?? 60,
+            }
+          : t,
       );
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },

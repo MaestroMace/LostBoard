@@ -17,6 +17,8 @@ export type SynthParams = {
   delay: number; // 0..1
   delayTime: string;
   drive: number; // 0..1
+  /** Wavetable engine: 0..1 morphs through preset wave frames. */
+  wavePosition?: number;
 };
 
 export const DEFAULT_SYNTH: SynthParams = {
@@ -36,6 +38,7 @@ export const DEFAULT_SYNTH: SynthParams = {
   delay: 0.12,
   delayTime: '8n',
   drive: 0.0,
+  wavePosition: 0.33,
 };
 
 export type DrumPad =
@@ -166,7 +169,7 @@ export const DEFAULT_FX: FxRack = {
   bitcrushOn: false,
 };
 
-export type SynthEngine = 'subtractive' | 'fm';
+export type SynthEngine = 'subtractive' | 'fm' | 'wavetable' | 'sampler';
 
 export type Track = {
   id: string;
@@ -186,6 +189,10 @@ export type Track = {
   sessionSlots?: (string | null)[];
   /** For drum tracks: map of pad → sampleId. When set, the pad fires that sample instead of the built-in drum synth voice. */
   padSamples?: Partial<Record<DrumPad, string>>;
+  /** For the sampler synth-engine: id of the sample to play chromatically. The sample is treated as the "root" pitch (samplerRootPitch) and resampled for other notes. */
+  samplerSampleId?: string;
+  /** MIDI pitch the sample was recorded at; other pitches are resampled from there. Defaults to 60 (middle C). */
+  samplerRootPitch?: number;
 };
 
 export type Project = {

@@ -170,6 +170,10 @@ class Engine {
     return this.sampleBank.has(id);
   }
 
+  listSampleIds(): string[] {
+    return Array.from(this.sampleBank.keys());
+  }
+
   /** Decode an arbitrary audio File/Blob into the bank under a fresh id. */
   async loadAudioFile(file: Blob): Promise<{ id: string; duration: number }> {
     const id = `smp_${Math.random().toString(36).slice(2, 10)}`;
@@ -619,7 +623,7 @@ class TrackNode {
     this.reverbSend.connect(reverb);
     this.delaySend.connect(delay);
 
-    this.instrument = buildInstrument(track);
+    this.instrument = buildInstrument(track, this.sampleBank);
     this.instrument.output.connect(this.fxInput);
     this.applySends(track);
     this.applyFx(track.fx);
@@ -633,10 +637,14 @@ class TrackNode {
 
     // rebuild the instrument if the requested synth engine changed
     if (track.kind === 'synth') {
-      const wantKind = track.synthEngine === 'fm' ? 'fm' : 'synth';
-      if (this.instrument.kind !== wantKind) {
+      const wantKind = synthEngineKind(track.synthEngine);
+      const samplerSourceChanged =
+        wantKind === 'sampler' &&
+        this.instrument.kind === 'sampler' &&
+        (this.instrument as SamplerInstrument).getSourceId() !== (track.samplerSampleId ?? '');
+      if (this.instrument.kind !== wantKind || samplerSourceChanged) {
         this.instrument.dispose();
-        this.instrument = buildInstrument(track);
+        this.instrument = buildInstrument(track, this.sampleBank);
         this.instrument.output.connect(this.fxInput);
       }
     }
@@ -646,6 +654,10 @@ class TrackNode {
         (this.instrument as SynthInstrument).applyParams(track.synth);
       } else if (this.instrument.kind === 'fm') {
         (this.instrument as FmInstrument).applyParams(track.synth);
+      } else if (this.instrument.kind === 'wavetable') {
+        (this.instrument as WavetableInstrument).applyParams(track.synth);
+      } else if (this.instrument.kind === 'sampler') {
+        (this.instrument as SamplerInstrument).applyParams(track.synth, track.samplerRootPitch ?? 60);
       }
     }
     this.applySends(track);
@@ -873,12 +885,26 @@ class TrackNode {
 // -----------------------------------------------------------
 
 type Instrument = {
-  kind: 'synth' | 'fm' | 'drum' | 'sampler';
+  kind: 'synth' | 'fm' | 'wavetable' | 'sampler' | 'drum' | 'null';
   output: Tone.ToneAudioNode;
   trigger(pitch: number | DrumPad, vel: number, dur: string | number): void;
   triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number): void;
   dispose(): void;
 };
+
+/** Map a SynthEngine value to its corresponding Instrument.kind. */
+function synthEngineKind(engine?: SynthEngine): Instrument['kind'] {
+  switch (engine) {
+    case 'fm':
+      return 'fm';
+    case 'wavetable':
+      return 'wavetable';
+    case 'sampler':
+      return 'sampler';
+    default:
+      return 'synth';
+  }
+}
 
 class SynthInstrument implements Instrument {
   kind = 'synth' as const;
@@ -1129,9 +1155,181 @@ class DrumInstrument implements Instrument {
   }
 }
 
+/**
+ * Wavetable instrument — a PolySynth whose oscillator type is a `custom`
+ * partials array. The `wavePosition` param (0..1) interpolates linearly
+ * between 4 preset wave frames, so a single knob sweeps the timbre from
+ * pure sine → hollow → bright → saw-ish. Cheap (no extra audio nodes)
+ * and reuses the same filter + ADSR + FX sends as the subtractive engine.
+ *
+ * Frames are stored as length-8 harmonic-amplitude arrays. Tone's Synth
+ * accepts `oscillator: { type: 'custom', partials: [...] }` and rebuilds
+ * the underlying PeriodicWave on assignment.
+ */
+const WAVE_FRAMES: number[][] = [
+  // sine — fundamental only
+  [1, 0, 0, 0, 0, 0, 0, 0],
+  // hollow — odd partials, square-ish
+  [1, 0, 0.55, 0, 0.33, 0, 0.22, 0],
+  // bright — all partials, decaying slowly
+  [1, 0.85, 0.7, 0.55, 0.45, 0.35, 0.27, 0.2],
+  // saw-ish — 1/n falloff
+  [1, 0.5, 0.33, 0.25, 0.2, 0.166, 0.143, 0.125],
+];
+
+function morphPartials(pos: number): number[] {
+  const clamped = Math.max(0, Math.min(1, pos));
+  const segments = WAVE_FRAMES.length - 1;
+  const scaled = clamped * segments;
+  const i = Math.min(segments - 1, Math.floor(scaled));
+  const t = scaled - i;
+  const a = WAVE_FRAMES[i];
+  const b = WAVE_FRAMES[i + 1];
+  const out: number[] = new Array(a.length);
+  for (let k = 0; k < a.length; k++) out[k] = a[k] * (1 - t) + b[k] * t;
+  return out;
+}
+
+class WavetableInstrument implements Instrument {
+  kind = 'wavetable' as const;
+  output: Tone.Gain;
+  private poly: Tone.PolySynth;
+  private filter: Tone.Filter;
+  private drive: Tone.Distortion;
+
+  constructor(params: SynthParams) {
+    this.output = new Tone.Gain(1);
+    this.drive = new Tone.Distortion({ distortion: params.drive, oversample: '2x' });
+    this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
+    this.poly = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'custom', partials: morphPartials(params.wavePosition ?? 0.33) } as any,
+      envelope: {
+        attack: params.attack,
+        decay: params.decay,
+        sustain: params.sustain,
+        release: params.release,
+      },
+      detune: params.detune,
+      portamento: params.glide,
+    });
+    this.poly.maxPolyphony = 16;
+    this.poly.chain(this.filter, this.drive, this.output);
+  }
+
+  applyParams(p: SynthParams) {
+    this.filter.frequency.rampTo(p.cutoff, 0.05);
+    this.filter.Q.rampTo(p.resonance, 0.05);
+    this.drive.distortion = p.drive;
+    this.poly.set({
+      oscillator: { type: 'custom', partials: morphPartials(p.wavePosition ?? 0.33) } as any,
+      envelope: {
+        attack: p.attack,
+        decay: p.decay,
+        sustain: p.sustain,
+        release: p.release,
+      },
+      detune: p.detune,
+      portamento: p.glide,
+    });
+  }
+
+  trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
+    if (typeof pitch !== 'number') return;
+    const freq = Tone.Frequency(pitch, 'midi').toFrequency();
+    this.poly.triggerAttackRelease(freq, dur, undefined, vel);
+  }
+
+  triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
+    if (typeof pitch !== 'number') return;
+    const freq = Tone.Frequency(pitch, 'midi').toFrequency();
+    this.poly.triggerAttackRelease(freq, dur, time, vel);
+  }
+
+  dispose() {
+    this.poly.dispose();
+    this.filter.dispose();
+    this.drive.dispose();
+    this.output.dispose();
+  }
+}
+
+/**
+ * Chromatic sampler — Tone.Sampler plays a single source buffer at every
+ * pitch by resampling. The buffer's "root" pitch (samplerRootPitch on the
+ * Track, default C4 / MIDI 60) is the unity-rate note; every other pitch
+ * shifts playback rate up or down. Useful for one-shot piano hits, vocal
+ * chops, melodic stab samples, etc.
+ *
+ * Reuses the shared filter / ADSR-shaped amplitude envelope so the same
+ * SynthParams knobs still mean something. ADSR maps onto Tone.Sampler's
+ * built-in attack/release; sustain/decay aren't exposed on Sampler so they
+ * fold into release (still musical for one-shots).
+ *
+ * If the referenced sampleId isn't present in the bank (e.g. project
+ * loaded before audio rehydrates), the instrument outputs silence rather
+ * than throwing — the engine update pass rebuilds it once the sample lands.
+ */
+class SamplerInstrument implements Instrument {
+  kind = 'sampler' as const;
+  output: Tone.Gain;
+  private sampler?: Tone.Sampler;
+  private filter: Tone.Filter;
+  private sourceId: string;
+
+  constructor(params: SynthParams, rootPitch: number, sampleId: string | undefined, sampleBank: Map<string, AudioBuffer>) {
+    this.output = new Tone.Gain(1);
+    this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
+    this.filter.connect(this.output);
+    this.sourceId = sampleId ?? '';
+    if (sampleId) {
+      const buf = sampleBank.get(sampleId);
+      if (buf) {
+        const rootName = Tone.Frequency(rootPitch, 'midi').toNote();
+        this.sampler = new Tone.Sampler({
+          urls: { [rootName]: new Tone.ToneAudioBuffer(buf) },
+          attack: params.attack,
+          release: Math.max(params.release, params.decay),
+        });
+        this.sampler.connect(this.filter);
+      }
+    }
+  }
+
+  getSourceId(): string {
+    return this.sourceId;
+  }
+
+  applyParams(p: SynthParams, _rootPitch: number) {
+    this.filter.frequency.rampTo(p.cutoff, 0.05);
+    this.filter.Q.rampTo(p.resonance, 0.05);
+    if (this.sampler) {
+      this.sampler.attack = p.attack;
+      this.sampler.release = Math.max(p.release, p.decay);
+    }
+  }
+
+  trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
+    if (!this.sampler || typeof pitch !== 'number') return;
+    const note = Tone.Frequency(pitch, 'midi').toNote();
+    this.sampler.triggerAttackRelease(note, dur, undefined, vel);
+  }
+
+  triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
+    if (!this.sampler || typeof pitch !== 'number') return;
+    const note = Tone.Frequency(pitch, 'midi').toNote();
+    this.sampler.triggerAttackRelease(note, dur, time, vel);
+  }
+
+  dispose() {
+    this.sampler?.dispose();
+    this.filter.dispose();
+    this.output.dispose();
+  }
+}
+
 /** Pass-through instrument for audio tracks (no synthesis — players feed FX directly). */
 class NullInstrument implements Instrument {
-  kind = 'sampler' as const;
+  kind = 'null' as const;
   output: Tone.Gain;
   constructor() {
     this.output = new Tone.Gain(1);
@@ -1162,12 +1360,21 @@ const FALLBACK_SYNTH: SynthParams = {
   drive: 0,
 };
 
-function buildInstrument(track: Track): Instrument {
+function buildInstrument(track: Track, sampleBank?: Map<string, AudioBuffer>): Instrument {
   if (track.kind === 'drum') return new DrumInstrument();
   if (track.kind === 'audio') return new NullInstrument();
   if (track.kind === 'synth') {
     const params = track.synth ?? FALLBACK_SYNTH;
     if (track.synthEngine === 'fm') return new FmInstrument(params);
+    if (track.synthEngine === 'wavetable') return new WavetableInstrument(params);
+    if (track.synthEngine === 'sampler') {
+      return new SamplerInstrument(
+        params,
+        track.samplerRootPitch ?? 60,
+        track.samplerSampleId,
+        sampleBank ?? new Map(),
+      );
+    }
     return new SynthInstrument(params);
   }
   return new SynthInstrument(FALLBACK_SYNTH);
