@@ -593,10 +593,28 @@ class Engine {
       const midiCh = track.midiOutChannel;
       const swing = track.swing ?? this.globalSwing;
       try {
-        const loop = new Tone.Loop((time) => {
-          this.fireClipInstance(clip, node, time, midiCh, swing);
-        }, interval).start(0);
-        this.sessionLoops.set(trackId, loop);
+        if (clip.kind === 'audio') {
+          // pre-build one Player; the loop restarts it each cycle so the
+          // sample re-triggers in time even if it's longer than the cell
+          const buffer = this.sampleBank.get(clip.sampleId);
+          if (!buffer) return;
+          const player = node.addPlayer(clip.id, buffer, clip.gain, clip.stretchMode ?? 'pitch');
+          const warp = clip.warp !== false && clip.sourceBpm && clip.sourceBpm > 0;
+          player.playbackRate = warp ? project.bpm / clip.sourceBpm! : 1;
+          const loop = new Tone.Loop((time) => {
+            try {
+              player.start(time, clip.offset);
+            } catch {
+              /* player may be mid-dispose */
+            }
+          }, interval).start(0);
+          this.sessionLoops.set(trackId, loop);
+        } else {
+          const loop = new Tone.Loop((time) => {
+            this.fireClipInstance(clip, node, time, midiCh, swing);
+          }, interval).start(0);
+          this.sessionLoops.set(trackId, loop);
+        }
       } catch (e) {
         console.warn('session loop create failed', e);
       }
