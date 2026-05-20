@@ -24,19 +24,17 @@ const useBeatWidth = () => useContext(BeatWidthContext);
 
 /**
  * AutomationOverlayContext — transient per-track UI state for the arrange
- * automation overlay. Maps trackId → param being displayed underneath that
- * track's clip lane. `null` (or missing) means hidden. Not persisted —
- * it's a view toggle, not a property of the project.
+ * automation overlay. `visible[trackId] === true` shows every automation
+ * lane the track owns, stacked under its clip row. Not persisted — it's a
+ * view toggle, not a property of the project.
  */
 type AutomationOverlayState = {
-  visible: Record<string, AutomationParam | null>;
-  toggle(trackId: string, available: AutomationParam[]): void;
-  setParam(trackId: string, param: AutomationParam | null): void;
+  visible: Record<string, boolean>;
+  toggle(trackId: string): void;
 };
 const AutomationOverlayContext = createContext<AutomationOverlayState>({
   visible: {},
   toggle: () => {},
-  setParam: () => {},
 });
 const useAutomationOverlay = () => useContext(AutomationOverlayContext);
 
@@ -52,23 +50,15 @@ export function ArrangeView() {
   const timelineW = totalBeats * beatW;
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [overlayVisible, setOverlayVisible] = useState<Record<string, AutomationParam | null>>({});
+  const [overlayVisible, setOverlayVisible] = useState<Record<string, boolean>>({});
   const overlayCtx: AutomationOverlayState = useMemo(
     () => ({
       visible: overlayVisible,
-      toggle: (trackId, available) => {
+      toggle: (trackId) => {
         setOverlayVisible((cur) => {
           const next = { ...cur };
           if (next[trackId]) delete next[trackId];
-          else if (available.length > 0) next[trackId] = available[0];
-          return next;
-        });
-      },
-      setParam: (trackId, param) => {
-        setOverlayVisible((cur) => {
-          const next = { ...cur };
-          if (param === null) delete next[trackId];
-          else next[trackId] = param;
+          else next[trackId] = true;
           return next;
         });
       },
@@ -150,14 +140,18 @@ export function ArrangeView() {
           </div>
           <div style={{ overflow: 'auto', flex: 1 }}>
             {tracks.map((t) => {
-              const param = overlayVisible[t.id];
-              const lane = param ? t.automation?.find((l) => l.param === param) : undefined;
+              const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
               return (
                 <div key={t.id}>
                   <TrackHeader track={t} compact={isMobile} />
-                  {param && (
-                    <AutomationOverlayHeader track={t} param={param} hasLane={!!lane} compact={isMobile} />
-                  )}
+                  {lanes.map((lane) => (
+                    <AutomationOverlayHeader
+                      key={lane.param}
+                      track={t}
+                      param={lane.param}
+                      compact={isMobile}
+                    />
+                  ))}
                 </div>
               );
             })}
@@ -173,25 +167,29 @@ export function ArrangeView() {
           <Ruler beats={totalBeats} />
           <div style={{ position: 'relative', width: timelineW, minWidth: '100%' }}>
             {tracks.map((t) => {
-              const param = overlayVisible[t.id];
-              const lane = param ? t.automation?.find((l) => l.param === param) : undefined;
+              const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
               return (
                 <div key={t.id}>
                   <TrackLane trackId={t.id} clips={t.clips} color={t.color} />
-                  {param && (
+                  {lanes.map((lane) => (
                     <AutomationOverlayLane
+                      key={lane.param}
                       trackId={t.id}
-                      param={param}
+                      param={lane.param}
                       lane={lane}
                       totalBeats={totalBeats}
                     />
-                  )}
+                  ))}
                 </div>
               );
             })}
             <Playhead
               height={
-                tracks.reduce((s, t) => s + ROW_H + (overlayVisible[t.id] ? AUTO_LANE_H : 0), 0) + 34
+                tracks.reduce(
+                  (s, t) =>
+                    s + ROW_H + (overlayVisible[t.id] ? (t.automation?.length ?? 0) * AUTO_LANE_H : 0),
+                  0,
+                ) + 34
               }
             />
           </div>
@@ -405,7 +403,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
   const setView = useStore((s) => s.setView);
   const overlay = useAutomationOverlay();
   const overlayActive = !!overlay.visible[track.id];
-  const availableParams: AutomationParam[] = (track.automation ?? []).map((l) => l.param);
+  const laneCount = track.automation?.length ?? 0;
 
   return (
     <div
@@ -459,19 +457,19 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           className={`nerv-btn nerv-btn--icon ${overlayActive ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            if (availableParams.length === 0) {
+            if (laneCount === 0) {
               selectTrack(track.id);
               useStore.getState().setView('automation');
               return;
             }
-            overlay.toggle(track.id, availableParams);
+            overlay.toggle(track.id);
           }}
           title={
-            availableParams.length === 0
+            laneCount === 0
               ? 'No automation lanes — opens AUTOMATION tab'
               : overlayActive
-                ? 'Hide automation lane'
-                : 'Show automation lane'
+                ? 'Hide automation lanes'
+                : `Show ${laneCount} automation lane${laneCount === 1 ? '' : 's'}`
           }
         >
           A
@@ -597,26 +595,22 @@ const TrackLane = memo(function TrackLane({
 });
 
 /**
- * AutomationOverlayHeader — left-column counterpart to AutomationOverlayLane.
- * Lives directly under the track's main header row so the heights stay
- * aligned with the timeline column. Lets the user switch which param this
- * track's overlay shows.
+ * AutomationOverlayHeader — left-column label for one stacked automation
+ * lane. Lives directly under the track's main header so heights stay
+ * aligned with the timeline column. Click the ⇲ to jump to the full
+ * AUTOMATION tab for finer editing.
  */
 function AutomationOverlayHeader({
   track,
   param,
-  hasLane,
   compact,
 }: {
   track: Track;
   param: AutomationParam;
-  hasLane: boolean;
   compact: boolean;
 }) {
-  const overlay = useAutomationOverlay();
   const setView = useStore((s) => s.setView);
   const selectTrack = useStore((s) => s.selectTrack);
-  const params: AutomationParam[] = (track.automation ?? []).map((l) => l.param);
   return (
     <div
       style={{
@@ -625,42 +619,30 @@ function AutomationOverlayHeader({
         background: 'rgba(0,0,0,0.55)',
         borderBottom: '1px solid rgba(255,106,0,0.25)',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 3,
-        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 4,
       }}
     >
-      <span className="hud-readout--dim hud-readout" style={{ fontSize: 9, letterSpacing: 1 }}>
-        AUTO {hasLane ? '●' : '○'}
+      <span
+        className="hud-readout--dim hud-readout"
+        style={{ fontSize: 9, letterSpacing: 1, flex: 1, minWidth: 0 }}
+      >
+        ▸ {AUTOMATION_PARAM_META[param].label}
       </span>
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <select
-          className="display"
-          value={param}
-          onChange={(e) => overlay.setParam(track.id, e.target.value as AutomationParam)}
-          style={{ flex: 1, fontSize: 9, minWidth: 0 }}
+      {!compact && (
+        <button
+          className="nerv-btn nerv-btn--icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            selectTrack(track.id);
+            setView('automation');
+          }}
+          title="Open AUTOMATION tab for this track"
+          style={{ minWidth: 0, padding: '2px 4px', fontSize: 9 }}
         >
-          {params.map((p) => (
-            <option key={p} value={p}>
-              {AUTOMATION_PARAM_META[p].label}
-            </option>
-          ))}
-        </select>
-        {!compact && (
-          <button
-            className="nerv-btn nerv-btn--icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              selectTrack(track.id);
-              setView('automation');
-            }}
-            title="Open AUTOMATION tab for this track"
-            style={{ minWidth: 0, padding: '2px 4px', fontSize: 9 }}
-          >
-            ⇲
-          </button>
-        )}
-      </div>
+          ⇲
+        </button>
+      )}
     </div>
   );
 }
