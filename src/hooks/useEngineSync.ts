@@ -89,7 +89,12 @@ export function useEngineSync() {
         if (!needsSchedule) {
           for (const t of project.tracks) {
             const pt = prev.trackById.get(t.id);
-            if (!pt || pt.clips !== t.clips || pt.automation !== t.automation) {
+            if (
+              !pt ||
+              pt.clips !== t.clips ||
+              pt.automation !== t.automation ||
+              pt.midiOutChannel !== t.midiOutChannel
+            ) {
               needsSchedule = true;
               break;
             }

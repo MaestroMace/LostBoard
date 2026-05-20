@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { midiOutput } from './midiOutput';
 import type {
   DrumPad,
   SynthParams,
@@ -396,7 +397,12 @@ class Engine {
 
   trigger(trackId: string, pitch: number | DrumPad, velocity = 0.9, duration = '8n') {
     const node = this.trackNodes.get(trackId);
-    node?.trigger(pitch, velocity, duration);
+    if (!node) return;
+    if (node.midiOutChannel && typeof pitch === 'number') {
+      midiOutput.sendNoteNow(node.midiOutChannel, pitch, velocity);
+      return;
+    }
+    node.trigger(pitch, velocity, duration);
   }
 
   /** Schedule the entire project's clip content onto the transport. */
@@ -541,9 +547,10 @@ class Engine {
       const node = this.trackNodes.get(trackId);
       if (!node) return;
       const interval = `${clip.length}*4n`;
+      const midiCh = track.midiOutChannel;
       try {
         const loop = new Tone.Loop((time) => {
-          this.fireClipInstance(clip, node, time);
+          this.fireClipInstance(clip, node, time, midiCh);
         }, interval).start(0);
         this.sessionLoops.set(trackId, loop);
       } catch (e) {
@@ -588,12 +595,13 @@ class Engine {
   }
 
   /** Fires the contents of a clip starting at `baseTime` (seconds, transport-relative). */
-  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number) {
+  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number, midiCh?: number) {
     if (clip.kind === 'midi') {
       for (const note of clip.notes) {
         const off = Tone.Time(`${note.start}*4n`).toSeconds();
         const dur = Tone.Time(`${note.length}*4n`).toSeconds();
-        node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
+        if (midiCh) midiOutput.scheduleNote(midiCh, note.pitch, note.velocity, baseTime + off, dur);
+        else node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
       }
     } else if (clip.kind === 'pattern') {
       const stepsPerBeat = clip.pattern.length / clip.length;
@@ -617,11 +625,15 @@ class Engine {
     const t = Tone.getTransport();
     const startBeats = clip.start;
     if (clip.kind === 'midi') {
+      // route to a Web MIDI output port instead of the internal voice when
+      // the track carries a midiOutChannel
+      const midiCh = project.tracks.find((tr) => tr.id === clip.trackId)?.midiOutChannel;
       for (const note of clip.notes) {
         const noteStartBeats = startBeats + note.start;
         const id = t.schedule((time) => {
           const dur = note.length * (60 / project.bpm);
-          node.triggerAt(note.pitch, note.velocity, dur, time);
+          if (midiCh) midiOutput.scheduleNote(midiCh, note.pitch, note.velocity, time, dur);
+          else node.triggerAt(note.pitch, note.velocity, dur, time);
         }, beatsToBarsBeats(noteStartBeats));
         this.scheduledIds.push(id);
       }
@@ -679,6 +691,8 @@ class Engine {
 
 class TrackNode {
   trackId: string;
+  /** Mirror of Track.midiOutChannel — when set, live triggers go to Web MIDI out. */
+  midiOutChannel?: number;
   channel: Tone.Channel;
   reverbSend: Tone.Gain;
   delaySend: Tone.Gain;
@@ -753,6 +767,7 @@ class TrackNode {
     this.channel.pan.rampTo(track.pan, 0.02);
     this.channel.mute = track.mute;
     this.channel.solo = track.solo;
+    this.midiOutChannel = track.midiOutChannel;
 
     // rebuild the instrument if the requested synth engine changed
     if (track.kind === 'synth') {

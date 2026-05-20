@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useStore, currentSamplerZones } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
 import { DEFAULT_SYNTH, type SynthParams, type SynthEngine } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
+import { midiOutput, subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { importSample } from '../../state/samples';
 
@@ -184,6 +185,8 @@ export function SynthPanel() {
             <Knob label="DELAY" value={s.delay} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ delay: v })} />
           </div>
         </HexFrame>
+
+        <MidiOutPanel trackId={active.id} channel={active.midiOutChannel} />
       </div>
 
       <HexFrame title="KEYBOARD // TAP">
@@ -259,6 +262,67 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * MidiOutPanel — routes a track's notes to an external Web MIDI device.
+ * The output port is a global pick (one selected port for the whole app);
+ * the channel is per-track. When a channel is set the engine sends MIDI
+ * for that track and skips its internal voice, so the sound comes from
+ * the hardware. Channel 0 (OFF) keeps the internal instrument.
+ */
+function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number }) {
+  const updateTrack = useStore((s) => s.updateTrack);
+  const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
+
+  return (
+    <HexFrame title="MIDI OUT">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!midi.supported ? (
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 10 }}>
+            Web MIDI not available in this browser.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span className="hud-readout" style={{ fontSize: 10 }}>PORT</span>
+              <select
+                className="display"
+                value={midi.selectedId}
+                onChange={(e) => midiOutput.selectOutput(e.target.value)}
+                style={{ flex: 1, minWidth: 0 }}
+              >
+                {midi.ports.length === 0 && <option value="">— no output devices —</option>}
+                {midi.ports.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span className="hud-readout" style={{ fontSize: 10 }}>CHANNEL</span>
+              <select
+                className="display"
+                value={channel ?? 0}
+                onChange={(e) => {
+                  const ch = parseInt(e.target.value, 10);
+                  updateTrack(trackId, { midiOutChannel: ch === 0 ? undefined : ch });
+                }}
+              >
+                <option value={0}>OFF (internal)</option>
+                {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
+                  <option key={ch} value={ch}>CH {ch}</option>
+                ))}
+              </select>
+            </div>
+            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 9 }}>
+              When a channel is set, this track's notes drive the hardware and the
+              internal voice is silent.
+            </p>
+          </>
+        )}
+      </div>
+    </HexFrame>
   );
 }
 

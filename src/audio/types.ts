@@ -204,6 +204,8 @@ export type Track = {
   samplerRootPitch?: number;
   /** Multi-zone sampler map. When present and non-empty, each zone's sample is mapped at its root pitch and Tone.Sampler interpolates between them across the keyboard. Supersedes samplerSampleId / samplerRootPitch. */
   samplerZones?: SamplerZone[];
+  /** When set (1..16), the track's notes are sent to the selected Web MIDI output on this channel instead of its internal instrument. */
+  midiOutChannel?: number;
 };
 
 /** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch, optionally restricted to a velocity range. */
