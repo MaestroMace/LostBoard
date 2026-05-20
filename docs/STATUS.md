@@ -43,6 +43,8 @@ out here is wired into the running app — type-check + build pass clean.
 
 | Commit | Feature | Notes |
 | --- | --- | --- |
+| `4052116` | **MIDI clock input** | Transport locks to an external clock — BPM re-derived per quarter from a 24-pulse average; start/continue/stop drive the transport. CLOCK IN toggle in the MIDI SYNC panel. |
+| `f0a4f10` | **User-loadable wavetables** | `partialsFromBuffer` DFTs an imported sample's most energetic window into a 32-harmonic series; POSITION morphs sine → that wave. LOAD WAVETABLE button + live spectrum view. |
 | `65c50a6` | **iOS lock-screen transport** | Muted looping silent `<audio>` keep-alive so iOS Safari surfaces MediaSession play/pause/stop while the transport rolls. |
 | `9580b96` | **Session-view audio clips** | Audio clips fire from session cells — scheduleSession pre-builds a Player and the cell loop restarts it each cycle. |
 | `a2711c3` | **Per-track swing** | Swing moved off Tone.Transport's global swing to a per-note offset baked at schedule time; per-track override via a SWING knob in the mixer strip. |
@@ -117,9 +119,13 @@ Things that work but have a trade-off worth flagging:
 - **Chorus depth isn't automatable.** `chorus.depth` is a plain setter,
   not a signal — unlike the EQ / comp / bitcrush params it can't take
   AudioParam ramps. Everything else in the FX rack is automatable.
-- **Wavetable engine uses a fixed 4-frame morph.** No user-loaded
-  wavetables and no per-voice unison spread; POSITION simply lerps
-  through partials sets.
+- **Wavetable import is a spectral reinterpretation.** `partialsFromBuffer`
+  treats an FFT window's magnitude spectrum as a harmonic series rather
+  than extracting a literal single cycle — characterful but not a faithful
+  reproduction of the source waveform.
+- **MIDI clock-in is BPM-follow, not a PLL.** The transport matches the
+  external tempo and start/stop, but there's no sample-accurate phase
+  lock, so long sessions can drift slightly in phase.
 - **Sampler decay folds into release.** Tone.Sampler exposes only
   attack/release, so the ADSR decay/sustain knobs don't fully apply.
   Key zones + velocity layers both work.
@@ -135,28 +141,31 @@ Things that work but have a trade-off worth flagging:
 
 ## Roadmap — what's next, ranked
 
-Highest-leverage to lowest:
+The original ranked roadmap is fully cleared. Remaining nice-to-haves,
+highest-leverage to lowest:
 
-1. **User-loadable wavetables.** Replace the fixed 4-frame morph with
-   imported single-cycle waveforms (needs FFT or cycle extraction).
-2. **MIDI clock input / sync-in.** Clock *out* is done; locking the
-   transport to an incoming external clock is the mirror feature.
-3. **Per-clip groove.** A clip inspector for MIDI / pattern clips would
+1. **Per-clip groove.** A clip inspector for MIDI / pattern clips would
    let a single part swing independently of its track.
-4. **Single-pass multi-channel offline stems.** One Tone.Offline render
-   with a per-track channel split instead of N passes.
-5. **Sampler decay/sustain.** Tone.Sampler exposes only attack/release —
+2. **Single-pass multi-channel offline stems.** One Tone.Offline render
+   with a per-track channel split instead of N passes — needs raw
+   Web Audio multi-channel routing.
+3. **Sampler decay/sustain.** Tone.Sampler exposes only attack/release —
    a custom amp envelope would restore the full ADSR.
+4. **MIDI clock-in phase lock.** Current sync-in is BPM-follow; a true
+   PLL would hold phase over long sessions.
+5. **Wavetable cycle extraction.** Detect a true single cycle from an
+   imported sample instead of the spectral reinterpretation.
 
 ### Done on this branch
 
 Offline bounce, wavetable + sampler engines, tempo map (+ ramps), full
-automation lanes (with curve modes, FX-rack targets, arrange overlay),
+automation lanes (curve modes, FX-rack targets, arrange overlay),
 per-note humanise/quantise, audio time-stretch, MAGI ticker telemetry,
 PWA install, tempo curve preview, orphaned-sample GC, global + per-track
 swing, multi-zone sampler with velocity layers, MIDI punch-in with
-pre-roll, Web MIDI note + clock output, sidechain attack/release split,
-session-view audio clips, and iOS lock-screen transport.
+pre-roll, Web MIDI note output, MIDI clock in + out, sidechain
+attack/release split, session-view audio clips, iOS lock-screen
+transport, and user-loadable wavetables.
 
 ## Repo layout cheatsheet
 

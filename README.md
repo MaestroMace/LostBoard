@@ -160,14 +160,18 @@ changelog and known limitations):
   part can shuffle while another stays straight
 - **Session-view audio clips** — audio clips fire from session cells
 - **iOS lock-screen transport** — play/pause/stop from Control Center
+- **User-loadable wavetables** — derive an oscillator from any sample's
+  harmonic spectrum
+- **MIDI clock in + out** — sync the transport to, or drive, external
+  gear
 
-Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
-full ranked roadmap):
+Next moves (see [`docs/STATUS.md`](docs/STATUS.md) — the original roadmap is
+fully cleared; these are remaining nice-to-haves):
 
-- User-loadable wavetables
-- MIDI clock input / sync-in
 - Per-clip groove
 - Single-pass multi-channel offline stems
+- Sampler decay/sustain
+- MIDI clock-in phase lock
 
 ## Status & handoff
 
