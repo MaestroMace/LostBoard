@@ -102,16 +102,86 @@ class MidiInput {
   }
 
   private onMessage = (e: MIDIMessageEvent) => {
-    if (!e.data || e.data.length < 2) return;
-    const status = e.data[0] & 0xf0;
+    if (!e.data || e.data.length === 0) return;
+    const status = e.data[0];
+    // realtime messages are single-byte, 0xF8+ — handled before the
+    // note-message length guard
+    if (status >= 0xf8) {
+      if (!this.clockSyncEnabled) return;
+      if (status === 0xf8) this.onClockPulse();
+      else if (status === 0xfa) this.onClockStart();
+      else if (status === 0xfb) this.onClockContinue();
+      else if (status === 0xfc) this.onClockStop();
+      return;
+    }
+    if (e.data.length < 2) return;
+    const cmd = status & 0xf0;
     const note = e.data[1];
     const vel = e.data[2] ?? 0;
-    if (status === 0x90 && vel > 0) {
+    if (cmd === 0x90 && vel > 0) {
       this.noteOn(note, vel / 127);
-    } else if (status === 0x80 || (status === 0x90 && vel === 0)) {
+    } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
       this.noteOff(note);
     }
   };
+
+  // ---------- MIDI CLOCK INPUT (sync-in) ----------
+
+  private clockSyncEnabled = false;
+  private lastPulseMs = 0;
+  private pulseIntervals: number[] = [];
+  private pulseCount = 0;
+
+  /** Toggle locking the transport to an incoming external MIDI clock. */
+  setClockSync(on: boolean) {
+    this.clockSyncEnabled = on;
+    this.lastPulseMs = 0;
+    this.pulseIntervals = [];
+    this.pulseCount = 0;
+  }
+
+  isClockSyncEnabled() {
+    return this.clockSyncEnabled;
+  }
+
+  /**
+   * One 0xF8 pulse — 24 per quarter note. We average the inter-pulse
+   * interval over a rolling quarter-note window and re-derive BPM once
+   * per quarter, which is stable against the few-ms jitter of MIDI + JS
+   * timers without a full phase-locked loop.
+   */
+  private onClockPulse() {
+    const now = performance.now();
+    if (this.lastPulseMs > 0) {
+      this.pulseIntervals.push(now - this.lastPulseMs);
+      if (this.pulseIntervals.length > 24) this.pulseIntervals.shift();
+    }
+    this.lastPulseMs = now;
+    this.pulseCount++;
+    if (this.pulseCount % 24 === 0 && this.pulseIntervals.length >= 12) {
+      const mean =
+        this.pulseIntervals.reduce((a, b) => a + b, 0) / this.pulseIntervals.length;
+      const bpm = 60000 / (mean * 24);
+      if (bpm >= 20 && bpm <= 400) audioEngine.setBpm(bpm);
+    }
+  }
+
+  private onClockStart() {
+    this.lastPulseMs = 0;
+    this.pulseIntervals = [];
+    this.pulseCount = 0;
+    audioEngine.stop();
+    audioEngine.play().then(() => useStore.getState().setPlaying(true));
+  }
+
+  private onClockContinue() {
+    audioEngine.play().then(() => useStore.getState().setPlaying(true));
+  }
+
+  private onClockStop() {
+    audioEngine.pause();
+    useStore.getState().setPlaying(false);
+  }
 
   private armedSynth(): Track | undefined {
     return useStore.getState().project.tracks.find((t) => t.kind === 'synth' && t.arm);

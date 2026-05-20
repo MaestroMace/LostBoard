@@ -10,6 +10,7 @@ import {
 } from '../../state/projectSlots';
 import { rehydrateSamples, gcOrphanedSamples } from '../../state/samples';
 import { audioEngine } from '../../audio/engine';
+import { midiInput } from '../../audio/midiInput';
 import { subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { audioBufferToWav } from '../../audio/wav';
 import { projectDurationSec, type TempoEvent } from '../../audio/types';
@@ -458,40 +459,67 @@ function SlotLibrary() {
 }
 
 /**
- * MidiSyncPanel — toggles MIDI clock output. When on, the engine sends
- * 24-PPQN timing clock plus start/continue/stop realtime messages to the
- * selected Web MIDI output port, so external hardware locks to the
- * transport (tempo map included). The port is the same global pick used
- * by per-track MIDI note output.
+ * MidiSyncPanel — MIDI clock sync, both directions.
+ *
+ * CLOCK OUT: the engine sends 24-PPQN timing clock + start/continue/stop
+ * to the selected output port, so external gear locks to the transport.
+ *
+ * CLOCK IN: the transport locks to an incoming external clock — BPM is
+ * re-derived from the pulse rate and start/continue/stop drive the
+ * transport. With sync-in on, the external device owns the tempo (a
+ * tempo map would fight it).
  */
 function MidiSyncPanel() {
   const midiClockOut = useStore((s) => s.midiClockOut);
   const setMidiClockOut = useStore((s) => s.setMidiClockOut);
+  const midiClockIn = useStore((s) => s.midiClockIn);
+  const setMidiClockIn = useStore((s) => s.setMidiClockIn);
   const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
   const portName = midi.ports.find((p) => p.id === midi.selectedId)?.name;
 
   return (
-    <HexFrame title="MIDI SYNC // CLOCK OUT">
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          className={`nerv-btn ${midiClockOut ? 'is-active' : ''}`}
-          onClick={() => {
-            const next = !midiClockOut;
-            setMidiClockOut(next);
-            audioEngine.setMidiClockEnabled(next);
-          }}
-          disabled={!midi.supported}
-          aria-pressed={midiClockOut}
-        >
-          ⧖ CLOCK OUT {midiClockOut ? 'ON' : 'OFF'}
-        </button>
-        <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
-          {!midi.supported
-            ? 'Web MIDI unavailable in this browser.'
-            : midiClockOut
-              ? `24-PPQN clock → ${portName ?? 'no output port'}`
-              : 'Sync external gear to the transport tempo.'}
-        </span>
+    <HexFrame title="MIDI SYNC // CLOCK">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className={`nerv-btn ${midiClockOut ? 'is-active' : ''}`}
+            onClick={() => {
+              const next = !midiClockOut;
+              setMidiClockOut(next);
+              audioEngine.setMidiClockEnabled(next);
+            }}
+            disabled={!midi.supported}
+            aria-pressed={midiClockOut}
+          >
+            ⧖ CLOCK OUT {midiClockOut ? 'ON' : 'OFF'}
+          </button>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+            {!midi.supported
+              ? 'Web MIDI unavailable in this browser.'
+              : midiClockOut
+                ? `24-PPQN clock → ${portName ?? 'no output port'}`
+                : 'Sync external gear to the transport tempo.'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className={`nerv-btn ${midiClockIn ? 'is-active' : ''}`}
+            onClick={() => {
+              const next = !midiClockIn;
+              setMidiClockIn(next);
+              midiInput.setClockSync(next);
+            }}
+            disabled={!midi.supported}
+            aria-pressed={midiClockIn}
+          >
+            ⧗ CLOCK IN {midiClockIn ? 'ON' : 'OFF'}
+          </button>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+            {midiClockIn
+              ? 'Transport follows an incoming external clock — it owns the tempo.'
+              : 'Lock the transport to an external MIDI clock.'}
+          </span>
+        </div>
       </div>
     </HexFrame>
   );
