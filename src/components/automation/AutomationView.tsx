@@ -28,6 +28,7 @@ const ALL_PARAMS: AutomationParam[] = [
   'eqHigh',
   'compThreshold',
   'compRatio',
+  'bitcrush',
 ];
 
 /**
@@ -134,6 +135,8 @@ function currentValueFor(track: Track, param: AutomationParam): number {
       return track.fx?.compThreshold ?? -18;
     case 'compRatio':
       return track.fx?.compRatio ?? 3;
+    case 'bitcrush':
+      return track.fx?.bitcrush ?? 8;
   }
 }
 

@@ -860,7 +860,7 @@ class TrackNode {
     }
     this.chorus.depth = fx.chorusOn ? fx.chorusDepth : 0;
     this.chorus.wet.rampTo(fx.chorusOn ? 1 : 0, 0.05);
-    this.crusher.bits.value = fx.bitcrush;
+    if (!automated?.has('bitcrush')) this.crusher.bits.value = fx.bitcrush;
     this.crusher.wet.rampTo(fx.bitcrushOn ? 1 : 0, 0.05);
   }
 
@@ -1054,6 +1054,8 @@ class TrackNode {
         return this.comp.threshold as unknown as Automatable;
       case 'compRatio':
         return this.comp.ratio as unknown as Automatable;
+      case 'bitcrush':
+        return this.crusher.bits as unknown as Automatable;
       default:
         return undefined;
     }

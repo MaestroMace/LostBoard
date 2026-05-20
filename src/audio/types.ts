@@ -232,6 +232,7 @@ export type SamplerZone = {
  *   - eqLow/Mid/High: dB (-24..+24), FX-rack 3-band EQ
  *   - compThreshold: dB (-60..0), FX-rack compressor
  *   - compRatio:     1..20, FX-rack compressor
+ *   - bitcrush:      1..16 bits, FX-rack bit-crusher
  */
 export type AutomationParam =
   | 'volume'
@@ -243,7 +244,8 @@ export type AutomationParam =
   | 'eqMid'
   | 'eqHigh'
   | 'compThreshold'
-  | 'compRatio';
+  | 'compRatio'
+  | 'bitcrush';
 
 /**
  * Curve mode controls how the param reaches a point's value:
@@ -281,6 +283,7 @@ export const AUTOMATION_PARAM_META: Record<AutomationParam, { label: string; min
   eqHigh: { label: 'EQ HIGH', min: -24, max: 24, step: 0.5, unit: 'dB' },
   compThreshold: { label: 'COMP THRES', min: -60, max: 0, step: 0.5, unit: 'dB' },
   compRatio: { label: 'COMP RATIO', min: 1, max: 20, step: 0.5, unit: '' },
+  bitcrush: { label: 'BITCRUSH', min: 1, max: 16, step: 1, unit: 'bit' },
 };
 
 /**
