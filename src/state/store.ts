@@ -220,6 +220,8 @@ type State = {
   bouncing: boolean;
   /** Help overlay visibility, toggled via `?` or the in-app button. */
   helpOpen: boolean;
+  /** Count-in bars for a punch-in MIDI recording. 0 = punch with no pre-roll. Not persisted. */
+  countInBars: number;
   /** When true the engine schedules session loops instead of the arrangement. */
   sessionMode: boolean;
   /** Runtime map of trackId → currently-playing session clipId. Not part of the project. */
@@ -253,6 +255,7 @@ type Actions = {
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
   setPlaying(b: boolean): void;
+  setCountInBars(n: number): void;
 
   setSessionMode(on: boolean): void;
   setHelpOpen(open: boolean): void;
@@ -348,6 +351,7 @@ export const useStore = create<Store>()(
     metronome: false,
     micRecording: false,
     bouncing: false,
+    countInBars: 1,
     sessionMode: false,
     sessionPlaying: {},
     helpOpen: false,
@@ -507,6 +511,7 @@ export const useStore = create<Store>()(
       }),
     setMetronome: (b) => set({ metronome: b }),
     setPlaying: (b) => set({ isPlaying: b }),
+    setCountInBars: (n) => set({ countInBars: Math.max(0, Math.min(8, Math.round(n))) }),
     setMicRecording: (b) => set({ micRecording: b }),
     setBouncing: (b) => set({ bouncing: b }),
 

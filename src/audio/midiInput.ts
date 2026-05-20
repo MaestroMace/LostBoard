@@ -55,6 +55,21 @@ class MidiInput {
   private pending = new Map<number, { startBeat: number; velocity: number; trackId: string }>();
   /** Most recently created clip per track during a recording session — keeps takes contiguous. */
   private liveClipByTrack = new Map<string, string>();
+  /**
+   * Punch-in gate: notes that begin before this beat are monitored live but
+   * not captured. -Infinity means "no gate" (normal record-everything mode).
+   * Set by a punch-record take so the pre-roll bars don't capture anything.
+   */
+  private recordGateBeat = -Infinity;
+
+  /** Set the punch-in record gate (beat). Pass null to clear it. */
+  setRecordGate(beat: number | null) {
+    this.recordGateBeat = beat ?? -Infinity;
+  }
+
+  getRecordGate(): number {
+    return this.recordGateBeat;
+  }
 
   async init(): Promise<void> {
     if (typeof navigator === 'undefined' || !('requestMIDIAccess' in navigator)) {
@@ -108,12 +123,11 @@ class MidiInput {
     // monitor immediately — short voice; the recorded clip's notes are what
     // actually play during transport, this is just the live-monitor tail
     audioEngine.trigger(track.id, pitch, velocity, '8n');
-    if (audioEngine.isPlaying()) {
-      this.pending.set(pitch, {
-        startBeat: transportClock.getSnapshot(),
-        velocity,
-        trackId: track.id,
-      });
+    const pos = transportClock.getSnapshot();
+    // capture only while rolling AND past the punch-in gate (pre-roll bars
+    // monitor live but don't record)
+    if (audioEngine.isPlaying() && pos >= this.recordGateBeat) {
+      this.pending.set(pitch, { startBeat: pos, velocity, trackId: track.id });
     }
   }
 
