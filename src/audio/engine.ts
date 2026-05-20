@@ -35,6 +35,8 @@ class Engine {
   private metronomeSynth?: Tone.MembraneSynth;
   private metronomeEvent?: number;
   metronomeEnabled = false;
+  private midiClockEvent?: number;
+  private midiClockEnabled = false;
 
   // recording
   private mic?: Tone.UserMedia;
@@ -145,16 +147,44 @@ class Engine {
 
   async play() {
     if (!this.inited) await this.init();
+    if (this.midiClockEnabled) {
+      // start (0xFA) resets the external sequencer to bar 1; continue
+      // (0xFB) resumes mid-song — pick by current transport position
+      midiOutput.sendTransport(Tone.getTransport().ticks === 0 ? 'start' : 'continue');
+    }
     Tone.getTransport().start('+0.05');
   }
 
   pause() {
     Tone.getTransport().pause();
+    if (this.midiClockEnabled) midiOutput.sendTransport('stop');
   }
 
   stop() {
     Tone.getTransport().stop();
     Tone.getTransport().position = 0;
+    if (this.midiClockEnabled) midiOutput.sendTransport('stop');
+  }
+
+  /**
+   * Toggle MIDI clock output. When enabled, a transport-locked repeat fires
+   * 24 pulses per quarter note (8 ticks at the default 192 PPQ) to the
+   * selected Web MIDI port, plus start/continue/stop realtime messages on
+   * transport changes — so external gear locks to LostBoard's tempo,
+   * including tempo-map changes since the repeat is transport-relative.
+   */
+  setMidiClockEnabled(on: boolean) {
+    this.midiClockEnabled = on;
+    if (this.midiClockEvent !== undefined) {
+      Tone.getTransport().clear(this.midiClockEvent);
+      this.midiClockEvent = undefined;
+    }
+    if (on) {
+      this.midiClockEvent = Tone.getTransport().scheduleRepeat((time) => {
+        midiOutput.sendClockPulse(time);
+      }, '8i');
+      if (this.isPlaying()) midiOutput.sendTransport('continue');
+    }
   }
 
   setPosition(beats: number) {

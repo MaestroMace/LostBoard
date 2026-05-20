@@ -222,6 +222,8 @@ type State = {
   helpOpen: boolean;
   /** Count-in bars for a punch-in MIDI recording. 0 = punch with no pre-roll. Not persisted. */
   countInBars: number;
+  /** When true, the engine sends MIDI clock + transport messages to the selected output port. Not persisted. */
+  midiClockOut: boolean;
   /** When true the engine schedules session loops instead of the arrangement. */
   sessionMode: boolean;
   /** Runtime map of trackId → currently-playing session clipId. Not part of the project. */
@@ -256,6 +258,7 @@ type Actions = {
   setMetronome(b: boolean): void;
   setPlaying(b: boolean): void;
   setCountInBars(n: number): void;
+  setMidiClockOut(on: boolean): void;
 
   setSessionMode(on: boolean): void;
   setHelpOpen(open: boolean): void;
@@ -352,6 +355,7 @@ export const useStore = create<Store>()(
     micRecording: false,
     bouncing: false,
     countInBars: 1,
+    midiClockOut: false,
     sessionMode: false,
     sessionPlaying: {},
     helpOpen: false,
@@ -512,6 +516,7 @@ export const useStore = create<Store>()(
     setMetronome: (b) => set({ metronome: b }),
     setPlaying: (b) => set({ isPlaying: b }),
     setCountInBars: (n) => set({ countInBars: Math.max(0, Math.min(8, Math.round(n))) }),
+    setMidiClockOut: (on) => set({ midiClockOut: on }),
     setMicRecording: (b) => set({ micRecording: b }),
     setBouncing: (b) => set({ bouncing: b }),
 

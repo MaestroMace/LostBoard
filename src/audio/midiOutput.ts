@@ -114,6 +114,34 @@ class MidiOutput {
     this.scheduleNote(channel, pitch, velocity, Tone.now(), durationSec);
   }
 
+  /**
+   * Send a MIDI timing-clock pulse (0xF8) at `audioTime`. External gear
+   * expects 24 of these per quarter note. Rebased onto the performance.now
+   * clock like scheduleNote.
+   */
+  sendClockPulse(audioTime: number) {
+    const port = this.port();
+    if (!port) return;
+    const ms = performance.now() + Math.max(0, audioTime - Tone.now()) * 1000;
+    try {
+      port.send([0xf8], ms);
+    } catch {
+      /* port may have disconnected */
+    }
+  }
+
+  /** Send a realtime transport message: start (0xFA), continue (0xFB) or stop (0xFC). */
+  sendTransport(kind: 'start' | 'continue' | 'stop') {
+    const port = this.port();
+    if (!port) return;
+    const byte = kind === 'start' ? 0xfa : kind === 'continue' ? 0xfb : 0xfc;
+    try {
+      port.send([byte]);
+    } catch {
+      /* noop */
+    }
+  }
+
   /** Panic — all-notes-off on every channel of the selected port. */
   allNotesOff() {
     const port = this.port();

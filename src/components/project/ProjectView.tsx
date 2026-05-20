@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useStore, saveProjectToStorage, loadProjectFromStorage, PROJECT_STORAGE_KEY } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import {
@@ -10,6 +10,7 @@ import {
 } from '../../state/projectSlots';
 import { rehydrateSamples, gcOrphanedSamples } from '../../state/samples';
 import { audioEngine } from '../../audio/engine';
+import { subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { audioBufferToWav } from '../../audio/wav';
 import { projectDurationSec, type TempoEvent } from '../../audio/types';
 
@@ -131,6 +132,8 @@ export function ProjectView() {
       </HexFrame>
 
       <TempoMapEditor />
+
+      <MidiSyncPanel />
 
       <SlotLibrary />
 
@@ -449,6 +452,46 @@ function SlotLibrary() {
             ))}
           </div>
         )}
+      </div>
+    </HexFrame>
+  );
+}
+
+/**
+ * MidiSyncPanel — toggles MIDI clock output. When on, the engine sends
+ * 24-PPQN timing clock plus start/continue/stop realtime messages to the
+ * selected Web MIDI output port, so external hardware locks to the
+ * transport (tempo map included). The port is the same global pick used
+ * by per-track MIDI note output.
+ */
+function MidiSyncPanel() {
+  const midiClockOut = useStore((s) => s.midiClockOut);
+  const setMidiClockOut = useStore((s) => s.setMidiClockOut);
+  const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
+  const portName = midi.ports.find((p) => p.id === midi.selectedId)?.name;
+
+  return (
+    <HexFrame title="MIDI SYNC // CLOCK OUT">
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          className={`nerv-btn ${midiClockOut ? 'is-active' : ''}`}
+          onClick={() => {
+            const next = !midiClockOut;
+            setMidiClockOut(next);
+            audioEngine.setMidiClockEnabled(next);
+          }}
+          disabled={!midi.supported}
+          aria-pressed={midiClockOut}
+        >
+          ⧖ CLOCK OUT {midiClockOut ? 'ON' : 'OFF'}
+        </button>
+        <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+          {!midi.supported
+            ? 'Web MIDI unavailable in this browser.'
+            : midiClockOut
+              ? `24-PPQN clock → ${portName ?? 'no output port'}`
+              : 'Sync external gear to the transport tempo.'}
+        </span>
       </div>
     </HexFrame>
   );
