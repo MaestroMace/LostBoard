@@ -37,6 +37,10 @@ class Engine {
   metronomeEnabled = false;
   private midiClockEvent?: number;
   private midiClockEnabled = false;
+  /** Project-global groove, applied per note by the scheduler. */
+  private globalSwing = 0;
+  /** Swing subdivision in beats — 0.5 = 1/8, 0.25 = 1/16. */
+  private globalSwingSubdiv = 0.5;
 
   // recording
   private mic?: Tone.UserMedia;
@@ -97,14 +101,23 @@ class Engine {
   }
 
   /**
-   * Global groove via Tone.Transport's built-in swing. `amount` 0..1
-   * delays every other `subdivision`-grid event toward a triplet feel;
-   * 0 is dead straight.
+   * Project-global groove. Stored (not pushed to Tone.Transport.swing,
+   * which is global-only) so the scheduler can apply swing per note and
+   * honour per-track overrides. `amount` 0..1; subdivision '8n' or '16n'.
    */
   setSwing(amount: number, subdivision = '8n') {
-    const t = Tone.getTransport();
-    t.swing = Math.max(0, Math.min(1, amount));
-    t.swingSubdivision = subdivision as typeof t.swingSubdivision;
+    this.globalSwing = Math.max(0, Math.min(1, amount));
+    this.globalSwingSubdiv = subdivision === '16n' ? 0.25 : 0.5;
+  }
+
+  /** Swing-shifted beat position: off-grid subdivisions get dragged late. */
+  private swungBeat(beat: number, amount: number): number {
+    if (amount <= 0) return beat;
+    const sub = this.globalSwingSubdiv;
+    // which subdivision slot the event sits in; odd slots are the off-beats
+    const idx = Math.round(beat / sub);
+    if (idx % 2 === 1) return beat + (amount * sub) / 3;
+    return beat;
   }
 
   setMasterVolume(db: number) {
@@ -578,9 +591,10 @@ class Engine {
       if (!node) return;
       const interval = `${clip.length}*4n`;
       const midiCh = track.midiOutChannel;
+      const swing = track.swing ?? this.globalSwing;
       try {
         const loop = new Tone.Loop((time) => {
-          this.fireClipInstance(clip, node, time, midiCh);
+          this.fireClipInstance(clip, node, time, midiCh, swing);
         }, interval).start(0);
         this.sessionLoops.set(trackId, loop);
       } catch (e) {
@@ -625,10 +639,10 @@ class Engine {
   }
 
   /** Fires the contents of a clip starting at `baseTime` (seconds, transport-relative). */
-  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number, midiCh?: number) {
+  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number, midiCh?: number, swing = 0) {
     if (clip.kind === 'midi') {
       for (const note of clip.notes) {
-        const off = Tone.Time(`${note.start}*4n`).toSeconds();
+        const off = Tone.Time(`${this.swungBeat(note.start, swing)}*4n`).toSeconds();
         const dur = Tone.Time(`${note.length}*4n`).toSeconds();
         if (midiCh) midiOutput.scheduleNote(midiCh, note.pitch, note.velocity, baseTime + off, dur);
         else node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
@@ -642,7 +656,7 @@ class Engine {
         steps.forEach((step, i) => {
           if (!step.on) return;
           if (step.probability !== undefined && step.probability < 1 && Math.random() > step.probability) return;
-          const off = Tone.Time(`${i * stepDurBeats}*4n`).toSeconds();
+          const off = Tone.Time(`${this.swungBeat(i * stepDurBeats, swing)}*4n`).toSeconds();
           const v = step.velocity * (step.accent ? 1.0 : 0.85);
           node.triggerAt(pad, v, 0.1, baseTime + off);
         });
@@ -654,12 +668,15 @@ class Engine {
   private scheduleClip(clip: Clip, node: TrackNode, project: Project) {
     const t = Tone.getTransport();
     const startBeats = clip.start;
+    const track = project.tracks.find((tr) => tr.id === clip.trackId);
+    // per-track swing override falls back to the project-global amount
+    const swing = track?.swing ?? this.globalSwing;
     if (clip.kind === 'midi') {
       // route to a Web MIDI output port instead of the internal voice when
       // the track carries a midiOutChannel
-      const midiCh = project.tracks.find((tr) => tr.id === clip.trackId)?.midiOutChannel;
+      const midiCh = track?.midiOutChannel;
       for (const note of clip.notes) {
-        const noteStartBeats = startBeats + note.start;
+        const noteStartBeats = this.swungBeat(startBeats + note.start, swing);
         const id = t.schedule((time) => {
           const dur = note.length * (60 / project.bpm);
           if (midiCh) midiOutput.scheduleNote(midiCh, note.pitch, note.velocity, time, dur);
@@ -676,7 +693,7 @@ class Engine {
         if (!steps) continue;
         steps.forEach((step, i) => {
           if (!step.on) return;
-          const beat = startBeats + i * stepDur;
+          const beat = this.swungBeat(startBeats + i * stepDur, swing);
           const id = t.schedule((time) => {
             // re-roll probability at fire time so each cycle is independent
             if (step.probability !== undefined && step.probability < 1 && Math.random() > step.probability) return;

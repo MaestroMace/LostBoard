@@ -73,14 +73,16 @@ export function useEngineSync() {
         }
 
         // swing applies to already-scheduled events live — no re-schedule needed
+        // swing is now baked into the scheduled note times, so a swing
+        // change must re-apply (engine) AND re-schedule
         const swing = project.swing ?? 0;
         const swingSub = project.swingSubdivision ?? '8n';
-        if (swing !== prev.swing || swingSub !== prev.swingSubdivision) {
-          audioEngine.setSwing(swing, swingSub);
-        }
+        const swingChanged = swing !== prev.swing || swingSub !== prev.swingSubdivision;
+        if (swingChanged) audioEngine.setSwing(swing, swingSub);
 
         // decide whether the transport needs a full re-schedule
         let needsSchedule =
+          swingChanged ||
           project.bpm !== prev.bpm ||
           project.numerator !== prev.numerator ||
           project.denominator !== prev.denominator ||
@@ -93,7 +95,8 @@ export function useEngineSync() {
               !pt ||
               pt.clips !== t.clips ||
               pt.automation !== t.automation ||
-              pt.midiOutChannel !== t.midiOutChannel
+              pt.midiOutChannel !== t.midiOutChannel ||
+              pt.swing !== t.swing
             ) {
               needsSchedule = true;
               break;

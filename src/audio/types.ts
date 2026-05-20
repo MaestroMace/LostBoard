@@ -206,6 +206,8 @@ export type Track = {
   samplerZones?: SamplerZone[];
   /** When set (1..16), the track's notes are sent to the selected Web MIDI output on this channel instead of its internal instrument. */
   midiOutChannel?: number;
+  /** Per-track swing override 0..1. When undefined the track uses the project-global swing. */
+  swing?: number;
 };
 
 /** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch, optionally restricted to a velocity range. */
