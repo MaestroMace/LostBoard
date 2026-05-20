@@ -156,15 +156,18 @@ changelog and known limitations):
   envelope follower (two followers + signal-domain max)
 - **Stacked automation overlay** — every lane a track owns, shown
   inline under its clip row in the Arrange view
+- **Per-track swing** — a SWING knob per mixer channel strip, so one
+  part can shuffle while another stays straight
+- **Session-view audio clips** — audio clips fire from session cells
+- **iOS lock-screen transport** — play/pause/stop from Control Center
 
 Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
 full ranked roadmap):
 
-- Per-track / per-clip groove
-- iOS silent-audio hack for lock-screen transport
 - User-loadable wavetables
-- Session-view audio clips
 - MIDI clock input / sync-in
+- Per-clip groove
+- Single-pass multi-channel offline stems
 
 ## Status & handoff
 

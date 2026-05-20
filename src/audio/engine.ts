@@ -177,6 +177,8 @@ class Engine {
     Tone.getTransport().stop();
     Tone.getTransport().position = 0;
     if (this.midiClockEnabled) midiOutput.sendTransport('stop');
+    // safety net for external gear — clear any notes still ringing
+    midiOutput.allNotesOff();
   }
 
   /**

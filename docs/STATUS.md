@@ -43,6 +43,9 @@ out here is wired into the running app — type-check + build pass clean.
 
 | Commit | Feature | Notes |
 | --- | --- | --- |
+| `65c50a6` | **iOS lock-screen transport** | Muted looping silent `<audio>` keep-alive so iOS Safari surfaces MediaSession play/pause/stop while the transport rolls. |
+| `9580b96` | **Session-view audio clips** | Audio clips fire from session cells — scheduleSession pre-builds a Player and the cell loop restarts it each cycle. |
+| `a2711c3` | **Per-track swing** | Swing moved off Tone.Transport's global swing to a per-note offset baked at schedule time; per-track override via a SWING knob in the mixer strip. |
 | `292fabe` | **Stacked arrange automation overlay** | The arrange "A" toggle now reveals every automation lane a track owns, stacked under the clip row, instead of one param at a time. |
 | `27ce3d1` | **MIDI clock output** | Engine sends 24-PPQN timing clock + start/continue/stop realtime messages to the selected Web MIDI port. MIDI SYNC panel in the PROJECT view. |
 | `67bd7a6` | **Bit-crusher automation** | `crusher.bits` is a real Param, so 'bitcrush' joins the automation targets (1..16 bits, smooth ramps). |
@@ -127,30 +130,33 @@ Things that work but have a trade-off worth flagging:
   separate Tone.Offline passes (one per track, others muted). Still
   much faster than realtime on any non-trivial project, but a
   single-pass multi-channel renderer would be cheaper.
+- **Per-clip swing.** Swing is global + per-track today; per-clip
+  groove would need a clip inspector for MIDI / pattern clips.
+
 ## Roadmap — what's next, ranked
 
 Highest-leverage to lowest:
 
-1. **Per-track / per-clip groove.** Swing is global today; a per-clip
-   groove amount would let one part shuffle while another stays
-   straight. Needs manual note-time offsetting since Tone.Transport's
-   swing is global.
-2. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
-   controls on iOS Safari (the install banner already covers the
-   Chromium PWA path).
-3. **User-loadable wavetables.** Replace the fixed 4-frame morph with
-   imported single-cycle waveforms.
-4. **Session-view audio clips.** Session loops fire MIDI + pattern
-   clips; audio clips would need a per-cycle Player.start.
-5. **MIDI clock input / sync-in.** Clock *out* is done; locking the
+1. **User-loadable wavetables.** Replace the fixed 4-frame morph with
+   imported single-cycle waveforms (needs FFT or cycle extraction).
+2. **MIDI clock input / sync-in.** Clock *out* is done; locking the
    transport to an incoming external clock is the mirror feature.
+3. **Per-clip groove.** A clip inspector for MIDI / pattern clips would
+   let a single part swing independently of its track.
+4. **Single-pass multi-channel offline stems.** One Tone.Offline render
+   with a per-track channel split instead of N passes.
+5. **Sampler decay/sustain.** Tone.Sampler exposes only attack/release —
+   a custom amp envelope would restore the full ADSR.
 
-### Done since the last revision
+### Done on this branch
 
-Sidechain attack/release split, Web MIDI note output + clock output,
-MIDI punch-in with pre-roll, sampler velocity layers, FX-rack
-automation (EQ / comp / bitcrush), stacked arrange automation overlay
-— all shipped on this branch.
+Offline bounce, wavetable + sampler engines, tempo map (+ ramps), full
+automation lanes (with curve modes, FX-rack targets, arrange overlay),
+per-note humanise/quantise, audio time-stretch, MAGI ticker telemetry,
+PWA install, tempo curve preview, orphaned-sample GC, global + per-track
+swing, multi-zone sampler with velocity layers, MIDI punch-in with
+pre-roll, Web MIDI note + clock output, sidechain attack/release split,
+session-view audio clips, and iOS lock-screen transport.
 
 ## Repo layout cheatsheet
 
