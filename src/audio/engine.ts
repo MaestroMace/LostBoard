@@ -707,8 +707,8 @@ class TrackNode {
   crusher: Tone.BitCrusher;
   /** Always-in-chain gain whose value is modulated by an external follower when sidechain is on. */
   sidechainGain: Tone.Gain;
-  private sidechainFollower?: Tone.Follower;
-  private sidechainScale?: Tone.Multiply;
+  /** Every node in the current sidechain detector path — disposed wholesale on rebuild. */
+  private sidechainNodes: Tone.ToneAudioNode[] = [];
   private sidechainSourceId?: string;
   private sidechainState: { depth: number; attack: number; release: number } = { depth: 0, attack: 0.005, release: 0.15 };
 
@@ -961,42 +961,61 @@ class TrackNode {
   }
 
   /**
-   * Install or update sidechain ducking. Builds an envelope follower from the
-   * source's channel output, scales it by `-depth`, and sums it into this
-   * track's always-in-chain `sidechainGain.gain` (intrinsic value = 1), so the
-   * effective gain is `1 - depth * envelope` — louder source → more ducking.
+   * Install or update sidechain ducking with a genuinely asymmetric
+   * attack/release envelope follower.
    *
-   * Passing `source = null` (or depth ≤ 0) disposes the follower path and
-   * leaves the gain at 1 (transparent).
+   * `Tone.Follower`'s smoothing is symmetric, so we run two — a fast one
+   * (attack) and a slow one (release) — and take their signal-domain
+   * maximum: `max(a,b) = (a + b + |a − b|) / 2`. On a rising source the
+   * fast follower leads and wins the max (fast attack); on a falling
+   * source the fast follower drops below the slow one, so the slow
+   * follower wins (slow release). The result is scaled by `−depth` and
+   * summed into the always-in-chain `sidechainGain.gain` (intrinsic value
+   * 1), giving an effective gain of `1 − depth · env`.
+   *
+   * Passing `source = null` (or depth ≤ 0) disposes the detector path and
+   * leaves the gain transparent.
    */
   setSidechain(source: TrackNode | null, depth: number, attack: number, release: number) {
-    // tear down any existing follower path
-    this.sidechainFollower?.dispose();
-    this.sidechainScale?.dispose();
-    this.sidechainFollower = undefined;
-    this.sidechainScale = undefined;
+    // tear down any existing detector path
+    for (const n of this.sidechainNodes) n.dispose();
+    this.sidechainNodes = [];
     this.sidechainSourceId = undefined;
     this.sidechainState = { depth, attack, release };
 
     if (!source || depth <= 0 || source === this) {
-      // make sure gain is transparent
       this.sidechainGain.gain.cancelScheduledValues(0);
       this.sidechainGain.gain.value = 1;
       return;
     }
 
-    // Tone.Follower in this Tone version takes a single smoothing time; we
-    // approximate asymmetric attack/release with the geometric mean so both
-    // UI knobs at least nudge behaviour. A true split would need two
-    // followers averaged, which isn't worth the wiring for v1.
-    const smoothing = Math.sqrt(attack * release);
-    this.sidechainFollower = new Tone.Follower(smoothing);
-    this.sidechainScale = new Tone.Multiply(-depth);
-    source.connectTap(this.sidechainFollower);
-    this.sidechainFollower.connect(this.sidechainScale);
-    // Multiply output → AudioParam (gain.gain). Intrinsic value 1, summed audio-rate signal contributes -depth*env.
-    this.sidechainScale.connect(this.sidechainGain.gain);
+    // two followers — fast tracks the attack, slow tracks the release
+    const fast = new Tone.Follower(Math.max(0.001, attack));
+    const slow = new Tone.Follower(Math.max(0.001, release));
+    // signal-domain max(fast, slow) = (fast + slow + |fast - slow|) / 2
+    const diff = new Tone.Subtract();
+    const abs = new Tone.Abs();
+    const sum = new Tone.Add();
+    const total = new Tone.Add();
+    const half = new Tone.Multiply(0.5);
+    const scale = new Tone.Multiply(-depth);
+
+    source.connectTap(fast);
+    source.connectTap(slow);
+    fast.connect(diff); // diff.input
+    slow.connect(diff.subtrahend);
+    diff.connect(abs);
+    fast.connect(sum); // sum.input
+    slow.connect(sum.addend);
+    sum.connect(total); // total.input
+    abs.connect(total.addend);
+    total.connect(half);
+    half.connect(scale);
+    // Multiply output → AudioParam: intrinsic gain 1, summed signal adds -depth*env
+    scale.connect(this.sidechainGain.gain);
     this.sidechainGain.gain.value = 1;
+
+    this.sidechainNodes = [fast, slow, diff, abs, sum, total, half, scale];
     this.sidechainSourceId = source.trackId;
   }
 
@@ -1055,8 +1074,8 @@ class TrackNode {
     this.instrument.dispose();
     this.clearPlayers();
     this.clearPadPlayers();
-    this.sidechainFollower?.dispose();
-    this.sidechainScale?.dispose();
+    for (const n of this.sidechainNodes) n.dispose();
+    this.sidechainNodes = [];
     this.sidechainGain.dispose();
     this.channel.dispose();
     this.reverbSend.dispose();
