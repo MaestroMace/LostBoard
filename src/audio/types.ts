@@ -208,6 +208,8 @@ export type Track = {
   midiOutChannel?: number;
   /** Per-track swing override 0..1. When undefined the track uses the project-global swing. */
   swing?: number;
+  /** Wavetable engine: a user-loaded harmonic partials array derived from an imported sample. When present, POSITION morphs sine → this wave. */
+  wavetablePartials?: number[];
 };
 
 /** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch, optionally restricted to a velocity range. */

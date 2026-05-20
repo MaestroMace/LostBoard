@@ -253,6 +253,12 @@ class Engine {
     return audioBuf.duration;
   }
 
+  /** Decode a blob to an AudioBuffer WITHOUT storing it in the bank (for analysis). */
+  async decodeOnly(blob: Blob): Promise<AudioBuffer> {
+    const arrayBuf = await blob.arrayBuffer();
+    return Tone.getContext().rawContext.decodeAudioData(arrayBuf);
+  }
+
   // ---------- MIC RECORDING ----------
 
   async armMic(): Promise<boolean> {
@@ -857,7 +863,7 @@ class TrackNode {
       } else if (this.instrument.kind === 'fm') {
         (this.instrument as FmInstrument).applyParams(track.synth);
       } else if (this.instrument.kind === 'wavetable') {
-        (this.instrument as WavetableInstrument).applyParams(track.synth);
+        (this.instrument as WavetableInstrument).applyParams(track.synth, track.wavetablePartials);
       } else if (this.instrument.kind === 'sampler') {
         (this.instrument as SamplerInstrument).applyParams(track.synth);
       }
@@ -1455,14 +1461,16 @@ class DrumInstrument implements Instrument {
 
 /**
  * Wavetable instrument — a PolySynth whose oscillator type is a `custom`
- * partials array. The `wavePosition` param (0..1) interpolates linearly
- * between 4 preset wave frames, so a single knob sweeps the timbre from
- * pure sine → hollow → bright → saw-ish. Cheap (no extra audio nodes)
- * and reuses the same filter + ADSR + FX sends as the subtractive engine.
+ * partials array. The `wavePosition` param (0..1) sweeps the timbre with a
+ * single knob; cheap (no extra audio nodes) and reuses the same filter +
+ * ADSR + FX sends as the subtractive engine.
  *
- * Frames are stored as length-8 harmonic-amplitude arrays. Tone's Synth
- * accepts `oscillator: { type: 'custom', partials: [...] }` and rebuilds
- * the underlying PeriodicWave on assignment.
+ * Without a user wavetable, POSITION interpolates through 4 preset frames
+ * (sine → hollow → bright → saw). With a user-loaded `wavetablePartials`
+ * array, POSITION morphs pure sine → that wave instead.
+ *
+ * Tone's Synth accepts `oscillator: { type: 'custom', partials: [...] }`
+ * and rebuilds the underlying PeriodicWave on assignment.
  */
 const WAVE_FRAMES: number[][] = [
   // sine — fundamental only
@@ -1475,8 +1483,17 @@ const WAVE_FRAMES: number[][] = [
   [1, 0.5, 0.33, 0.25, 0.2, 0.166, 0.143, 0.125],
 ];
 
-function morphPartials(pos: number): number[] {
+function morphPartials(pos: number, userWave?: number[]): number[] {
   const clamped = Math.max(0, Math.min(1, pos));
+  if (userWave && userWave.length > 0) {
+    // morph pure sine → the user wavetable
+    const out: number[] = new Array(userWave.length);
+    for (let k = 0; k < userWave.length; k++) {
+      const sine = k === 0 ? 1 : 0;
+      out[k] = sine * (1 - clamped) + userWave[k] * clamped;
+    }
+    return out;
+  }
   const segments = WAVE_FRAMES.length - 1;
   const scaled = clamped * segments;
   const i = Math.min(segments - 1, Math.floor(scaled));
@@ -1495,12 +1512,12 @@ class WavetableInstrument implements Instrument {
   private filter: Tone.Filter;
   private drive: Tone.Distortion;
 
-  constructor(params: SynthParams) {
+  constructor(params: SynthParams, userWave?: number[]) {
     this.output = new Tone.Gain(1);
     this.drive = new Tone.Distortion({ distortion: params.drive, oversample: '2x' });
     this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
     this.poly = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'custom', partials: morphPartials(params.wavePosition ?? 0.33) } as any,
+      oscillator: { type: 'custom', partials: morphPartials(params.wavePosition ?? 0.33, userWave) } as any,
       envelope: {
         attack: params.attack,
         decay: params.decay,
@@ -1514,12 +1531,12 @@ class WavetableInstrument implements Instrument {
     this.poly.chain(this.filter, this.drive, this.output);
   }
 
-  applyParams(p: SynthParams) {
+  applyParams(p: SynthParams, userWave?: number[]) {
     this.filter.frequency.rampTo(p.cutoff, 0.05);
     this.filter.Q.rampTo(p.resonance, 0.05);
     this.drive.distortion = p.drive;
     this.poly.set({
-      oscillator: { type: 'custom', partials: morphPartials(p.wavePosition ?? 0.33) } as any,
+      oscillator: { type: 'custom', partials: morphPartials(p.wavePosition ?? 0.33, userWave) } as any,
       envelope: {
         attack: p.attack,
         decay: p.decay,
@@ -1744,7 +1761,7 @@ function buildInstrument(track: Track, sampleBank?: Map<string, AudioBuffer>): I
   if (track.kind === 'synth') {
     const params = track.synth ?? FALLBACK_SYNTH;
     if (track.synthEngine === 'fm') return new FmInstrument(params);
-    if (track.synthEngine === 'wavetable') return new WavetableInstrument(params);
+    if (track.synthEngine === 'wavetable') return new WavetableInstrument(params, track.wavetablePartials);
     if (track.synthEngine === 'sampler') {
       return new SamplerInstrument(params, resolveSamplerZones(track), sampleBank ?? new Map());
     }

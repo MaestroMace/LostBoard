@@ -120,24 +120,7 @@ export function SynthPanel() {
             </div>
           </HexFrame>
         ) : engine === 'wavetable' ? (
-          <HexFrame title="WAVETABLE">
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-              <Knob
-                label="POSITION"
-                value={s.wavePosition ?? 0.33}
-                min={0}
-                max={1}
-                step={0.01}
-                display={(v) => `${(v * 100).toFixed(0)}%`}
-                onChange={(v) => patch({ wavePosition: v })}
-              />
-              <Knob label="DETUNE" value={s.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
-              <Knob label="GLIDE" value={s.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
-            </div>
-            <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: '8px 0 0' }}>
-              POSITION morphs sine → hollow → bright → saw.
-            </p>
-          </HexFrame>
+          <WavetablePanel trackId={active.id} synth={s} patch={patch} partials={active.wavetablePartials} />
         ) : engine === 'sampler' ? (
           <SamplerSource trackId={active.id} />
         ) : (
@@ -262,6 +245,116 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * WavetablePanel — the wavetable engine's editor. POSITION morphs the
+ * oscillator timbre; LOAD WAVETABLE imports an audio file and derives a
+ * harmonic partials array from it (POSITION then morphs sine → that wave).
+ * A small SVG draws the active harmonic spectrum.
+ */
+function WavetablePanel({
+  trackId,
+  synth,
+  patch,
+  partials,
+}: {
+  trackId: string;
+  synth: SynthParams;
+  patch: (p: Partial<SynthParams>) => void;
+  partials?: number[];
+}) {
+  const updateTrack = useStore((s) => s.updateTrack);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function loadWavetable(file: File) {
+    setBusy(true);
+    try {
+      const { partialsFromBuffer } = await import('../../audio/wavetable');
+      const buffer = await audioEngine.decodeOnly(file);
+      const p = partialsFromBuffer(buffer);
+      updateTrack(trackId, { wavetablePartials: p });
+    } catch (e) {
+      console.error('Wavetable import failed', e);
+      alert('Could not derive a wavetable from that file.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <HexFrame title="WAVETABLE">
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        <Knob
+          label="POSITION"
+          value={synth.wavePosition ?? 0.33}
+          min={0}
+          max={1}
+          step={0.01}
+          display={(v) => `${(v * 100).toFixed(0)}%`}
+          onChange={(v) => patch({ wavePosition: v })}
+        />
+        <Knob label="DETUNE" value={synth.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
+        <Knob label="GLIDE" value={synth.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
+      </div>
+
+      {partials && partials.length > 0 && (
+        <svg
+          viewBox="0 0 100 24"
+          preserveAspectRatio="none"
+          width="100%"
+          height={32}
+          style={{ marginTop: 8, background: 'rgba(255,106,0,0.06)', border: '1px solid rgba(255,106,0,0.25)' }}
+        >
+          {partials.map((amp, i) => {
+            const w = 100 / partials.length;
+            const h = Math.max(0.5, amp * 23);
+            return (
+              <rect
+                key={i}
+                x={i * w + w * 0.15}
+                y={24 - h}
+                width={w * 0.7}
+                height={h}
+                fill="var(--nerv-orange-bright)"
+              />
+            );
+          })}
+        </svg>
+      )}
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()} disabled={busy}>
+          {busy ? '⌛ ANALYSING' : '⬆ LOAD WAVETABLE'}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) loadWavetable(f);
+            e.target.value = '';
+          }}
+        />
+        {partials && partials.length > 0 && (
+          <button
+            className="nerv-btn nerv-btn--ghost"
+            onClick={() => updateTrack(trackId, { wavetablePartials: undefined })}
+          >
+            ✕ CLEAR
+          </button>
+        )}
+      </div>
+      <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: '6px 0 0' }}>
+        {partials && partials.length > 0
+          ? 'POSITION morphs sine → the loaded wavetable.'
+          : 'POSITION morphs sine → hollow → bright → saw. Load a sample to derive a custom wave.'}
+      </p>
+    </HexFrame>
   );
 }
 
