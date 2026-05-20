@@ -150,18 +150,21 @@ changelog and known limitations):
 - **Multi-zone sampler** with **velocity layers** — samples key-mapped
   across the keyboard and switched by note velocity
 - **MIDI punch-in record** — ⏺ PUNCH with a count-in pre-roll
-- **Web MIDI output** — route a track's notes to external hardware
+- **Web MIDI output** — route a track's notes to external hardware,
+  plus **MIDI clock output** so external gear locks to the transport
 - **Sidechain attack/release split** — a genuinely asymmetric
   envelope follower (two followers + signal-domain max)
+- **Stacked automation overlay** — every lane a track owns, shown
+  inline under its clip row in the Arrange view
 
 Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
 full ranked roadmap):
 
-- MIDI clock output / transport sync
-- Per-lane arrange automation overlay
 - Per-track / per-clip groove
 - iOS silent-audio hack for lock-screen transport
 - User-loadable wavetables
+- Session-view audio clips
+- MIDI clock input / sync-in
 
 ## Status & handoff
 

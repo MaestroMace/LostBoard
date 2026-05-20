@@ -43,6 +43,8 @@ out here is wired into the running app — type-check + build pass clean.
 
 | Commit | Feature | Notes |
 | --- | --- | --- |
+| `292fabe` | **Stacked arrange automation overlay** | The arrange "A" toggle now reveals every automation lane a track owns, stacked under the clip row, instead of one param at a time. |
+| `27ce3d1` | **MIDI clock output** | Engine sends 24-PPQN timing clock + start/continue/stop realtime messages to the selected Web MIDI port. MIDI SYNC panel in the PROJECT view. |
 | `67bd7a6` | **Bit-crusher automation** | `crusher.bits` is a real Param, so 'bitcrush' joins the automation targets (1..16 bits, smooth ramps). |
 | `b2f428e` | **Sidechain attack/release split** | Two Tone.Followers (fast/slow) combined by a signal-domain max — genuinely asymmetric attack vs release, replacing the geometric-mean compromise. |
 | `ccea615` | **Web MIDI output** | midiOutput bridge schedules note-on/off to an external port (audio→performance.now clock rebase). Per-track midiOutChannel routes notes to hardware instead of the internal voice. SynthPanel MIDI OUT panel. |
@@ -109,9 +111,6 @@ Things that work but have a trade-off worth flagging:
   you may want a "merge MIDI take into one history entry" pass later.
 ## Known limitations / rough edges on the new round
 
-- **Automation overlay is one-param-per-track.** Multiple active lanes
-  on a track stack in the AUTOMATION tab but the arrange overlay shows
-  one at a time via the dropdown.
 - **Chorus depth isn't automatable.** `chorus.depth` is a plain setter,
   not a signal — unlike the EQ / comp / bitcrush params it can't take
   AudioParam ramps. Everything else in the FX rack is automatable.
@@ -128,33 +127,30 @@ Things that work but have a trade-off worth flagging:
   separate Tone.Offline passes (one per track, others muted). Still
   much faster than realtime on any non-trivial project, but a
   single-pass multi-channel renderer would be cheaper.
-- **MIDI clock isn't sent.** Web MIDI *note* output works per track,
-  but transport sync (24-PPQN clock + start/stop) to external gear
-  isn't wired yet.
-
 ## Roadmap — what's next, ranked
 
 Highest-leverage to lowest:
 
-1. **MIDI clock output / transport sync.** Send 24-PPQN clock +
-   start/stop/continue so hardware locks to LostBoard's tempo.
-2. **Per-lane arrange overlay.** Stack N automation lanes vertically
-   under a track instead of the current one-at-a-time dropdown.
-3. **Per-track / per-clip groove.** Swing is global today; a per-clip
-   groove amount would let one part shuffle while another stays straight.
-4. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
+1. **Per-track / per-clip groove.** Swing is global today; a per-clip
+   groove amount would let one part shuffle while another stays
+   straight. Needs manual note-time offsetting since Tone.Transport's
+   swing is global.
+2. **iOS silent-audio hack.** Surfaces MediaSession lock-screen
    controls on iOS Safari (the install banner already covers the
    Chromium PWA path).
-5. **User-loadable wavetables.** Replace the fixed 4-frame morph with
+3. **User-loadable wavetables.** Replace the fixed 4-frame morph with
    imported single-cycle waveforms.
-6. **Session-view audio clips.** Session loops fire MIDI + pattern
+4. **Session-view audio clips.** Session loops fire MIDI + pattern
    clips; audio clips would need a per-cycle Player.start.
+5. **MIDI clock input / sync-in.** Clock *out* is done; locking the
+   transport to an incoming external clock is the mirror feature.
 
 ### Done since the last revision
 
-Sidechain attack/release split, Web MIDI note output, MIDI punch-in
-with pre-roll, sampler velocity layers, FX-rack automation (EQ / comp
-/ bitcrush) — all shipped on this branch.
+Sidechain attack/release split, Web MIDI note output + clock output,
+MIDI punch-in with pre-roll, sampler velocity layers, FX-rack
+automation (EQ / comp / bitcrush), stacked arrange automation overlay
+— all shipped on this branch.
 
 ## Repo layout cheatsheet
 
