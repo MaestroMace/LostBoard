@@ -30,14 +30,22 @@ export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9
  * Effective sampler zones for a track, migrating the legacy single-sample
  * fields (samplerSampleId / samplerRootPitch) into a one-element zone list
  * so the UI and store actions only ever deal with the array form. Returns
- * a fresh array each call — safe to mutate.
+ * a fresh array each call — safe to mutate. The migration uses a stable
+ * id (`${track.id}__legacy`) so React keys don't churn between renders
+ * until the user's first edit promotes the zone into `samplerZones`.
  */
 export function currentSamplerZones(track: Track): SamplerZone[] {
   if (track.samplerZones && track.samplerZones.length > 0) {
     return track.samplerZones.map((z) => ({ ...z }));
   }
   if (track.samplerSampleId) {
-    return [{ id: newId('zn'), sampleId: track.samplerSampleId, rootPitch: track.samplerRootPitch ?? 60 }];
+    return [
+      {
+        id: `${track.id}__legacy`,
+        sampleId: track.samplerSampleId,
+        rootPitch: track.samplerRootPitch ?? 60,
+      },
+    ];
   }
   return [];
 }

@@ -667,10 +667,11 @@ class Engine {
   /** Fires the contents of a clip starting at `baseTime` (seconds, transport-relative). */
   private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number, midiCh?: number, swing = 0) {
     if (clip.kind === 'midi') {
+      const sendMidi = !!midiCh && isRealtimeContext();
       for (const note of clip.notes) {
         const off = Tone.Time(`${this.swungBeat(note.start, swing)}*4n`).toSeconds();
         const dur = Tone.Time(`${note.length}*4n`).toSeconds();
-        if (midiCh) midiOutput.scheduleNote(midiCh, note.pitch, note.velocity, baseTime + off, dur);
+        if (sendMidi) midiOutput.scheduleNote(midiCh!, note.pitch, note.velocity, baseTime + off, dur);
         else node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
       }
     } else if (clip.kind === 'pattern') {
@@ -698,14 +699,21 @@ class Engine {
     // per-track swing override falls back to the project-global amount
     const swing = track?.swing ?? this.globalSwing;
     if (clip.kind === 'midi') {
-      // route to a Web MIDI output port instead of the internal voice when
-      // the track carries a midiOutChannel
+      // Route to a Web MIDI output port instead of the internal voice when
+      // the track carries a midiOutChannel — but never during an offline
+      // render (audio-time and wall-time aren't related there), so the
+      // offline bounce captures the internal voice instead of silence.
       const midiCh = track?.midiOutChannel;
+      const sendMidi = !!midiCh && isRealtimeContext();
       for (const note of clip.notes) {
         const noteStartBeats = this.swungBeat(startBeats + note.start, swing);
         const id = t.schedule((time) => {
-          const dur = note.length * (60 / project.bpm);
-          if (midiCh) midiOutput.scheduleNote(midiCh, note.pitch, note.velocity, time, dur);
+          // tempo-aware duration: take BPM at the note's start beat, so a
+          // tempo-map change doesn't make every subsequent note the wrong
+          // length. Notes that straddle a tempo event still use the
+          // start-time tempo, matching standard DAW behaviour.
+          const dur = note.length * (60 / t.bpm.value);
+          if (sendMidi) midiOutput.scheduleNote(midiCh!, note.pitch, note.velocity, time, dur);
           else node.triggerAt(note.pitch, note.velocity, dur, time);
         }, beatsToBarsBeats(noteStartBeats));
         this.scheduledIds.push(id);
