@@ -1,5 +1,6 @@
 import { useStore } from '../state/store';
 import { audioEngine } from './engine';
+import { midiOutput } from './midiOutput';
 import { transportClock } from '../state/transportClock';
 import type { Track } from './types';
 
@@ -167,6 +168,9 @@ class MidiInput {
   }
 
   private onClockStart() {
+    // ignore an immediate echo if we just sent this transport message
+    // ourselves (clock-in + clock-out wired to a loopback port)
+    if (midiOutput.wasJustSent('start')) return;
     this.lastPulseMs = 0;
     this.pulseIntervals = [];
     this.pulseCount = 0;
@@ -175,10 +179,12 @@ class MidiInput {
   }
 
   private onClockContinue() {
+    if (midiOutput.wasJustSent('continue')) return;
     audioEngine.play().then(() => useStore.getState().setPlaying(true));
   }
 
   private onClockStop() {
+    if (midiOutput.wasJustSent('stop')) return;
     audioEngine.pause();
     useStore.getState().setPlaying(false);
   }

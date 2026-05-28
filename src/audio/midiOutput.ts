@@ -46,6 +46,21 @@ export function getMidiOutSnapshot(): MidiOutStatus {
 class MidiOutput {
   private access?: MIDIAccess;
   private selectedId = '';
+  /** Wall-time (performance.now ms) of the last transport message we sent, by kind. */
+  private lastSentMs: Record<'start' | 'continue' | 'stop', number> = {
+    start: -Infinity,
+    continue: -Infinity,
+    stop: -Infinity,
+  };
+
+  /**
+   * True if we sent a transport message of this kind in the last `windowMs`.
+   * midiInput's clock-sync uses this to ignore loopback echoes from devices
+   * that forward our own transport messages back.
+   */
+  wasJustSent(kind: 'start' | 'continue' | 'stop', windowMs = 80): boolean {
+    return performance.now() - this.lastSentMs[kind] < windowMs;
+  }
 
   async init(): Promise<void> {
     if (typeof navigator === 'undefined' || !('requestMIDIAccess' in navigator)) {
@@ -135,6 +150,7 @@ class MidiOutput {
     const port = this.port();
     if (!port) return;
     const byte = kind === 'start' ? 0xfa : kind === 'continue' ? 0xfb : 0xfc;
+    this.lastSentMs[kind] = performance.now();
     try {
       port.send([byte]);
     } catch {

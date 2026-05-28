@@ -790,6 +790,10 @@ class TrackNode {
   sidechainGain: Tone.Gain;
   /** Every node in the current sidechain detector path — disposed wholesale on rebuild. */
   private sidechainNodes: Tone.ToneAudioNode[] = [];
+  /** Live references for in-place param updates (avoids a rebuild on knob drag). */
+  private sidechainFast?: Tone.Follower;
+  private sidechainSlow?: Tone.Follower;
+  private sidechainScale?: Tone.Multiply;
   private sidechainSourceId?: string;
   private sidechainState: { depth: number; attack: number; release: number } = { depth: 0, attack: 0.005, release: 0.15 };
 
@@ -1054,26 +1058,45 @@ class TrackNode {
    * summed into the always-in-chain `sidechainGain.gain` (intrinsic value
    * 1), giving an effective gain of `1 − depth · env`.
    *
+   * Only rebuilds the detector graph when the SOURCE changes; depth /
+   * attack / release tweaks update the existing nodes in place
+   * (Follower.smoothing, Multiply.factor) so dragging a knob doesn't
+   * produce audio glitches from tearing down 8 audio nodes per frame.
+   *
    * Passing `source = null` (or depth ≤ 0) disposes the detector path and
    * leaves the gain transparent.
    */
   setSidechain(source: TrackNode | null, depth: number, attack: number, release: number) {
-    // tear down any existing detector path
-    for (const n of this.sidechainNodes) n.dispose();
-    this.sidechainNodes = [];
-    this.sidechainSourceId = undefined;
-    this.sidechainState = { depth, attack, release };
-
     if (!source || depth <= 0 || source === this) {
+      for (const n of this.sidechainNodes) n.dispose();
+      this.sidechainNodes = [];
+      this.sidechainFast = undefined;
+      this.sidechainSlow = undefined;
+      this.sidechainScale = undefined;
+      this.sidechainSourceId = undefined;
+      this.sidechainState = { depth, attack, release };
       this.sidechainGain.gain.cancelScheduledValues(0);
       this.sidechainGain.gain.value = 1;
       return;
     }
 
-    // two followers — fast tracks the attack, slow tracks the release
+    const sourceSame = source.trackId === this.sidechainSourceId;
+    if (sourceSame && this.sidechainFast && this.sidechainSlow && this.sidechainScale) {
+      // in-place param update — no rebuild, no audio glitch
+      this.sidechainFast.smoothing = Math.max(0.001, attack);
+      this.sidechainSlow.smoothing = Math.max(0.001, release);
+      this.sidechainScale.factor.value = -depth;
+      this.sidechainState = { depth, attack, release };
+      return;
+    }
+
+    // full rebuild — source changed (or first install)
+    for (const n of this.sidechainNodes) n.dispose();
+    this.sidechainNodes = [];
+    this.sidechainState = { depth, attack, release };
+
     const fast = new Tone.Follower(Math.max(0.001, attack));
     const slow = new Tone.Follower(Math.max(0.001, release));
-    // signal-domain max(fast, slow) = (fast + slow + |fast - slow|) / 2
     const diff = new Tone.Subtract();
     const abs = new Tone.Abs();
     const sum = new Tone.Add();
@@ -1083,20 +1106,22 @@ class TrackNode {
 
     source.connectTap(fast);
     source.connectTap(slow);
-    fast.connect(diff); // diff.input
+    fast.connect(diff);
     slow.connect(diff.subtrahend);
     diff.connect(abs);
-    fast.connect(sum); // sum.input
+    fast.connect(sum);
     slow.connect(sum.addend);
-    sum.connect(total); // total.input
+    sum.connect(total);
     abs.connect(total.addend);
     total.connect(half);
     half.connect(scale);
-    // Multiply output → AudioParam: intrinsic gain 1, summed signal adds -depth*env
     scale.connect(this.sidechainGain.gain);
     this.sidechainGain.gain.value = 1;
 
     this.sidechainNodes = [fast, slow, diff, abs, sum, total, half, scale];
+    this.sidechainFast = fast;
+    this.sidechainSlow = slow;
+    this.sidechainScale = scale;
     this.sidechainSourceId = source.trackId;
   }
 

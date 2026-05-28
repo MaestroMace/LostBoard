@@ -11,6 +11,7 @@ const GROUPS: ShortcutGroup[] = [
       ['L', 'Toggle loop'],
       ['M', 'Toggle metronome'],
       ['◉ TAP', 'Tap-tempo (4-tap rolling average)'],
+      ['⏺ PUNCH', 'Record MIDI into the armed synth track with a CI-bar pre-roll'],
     ],
   },
   {
@@ -30,6 +31,7 @@ const GROUPS: ShortcutGroup[] = [
       ['Double-click clip', 'Open the right editor (piano roll / sequencer)'],
       ['Drag clip', 'Move; drag right edge to resize'],
       ['Shift-click clip', 'Add to / remove from multi-selection'],
+      ['"A" in track header', 'Toggle inline automation lanes for that track'],
       ['Drag strip under ruler', 'Set loop region'],
       ['⌘ / Ctrl + wheel · pinch', 'Zoom timeline'],
     ],
@@ -38,10 +40,21 @@ const GROUPS: ShortcutGroup[] = [
     title: 'PIANO ROLL',
     items: [
       ['DRAW + tap grid', 'Add a note (snapped to scale)'],
-      ['ERASE + tap note', 'Delete a note (or shift-click in DRAW)'],
+      ['Click a note', 'Select it (Cmd/Ctrl-click to multi-select)'],
+      ['Shift-click note', 'Delete it (or use ERASE tool)'],
       ['Drag note', 'Move (pitch snaps to scale); drag right edge to resize'],
+      ['QUANTIZE / HUMANIZE', 'Honours the note selection when non-empty'],
       ['SCALE / SNAP', 'Per-editor scale lock + quantize grid'],
-      ['QUANTIZE', 'Snap every note start to current SNAP'],
+    ],
+  },
+  {
+    title: 'AUTOMATION',
+    items: [
+      ['Click empty lane', 'Drop a breakpoint at that beat / value'],
+      ['Drag a point', 'Move it (in both the tab and the arrange overlay)'],
+      ['Double-click point', 'Remove it'],
+      ['Curve dropdown', 'linear / exponential / hold / step into a point'],
+      ['Targets', 'volume · pan · cutoff · sends · EQ · comp · bitcrush'],
     ],
   },
   {
@@ -56,9 +69,27 @@ const GROUPS: ShortcutGroup[] = [
   {
     title: 'SESSION',
     items: [
-      ['Tap slot', 'Launch its clip on that track'],
+      ['Tap slot', 'Launch its clip on that track (MIDI / pattern / audio)'],
       ['Tap ▶ in scene header', 'Launch every clip in that scene'],
       ['ARRANGEMENT', 'Swap the engine back to the timeline'],
+    ],
+  },
+  {
+    title: 'INSTRUMENTS',
+    items: [
+      ['SUBTRACTIVE / FM', 'Classic engines with osc / harmonicity controls'],
+      ['WAVETABLE', 'POSITION morphs through frames; LOAD WAVETABLE imports a sample'],
+      ['SAMPLER', 'Multi-zone key + velocity layered Tone.Sampler'],
+      ['MIDI OUT panel', 'Route a track\'s notes to external hardware'],
+    ],
+  },
+  {
+    title: 'MIXER + TEMPO',
+    items: [
+      ['PAN / SWING knobs', 'Per-track pan and per-track swing override'],
+      ['Project SWING slider', 'Global swing default (8n or 16n)'],
+      ['Project TEMPO MAP', 'Sparse (beat, BPM) events with step or ramp'],
+      ['MIDI SYNC panel', 'CLOCK IN / OUT — sync to or from external gear'],
     ],
   },
   {
@@ -68,6 +99,15 @@ const GROUPS: ShortcutGroup[] = [
       ['Z / X', 'Shift octave down / up'],
       ['A..K on drum track', 'Trigger pads 1..8'],
       ['Connect MIDI controller', 'Arm a synth track (●) to record incoming notes'],
+    ],
+  },
+  {
+    title: 'OUTPUT + BOUNCE',
+    items: [
+      ['⚡ BOUNCE WAV', 'Render the project to a WAV faster-than-realtime'],
+      ['⚡⬇ OFFLINE STEMS', 'Per-track WAVs in one pass-per-track'],
+      ['⬇⬇ STEMS', 'Real-time stem playthrough (legacy)'],
+      ['⌫ GC SAMPLES', 'Drop audio nothing in any slot references'],
     ],
   },
 ];
