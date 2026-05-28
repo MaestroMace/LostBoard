@@ -203,6 +203,8 @@ function Ticker() {
   const playing = useStore((s) => s.isPlaying);
   const sessionMode = useStore((s) => s.sessionMode);
   const micRecording = useStore((s) => s.micRecording);
+  const midiClockOut = useStore((s) => s.midiClockOut);
+  const midiClockIn = useStore((s) => s.midiClockIn);
   const bpm = useStore((s) => s.project.bpm);
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
   const [msg, setMsg] = useState('MAGI SYSTEM ONLINE');
@@ -223,6 +225,8 @@ function Ticker() {
       if (automationLanes > 0) lines.push(`AUTO LANES ${automationLanes}`);
       if (tempoEvents > 0) lines.push(`TEMPO MAP ${tempoEvents} EV`);
       if (micRecording) lines.push('MIC RECORDING — ARMED');
+      if (midiClockOut) lines.push('MIDI CLOCK OUT ACTIVE');
+      if (midiClockIn) lines.push('MIDI CLOCK IN — TRANSPORT SLAVED');
       if (midi.supported) {
         lines.push(midi.connected ? `MIDI IN: ${midi.device.toUpperCase()}` : 'MIDI BUS IDLE');
       }
@@ -239,7 +243,7 @@ function Ticker() {
       setMsg(lines[i]);
     }, 2200);
     return () => clearInterval(t);
-  }, [playing, sessionMode, micRecording, bpm, trackCount, clipCount, automationLanes, tempoEvents, midi.supported, midi.connected, midi.device]);
+  }, [playing, sessionMode, micRecording, midiClockOut, midiClockIn, bpm, trackCount, clipCount, automationLanes, tempoEvents, midi.supported, midi.connected, midi.device]);
 
   return (
     <div
