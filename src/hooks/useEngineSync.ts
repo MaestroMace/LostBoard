@@ -67,6 +67,12 @@ export function useEngineSync() {
             anyTrackChanged = true;
           }
         }
+        // dispose nodes for tracks that no longer exist in the project so a
+        // delete doesn't leak the channel / instrument / FX rack
+        const currentIds = new Set(project.tracks.map((t) => t.id));
+        for (const id of prev.trackById.keys()) {
+          if (!currentIds.has(id)) audioEngine.removeTrack(id);
+        }
         // sidechain wiring needs every node to exist; reconcile after the per-track pass
         if (anyTrackChanged || project.tracks.length !== prev.trackById.size) {
           audioEngine.applySidechains(project);
