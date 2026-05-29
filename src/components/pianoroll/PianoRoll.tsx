@@ -827,15 +827,16 @@ const VelocityLane = memo(function VelocityLane({
   color: string;
   selectedIds: string[];
 }) {
-  const setNotesVelocity = useStore((s) => s.setNotesVelocity);
+  const setNoteVelocities = useStore((s) => s.setNoteVelocities);
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<
     | null
     | {
         ids: string[];
         startY: number;
-        baseVelocities: number[];
-        lastV: number;
+        /** Base velocity per id (parallel array) — applied with the same delta to preserve relative dynamics. */
+        baseVelocities: Record<string, number>;
+        lastDelta: number;
         pointerId: number;
       }
   >(null);
@@ -843,24 +844,24 @@ const VelocityLane = memo(function VelocityLane({
   function down(e: React.PointerEvent, noteId: string, velocity: number) {
     e.stopPropagation();
     const ids = selectedIds.includes(noteId) && selectedIds.length > 1 ? [...selectedIds] : [noteId];
-    const baseVelocities = ids.map((id) => notes.find((n) => n.id === id)?.velocity ?? velocity);
+    const baseVelocities: Record<string, number> = {};
+    for (const id of ids) baseVelocities[id] = notes.find((n) => n.id === id)?.velocity ?? velocity;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { ids, startY: e.clientY, baseVelocities, lastV: velocity, pointerId: e.pointerId };
+    drag.current = { ids, startY: e.clientY, baseVelocities, lastDelta: 0, pointerId: e.pointerId };
   }
   function move(e: React.PointerEvent) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
-    const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
     const dy = e.clientY - d.startY;
-    // each lane-height unit of drag = full velocity range
+    // lane-height of drag spans the full 0..1 range
     const dvel = -dy / Math.max(1, VEL_LANE_H - 16);
-    // anchor on the first tracked note's base velocity so the bar tracks
-    // the cursor 1:1 once you start dragging
-    const v = Math.max(0.05, Math.min(1, d.baseVelocities[0] + dvel));
-    if (Math.abs(v - d.lastV) < 0.005) return;
-    d.lastV = v;
-    setNotesVelocity(trackId, clipId, d.ids, v);
+    if (Math.abs(dvel - d.lastDelta) < 0.005) return;
+    d.lastDelta = dvel;
+    // apply the SAME delta to every tracked note so a multi-note drag
+    // preserves their relative dynamics
+    const valuesById: Record<string, number> = {};
+    for (const id of d.ids) valuesById[id] = d.baseVelocities[id] + dvel;
+    setNoteVelocities(trackId, clipId, valuesById);
   }
   function up(e: React.PointerEvent) {
     if (!drag.current) return;

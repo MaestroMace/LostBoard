@@ -39,12 +39,14 @@ const GROUPS: ShortcutGroup[] = [
   {
     title: 'PIANO ROLL',
     items: [
-      ['DRAW + tap grid', 'Add a note (snapped to scale)'],
-      ['Click a note', 'Select it (Cmd/Ctrl-click to multi-select)'],
+      ['DRAW + drag grid', 'Draw a note whose length follows the pointer'],
+      ['SELECT + drag grid', 'Marquee — select every note inside the rect'],
+      ['Click a note', 'Select it (Cmd/Ctrl-click toggles multi)'],
+      ['Drag a selected note', 'Moves the whole selection in lockstep'],
+      ['Drag right edge', 'Resize (single note)'],
+      ['Drag velocity bar', 'Set velocity (drags every selected together)'],
       ['Shift-click note', 'Delete it (or use ERASE tool)'],
-      ['Drag note', 'Move (pitch snaps to scale); drag right edge to resize'],
       ['QUANTIZE / HUMANIZE', 'Honours the note selection when non-empty'],
-      ['SCALE / SNAP', 'Per-editor scale lock + quantize grid'],
     ],
   },
   {

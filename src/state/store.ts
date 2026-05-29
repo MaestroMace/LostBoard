@@ -329,6 +329,8 @@ type Actions = {
   moveNotesBy(trackId: string, clipId: string, noteIds: string[], deltaStart: number, deltaPitch: number): void;
   /** Set the same velocity on every note in `noteIds` (or all notes in the clip if empty). */
   setNotesVelocity(trackId: string, clipId: string, noteIds: string[], velocity: number): void;
+  /** Per-note velocity write, used by velocity-lane drags that preserve relative dynamics. */
+  setNoteVelocities(trackId: string, clipId: string, valuesById: Record<string, number>): void;
 
   loadProject(p: Project): void;
   newProject(): void;
@@ -1145,6 +1147,29 @@ export const useStore = create<Store>()(
             },
       );
       // not history-tracked — velocity drags are knob-like
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+
+    setNoteVelocities: (trackId, clipId, valuesById) => {
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) =>
+                        valuesById[n.id] === undefined
+                          ? n
+                          : { ...n, velocity: Math.max(0.05, Math.min(1, valuesById[n.id])) },
+                      ),
+                    },
+              ),
+            },
+      );
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
 
