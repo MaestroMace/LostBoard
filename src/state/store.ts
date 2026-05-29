@@ -322,9 +322,13 @@ type Actions = {
   toggleNoteSelected(noteId: string): void;
   clearNoteSelection(): void;
 
-  addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
+  addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): string;
   removeNote(trackId: string, clipId: string, noteId: string): void;
   updateNote(trackId: string, clipId: string, noteId: string, patch: Partial<Note>): void;
+  /** Move a set of notes in one atomic, history-tracked edit. Deltas can be negative; positions and pitches are clamped at 0 / [0,127]. */
+  moveNotesBy(trackId: string, clipId: string, noteIds: string[], deltaStart: number, deltaPitch: number): void;
+  /** Set the same velocity on every note in `noteIds` (or all notes in the clip if empty). */
+  setNotesVelocity(trackId: string, clipId: string, noteIds: string[], velocity: number): void;
 
   loadProject(p: Project): void;
   newProject(): void;
@@ -1045,6 +1049,7 @@ export const useStore = create<Store>()(
     clearNoteSelection: () => set({ selectedNoteIds: [] }),
 
     addNote: (trackId, clipId, note) => {
+      const noteId = newId('n');
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -1053,11 +1058,12 @@ export const useStore = create<Store>()(
               clips: t.clips.map((c) =>
                 c.id !== clipId || c.kind !== 'midi'
                   ? c
-                  : { ...c, notes: [...c.notes, { ...note, id: newId('n') }] },
+                  : { ...c, notes: [...c.notes, { ...note, id: noteId }] },
               ),
             },
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() });
+      return noteId;
     },
 
     removeNote: (trackId, clipId, noteId) => {
@@ -1088,6 +1094,58 @@ export const useStore = create<Store>()(
             },
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    moveNotesBy: (trackId, clipId, noteIds, deltaStart, deltaPitch) => {
+      if (noteIds.length === 0) return;
+      if (deltaStart === 0 && deltaPitch === 0) return;
+      const idSet = new Set(noteIds);
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) =>
+                        idSet.has(n.id)
+                          ? {
+                              ...n,
+                              start: Math.max(0, n.start + deltaStart),
+                              pitch: Math.max(0, Math.min(127, n.pitch + deltaPitch)),
+                            }
+                          : n,
+                      ),
+                    },
+              ),
+            },
+      );
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    setNotesVelocity: (trackId, clipId, noteIds, velocity) => {
+      const v = Math.max(0.05, Math.min(1, velocity));
+      const idSet = noteIds.length > 0 ? new Set(noteIds) : null;
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) => (!idSet || idSet.has(n.id) ? { ...n, velocity: v } : n)),
+                    },
+              ),
+            },
+      );
+      // not history-tracked — velocity drags are knob-like
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
 
     loadProject: (p) => set({ project: p, selectedClipIds: [], selectedTrackId: null, past: [], future: [] }),
