@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import { useStore } from '../../state/store';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useStore, currentSamplerZones } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
-import { DEFAULT_SYNTH, type SynthParams } from '../../audio/types';
+import { DEFAULT_SYNTH, type SynthParams, type SynthEngine } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
+import { midiOutput, subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { importSample } from '../../state/samples';
 
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
@@ -58,18 +60,15 @@ export function SynthPanel() {
           ))}
         </select>
         <span className="hud-readout">ENGINE:</span>
-        <button
-          className={`nerv-btn ${engine === 'subtractive' ? 'is-active' : ''}`}
-          onClick={() => setSynthEngine(active.id, 'subtractive')}
-        >
-          SUBTRACTIVE
-        </button>
-        <button
-          className={`nerv-btn ${engine === 'fm' ? 'is-active' : ''}`}
-          onClick={() => setSynthEngine(active.id, 'fm')}
-        >
-          FM
-        </button>
+        {(['subtractive', 'fm', 'wavetable', 'sampler'] as SynthEngine[]).map((e) => (
+          <button
+            key={e}
+            className={`nerv-btn ${engine === e ? 'is-active' : ''}`}
+            onClick={() => setSynthEngine(active.id, e)}
+          >
+            {e === 'subtractive' ? 'SUBTRACTIVE' : e === 'fm' ? 'FM' : e === 'wavetable' ? 'WAVETABLE' : 'SAMPLER'}
+          </button>
+        ))}
         <div style={{ flex: 1 }} />
         <span className="hud-readout">PRESET:</span>
         {Object.keys(PRESETS).map((k) => (
@@ -120,6 +119,10 @@ export function SynthPanel() {
               />
             </div>
           </HexFrame>
+        ) : engine === 'wavetable' ? (
+          <WavetablePanel trackId={active.id} synth={s} patch={patch} partials={active.wavetablePartials} />
+        ) : engine === 'sampler' ? (
+          <SamplerSource trackId={active.id} />
         ) : (
         <HexFrame title="OSC">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -165,6 +168,8 @@ export function SynthPanel() {
             <Knob label="DELAY" value={s.delay} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ delay: v })} />
           </div>
         </HexFrame>
+
+        <MidiOutPanel trackId={active.id} channel={active.midiOutChannel} />
       </div>
 
       <HexFrame title="KEYBOARD // TAP">
@@ -240,5 +245,351 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * WavetablePanel — the wavetable engine's editor. POSITION morphs the
+ * oscillator timbre; LOAD WAVETABLE imports an audio file and derives a
+ * harmonic partials array from it (POSITION then morphs sine → that wave).
+ * A small SVG draws the active harmonic spectrum.
+ */
+function WavetablePanel({
+  trackId,
+  synth,
+  patch,
+  partials,
+}: {
+  trackId: string;
+  synth: SynthParams;
+  patch: (p: Partial<SynthParams>) => void;
+  partials?: number[];
+}) {
+  const updateTrack = useStore((s) => s.updateTrack);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function loadWavetable(file: File) {
+    setBusy(true);
+    try {
+      const { partialsFromBuffer } = await import('../../audio/wavetable');
+      const buffer = await audioEngine.decodeOnly(file);
+      const p = partialsFromBuffer(buffer);
+      updateTrack(trackId, { wavetablePartials: p });
+    } catch (e) {
+      console.error('Wavetable import failed', e);
+      alert('Could not derive a wavetable from that file.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <HexFrame title="WAVETABLE">
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        <Knob
+          label="POSITION"
+          value={synth.wavePosition ?? 0.33}
+          min={0}
+          max={1}
+          step={0.01}
+          display={(v) => `${(v * 100).toFixed(0)}%`}
+          onChange={(v) => patch({ wavePosition: v })}
+        />
+        <Knob label="DETUNE" value={synth.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
+        <Knob label="GLIDE" value={synth.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
+      </div>
+
+      {partials && partials.length > 0 && (
+        <svg
+          viewBox="0 0 100 24"
+          preserveAspectRatio="none"
+          width="100%"
+          height={32}
+          style={{ marginTop: 8, background: 'rgba(255,106,0,0.06)', border: '1px solid rgba(255,106,0,0.25)' }}
+        >
+          {partials.map((amp, i) => {
+            const w = 100 / partials.length;
+            const h = Math.max(0.5, amp * 23);
+            return (
+              <rect
+                key={i}
+                x={i * w + w * 0.15}
+                y={24 - h}
+                width={w * 0.7}
+                height={h}
+                fill="var(--nerv-orange-bright)"
+              />
+            );
+          })}
+        </svg>
+      )}
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()} disabled={busy}>
+          {busy ? '⌛ ANALYSING' : '⬆ LOAD WAVETABLE'}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) loadWavetable(f);
+            e.target.value = '';
+          }}
+        />
+        {partials && partials.length > 0 && (
+          <button
+            className="nerv-btn nerv-btn--ghost"
+            onClick={() => updateTrack(trackId, { wavetablePartials: undefined })}
+          >
+            ✕ CLEAR
+          </button>
+        )}
+      </div>
+      <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: '6px 0 0' }}>
+        {partials && partials.length > 0
+          ? 'POSITION morphs sine → the loaded wavetable.'
+          : 'POSITION morphs sine → hollow → bright → saw. Load a sample to derive a custom wave.'}
+      </p>
+    </HexFrame>
+  );
+}
+
+/**
+ * MidiOutPanel — routes a track's notes to an external Web MIDI device.
+ * The output port is a global pick (one selected port for the whole app);
+ * the channel is per-track. When a channel is set the engine sends MIDI
+ * for that track and skips its internal voice, so the sound comes from
+ * the hardware. Channel 0 (OFF) keeps the internal instrument.
+ */
+function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number }) {
+  const updateTrack = useStore((s) => s.updateTrack);
+  const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
+
+  return (
+    <HexFrame title="MIDI OUT">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!midi.supported ? (
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 10 }}>
+            Web MIDI not available in this browser.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span className="hud-readout" style={{ fontSize: 10 }}>PORT</span>
+              <select
+                className="display"
+                value={midi.selectedId}
+                onChange={(e) => midiOutput.selectOutput(e.target.value)}
+                style={{ flex: 1, minWidth: 0 }}
+              >
+                {midi.ports.length === 0 && <option value="">— no output devices —</option>}
+                {midi.ports.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span className="hud-readout" style={{ fontSize: 10 }}>CHANNEL</span>
+              <select
+                className="display"
+                value={channel ?? 0}
+                onChange={(e) => {
+                  const ch = parseInt(e.target.value, 10);
+                  updateTrack(trackId, { midiOutChannel: ch === 0 ? undefined : ch });
+                }}
+              >
+                <option value={0}>OFF (internal)</option>
+                {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
+                  <option key={ch} value={ch}>CH {ch}</option>
+                ))}
+              </select>
+            </div>
+            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 9 }}>
+              When a channel is set, this track's notes drive the hardware and the
+              internal voice is silent.
+            </p>
+          </>
+        )}
+      </div>
+    </HexFrame>
+  );
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function midiToName(m: number) {
+  return `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
+}
+
+/**
+ * SamplerSource — multi-zone editor for the sampler engine. Each zone is a
+ * sample anchored at a root MIDI pitch; Tone.Sampler interpolates between
+ * zones across the keyboard, so one zone behaves like a basic one-shot and
+ * several cover a wider range cleanly.
+ *
+ * The sample picker pulls from the engine's runtime bank so anything
+ * already imported elsewhere (audio clips, pad samples) shows up. The bank
+ * isn't a React store, so we poll on a small interval while mounted to
+ * catch background-rehydrated samples.
+ */
+function SamplerSource({ trackId }: { trackId: string }) {
+  const track = useStore((s) => s.project.tracks.find((t) => t.id === trackId));
+  const addSamplerZone = useStore((s) => s.addSamplerZone);
+  const updateSamplerZone = useStore((s) => s.updateSamplerZone);
+  const removeSamplerZone = useStore((s) => s.removeSamplerZone);
+  const [sampleIds, setSampleIds] = useState<string[]>(audioEngine.listSampleIds());
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const refresh = () => setSampleIds(audioEngine.listSampleIds());
+    refresh();
+    const tick = window.setInterval(refresh, 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const zones = track ? currentSamplerZones(track) : [];
+
+  async function handleUpload(file: File) {
+    try {
+      const { id } = await importSample(file);
+      setSampleIds(audioEngine.listSampleIds());
+      // new zone defaults a sensible root pitch one octave up per existing zone
+      addSamplerZone(trackId, id, 60 + zones.length * 12);
+    } catch (e) {
+      console.error('Sample import failed', e);
+      alert('Could not import sample.');
+    }
+  }
+
+  return (
+    <HexFrame title="SAMPLER ZONES">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()}>
+            ⬆ LOAD + ADD ZONE
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+              e.target.value = '';
+            }}
+          />
+          {sampleIds.length > 0 && (
+            <button
+              className="nerv-btn"
+              onClick={() => addSamplerZone(trackId, sampleIds[0], 60 + zones.length * 12)}
+            >
+              + ZONE
+            </button>
+          )}
+        </div>
+
+        {zones.length === 0 ? (
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
+            No zones yet. Load a sample to start — add more zones at different root pitches
+            for a cleanly multi-sampled instrument.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {zones.map((zone, i) => (
+              <div
+                key={zone.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '52px 1fr 96px 120px 40px',
+                  gap: 6,
+                  alignItems: 'center',
+                  padding: '4px 6px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,106,0,0.2)',
+                }}
+              >
+                <span className="hud-value" style={{ fontSize: 10 }}>ZN-{String(i + 1).padStart(2, '0')}</span>
+                <select
+                  className="display"
+                  value={zone.sampleId}
+                  onChange={(e) => updateSamplerZone(trackId, zone.id, { sampleId: e.target.value })}
+                  style={{ minWidth: 0 }}
+                >
+                  {!sampleIds.includes(zone.sampleId) && (
+                    <option value={zone.sampleId}>{zone.sampleId} (missing)</option>
+                  )}
+                  {sampleIds.map((id) => (
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>ROOT</span>
+                  <input
+                    className="display"
+                    type="number"
+                    min={12}
+                    max={108}
+                    value={zone.rootPitch}
+                    onChange={(e) =>
+                      updateSamplerZone(trackId, zone.id, {
+                        rootPitch: Math.max(12, Math.min(108, parseInt(e.target.value) || 60)),
+                      })
+                    }
+                    style={{ width: 44 }}
+                  />
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9, minWidth: 28 }}>
+                    {midiToName(zone.rootPitch)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Velocity range this zone responds to (%)">
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>VEL</span>
+                  <input
+                    className="display"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={Math.round((zone.velMin ?? 0) * 100)}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) / 100;
+                      updateSamplerZone(trackId, zone.id, { velMin: Math.min(v, zone.velMax ?? 1) });
+                    }}
+                    style={{ width: 38 }}
+                  />
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>–</span>
+                  <input
+                    className="display"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={Math.round((zone.velMax ?? 1) * 100)}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) / 100;
+                      updateSamplerZone(trackId, zone.id, { velMax: Math.max(v, zone.velMin ?? 0) });
+                    }}
+                    style={{ width: 38 }}
+                  />
+                </div>
+                <button
+                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  onClick={() => removeSamplerZone(trackId, zone.id)}
+                  title="Remove zone"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
+          ROOT = MIDI pitch a zone's sample plays at unity rate. VEL = velocity range
+          (%) the zone responds to — give zones different ranges for velocity layers.
+          Zones sharing a range key-map together.
+        </p>
+      </div>
+    </HexFrame>
   );
 }

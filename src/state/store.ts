@@ -4,6 +4,9 @@ import {
   DEFAULT_SYNTH,
   DEFAULT_FX,
   DRUM_PADS,
+  type AutomationCurve,
+  type AutomationParam,
+  type AutomationPoint,
   type Clip,
   type DrumPad,
   type DrumPattern,
@@ -11,8 +14,10 @@ import {
   type Note,
   type Project,
   type Step,
+  type SamplerZone,
   type SynthEngine,
   type SynthParams,
+  type TempoEvent,
   type Track,
   type TrackKind,
 } from '../audio/types';
@@ -20,6 +25,30 @@ import {
 const NERV_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
 
 export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
+
+/**
+ * Effective sampler zones for a track, migrating the legacy single-sample
+ * fields (samplerSampleId / samplerRootPitch) into a one-element zone list
+ * so the UI and store actions only ever deal with the array form. Returns
+ * a fresh array each call — safe to mutate. The migration uses a stable
+ * id (`${track.id}__legacy`) so React keys don't churn between renders
+ * until the user's first edit promotes the zone into `samplerZones`.
+ */
+export function currentSamplerZones(track: Track): SamplerZone[] {
+  if (track.samplerZones && track.samplerZones.length > 0) {
+    return track.samplerZones.map((z) => ({ ...z }));
+  }
+  if (track.samplerSampleId) {
+    return [
+      {
+        id: `${track.id}__legacy`,
+        sampleId: track.samplerSampleId,
+        rootPitch: track.samplerRootPitch ?? 60,
+      },
+    ];
+  }
+  return [];
+}
 
 /** Default scene list when a project doesn't carry one (old projects, fresh `makeProject`). */
 export function defaultScenes() {
@@ -178,6 +207,7 @@ export type View =
   | 'pianoroll'
   | 'sequencer'
   | 'fx'
+  | 'automation'
   | 'project';
 
 type State = {
@@ -186,6 +216,8 @@ type State = {
   selectedTrackId: string | null;
   /** Selected clips, in selection order. The first id is the "primary" used by per-clip editors. */
   selectedClipIds: string[];
+  /** Selected MIDI note ids (in the currently-open piano-roll clip). Not persisted — UI state for selection-aware actions like per-note humanise / quantise. */
+  selectedNoteIds: string[];
   /** In-memory clip clipboard for copy/paste/duplicate. Not part of the persisted project. */
   clipboard: Clip[];
   isPlaying: boolean;
@@ -196,6 +228,12 @@ type State = {
   bouncing: boolean;
   /** Help overlay visibility, toggled via `?` or the in-app button. */
   helpOpen: boolean;
+  /** Count-in bars for a punch-in MIDI recording. 0 = punch with no pre-roll. Not persisted. */
+  countInBars: number;
+  /** When true, the engine sends MIDI clock + transport messages to the selected output port. Not persisted. */
+  midiClockOut: boolean;
+  /** When true, the transport locks to an incoming external MIDI clock. Not persisted. */
+  midiClockIn: boolean;
   /** When true the engine schedules session loops instead of the arrangement. */
   sessionMode: boolean;
   /** Runtime map of trackId → currently-playing session clipId. Not part of the project. */
@@ -220,10 +258,18 @@ type Actions = {
 
   setBpm(bpm: number): void;
   setTimeSig(n: number, d: number): void;
+  addTempoEvent(beat: number, bpm: number): TempoEvent;
+  updateTempoEvent(id: string, patch: Partial<Pick<TempoEvent, 'beat' | 'bpm' | 'curve'>>): void;
+  removeTempoEvent(id: string): void;
+  clearTempoMap(): void;
+  setSwing(amount: number, subdivision?: string): void;
   setMasterVolume(db: number): void;
   setLoop(enabled: boolean, start?: number, end?: number): void;
   setMetronome(b: boolean): void;
   setPlaying(b: boolean): void;
+  setCountInBars(n: number): void;
+  setMidiClockOut(on: boolean): void;
+  setMidiClockIn(on: boolean): void;
 
   setSessionMode(on: boolean): void;
   setHelpOpen(open: boolean): void;
@@ -243,6 +289,15 @@ type Actions = {
   updateTrack(id: string, patch: Partial<Track>): void;
   updateSynth(id: string, patch: Partial<SynthParams>): void;
   setSynthEngine(id: string, engine: SynthEngine): void;
+  addSamplerZone(trackId: string, sampleId: string, rootPitch?: number): void;
+  updateSamplerZone(trackId: string, zoneId: string, patch: Partial<Pick<SamplerZone, 'sampleId' | 'rootPitch' | 'velMin' | 'velMax'>>): void;
+  removeSamplerZone(trackId: string, zoneId: string): void;
+
+  addAutomationPoint(trackId: string, param: AutomationParam, beat: number, value: number): AutomationPoint | null;
+  updateAutomationPoint(trackId: string, param: AutomationParam, pointId: string, patch: Partial<Pick<AutomationPoint, 'beat' | 'value' | 'curve'>>): void;
+  setAutomationPointCurve(trackId: string, param: AutomationParam, pointId: string, curve: AutomationCurve): void;
+  removeAutomationPoint(trackId: string, param: AutomationParam, pointId: string): void;
+  removeAutomationLane(trackId: string, param: AutomationParam): void;
   updateFx(id: string, patch: Partial<FxRack>): void;
 
   addClip(trackId: string, atBeat: number, lengthBeats?: number): Clip | null;
@@ -250,7 +305,7 @@ type Actions = {
   removeClip(clipId: string): void;
   moveClip(clipId: string, newStart: number): void;
   resizeClip(clipId: string, newLength: number): void;
-  updateAudioClip(clipId: string, patch: { sourceBpm?: number; warp?: boolean; gain?: number; offset?: number }): void;
+  updateAudioClip(clipId: string, patch: { sourceBpm?: number; warp?: boolean; gain?: number; offset?: number; stretchMode?: 'pitch' | 'time' }): void;
 
   setMicRecording(b: boolean): void;
   setBouncing(b: boolean): void;
@@ -260,12 +315,22 @@ type Actions = {
   setStepProbability(trackId: string, clipId: string, pad: DrumPad, step: number, p: number): void;
   setPadSample(trackId: string, pad: DrumPad, sampleId: string | null): void;
   setPatternLength(trackId: string, clipId: string, newLength: number): void;
-  quantizeClip(trackId: string, clipId: string, gridBeats: number): void;
-  humanizeClip(trackId: string, clipId: string, amount: number): void;
+  quantizeClip(trackId: string, clipId: string, gridBeats: number, noteIds?: string[]): void;
+  humanizeClip(trackId: string, clipId: string, amount: number, noteIds?: string[]): void;
 
-  addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): void;
+  selectNote(noteId: string | null): void;
+  toggleNoteSelected(noteId: string): void;
+  clearNoteSelection(): void;
+
+  addNote(trackId: string, clipId: string, note: Omit<Note, 'id'>): string;
   removeNote(trackId: string, clipId: string, noteId: string): void;
   updateNote(trackId: string, clipId: string, noteId: string, patch: Partial<Note>): void;
+  /** Move a set of notes in one atomic, history-tracked edit. Deltas can be negative; positions and pitches are clamped at 0 / [0,127]. */
+  moveNotesBy(trackId: string, clipId: string, noteIds: string[], deltaStart: number, deltaPitch: number): void;
+  /** Set the same velocity on every note in `noteIds` (or all notes in the clip if empty). */
+  setNotesVelocity(trackId: string, clipId: string, noteIds: string[], velocity: number): void;
+  /** Per-note velocity write, used by velocity-lane drags that preserve relative dynamics. */
+  setNoteVelocities(trackId: string, clipId: string, valuesById: Record<string, number>): void;
 
   loadProject(p: Project): void;
   newProject(): void;
@@ -300,11 +365,15 @@ export const useStore = create<Store>()(
     view: 'arrange',
     selectedTrackId: null,
     selectedClipIds: [],
+    selectedNoteIds: [],
     clipboard: [],
     isPlaying: false,
     metronome: false,
     micRecording: false,
     bouncing: false,
+    countInBars: 1,
+    midiClockOut: false,
+    midiClockIn: false,
     sessionMode: false,
     sessionPlaying: {},
     helpOpen: false,
@@ -411,6 +480,45 @@ export const useStore = create<Store>()(
       set({ project: p });
     },
     setTimeSig: (n, d) => set({ project: { ...get().project, numerator: n, denominator: d, updatedAt: Date.now() } }),
+    addTempoEvent: (beat, bpm) => {
+      const ev: TempoEvent = { id: newId('tmp'), beat: Math.max(0, beat), bpm: Math.max(20, Math.min(400, bpm)) };
+      const map = [...(get().project.tempoMap ?? []), ev].sort((a, b) => a.beat - b.beat);
+      commit({ ...get().project, tempoMap: map, updatedAt: Date.now() });
+      return ev;
+    },
+    updateTempoEvent: (id, patch) => {
+      const map = (get().project.tempoMap ?? []).map((ev) =>
+        ev.id !== id
+          ? ev
+          : {
+              ...ev,
+              beat: patch.beat !== undefined ? Math.max(0, patch.beat) : ev.beat,
+              bpm: patch.bpm !== undefined ? Math.max(20, Math.min(400, patch.bpm)) : ev.bpm,
+              curve: patch.curve !== undefined ? patch.curve : ev.curve,
+            },
+      );
+      map.sort((a, b) => a.beat - b.beat);
+      // not history-tracked — treat tempo-event tweaks like knob drags
+      set({ project: { ...get().project, tempoMap: map, updatedAt: Date.now() } });
+    },
+    removeTempoEvent: (id) => {
+      const map = (get().project.tempoMap ?? []).filter((ev) => ev.id !== id);
+      commit({ ...get().project, tempoMap: map.length > 0 ? map : undefined, updatedAt: Date.now() });
+    },
+    clearTempoMap: () => {
+      commit({ ...get().project, tempoMap: undefined, updatedAt: Date.now() });
+    },
+    setSwing: (amount, subdivision) => {
+      const p = get().project;
+      set({
+        project: {
+          ...p,
+          swing: Math.max(0, Math.min(1, amount)),
+          swingSubdivision: subdivision ?? p.swingSubdivision ?? '8n',
+          updatedAt: Date.now(),
+        },
+      });
+    },
     setMasterVolume: (db) =>
       set({ project: { ...get().project, master: { ...get().project.master, volume: db }, updatedAt: Date.now() } }),
     setLoop: (enabled, start, end) =>
@@ -425,6 +533,9 @@ export const useStore = create<Store>()(
       }),
     setMetronome: (b) => set({ metronome: b }),
     setPlaying: (b) => set({ isPlaying: b }),
+    setCountInBars: (n) => set({ countInBars: Math.max(0, Math.min(8, Math.round(n))) }),
+    setMidiClockOut: (on) => set({ midiClockOut: on }),
+    setMidiClockIn: (on) => set({ midiClockIn: on }),
     setMicRecording: (b) => set({ micRecording: b }),
     setBouncing: (b) => set({ bouncing: b }),
 
@@ -538,6 +649,119 @@ export const useStore = create<Store>()(
       const tracks = get().project.tracks.map((t) =>
         t.id === id ? { ...t, synthEngine: engine } : t,
       );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    addAutomationPoint: (trackId, param, beat, value) => {
+      const trackIdx = get().project.tracks.findIndex((t) => t.id === trackId);
+      if (trackIdx < 0) return null;
+      const pt: AutomationPoint = { id: newId('ap'), beat: Math.max(0, beat), value };
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = [...(t.automation ?? [])];
+        const li = lanes.findIndex((l) => l.param === param);
+        if (li < 0) {
+          lanes.push({ param, points: [pt] });
+        } else {
+          const points = [...lanes[li].points, pt].sort((a, b) => a.beat - b.beat);
+          lanes[li] = { ...lanes[li], points };
+        }
+        return { ...t, automation: lanes };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+      return pt;
+    },
+    updateAutomationPoint: (trackId, param, pointId, patch) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? []).map((lane) => {
+          if (lane.param !== param) return lane;
+          const points = lane.points
+            .map((p) =>
+              p.id !== pointId
+                ? p
+                : {
+                    ...p,
+                    beat: patch.beat !== undefined ? Math.max(0, patch.beat) : p.beat,
+                    value: patch.value !== undefined ? patch.value : p.value,
+                    curve: patch.curve !== undefined ? patch.curve : p.curve,
+                  },
+            )
+            .sort((a, b) => a.beat - b.beat);
+          return { ...lane, points };
+        });
+        return { ...t, automation: lanes };
+      });
+      // not history-tracked — point drags are knob-like
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    setAutomationPointCurve: (trackId, param, pointId, curve) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? []).map((lane) =>
+          lane.param !== param
+            ? lane
+            : {
+                ...lane,
+                points: lane.points.map((p) => (p.id === pointId ? { ...p, curve } : p)),
+              },
+        );
+        return { ...t, automation: lanes };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+    removeAutomationPoint: (trackId, param, pointId) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? [])
+          .map((lane) =>
+            lane.param !== param
+              ? lane
+              : { ...lane, points: lane.points.filter((p) => p.id !== pointId) },
+          )
+          .filter((lane) => lane.points.length > 0);
+        return { ...t, automation: lanes.length > 0 ? lanes : undefined };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+    removeAutomationLane: (trackId, param) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const lanes = (t.automation ?? []).filter((lane) => lane.param !== param);
+        return { ...t, automation: lanes.length > 0 ? lanes : undefined };
+      });
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    addSamplerZone: (trackId, sampleId, rootPitch) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const zones = currentSamplerZones(t);
+        zones.push({ id: newId('zn'), sampleId, rootPitch: rootPitch ?? 60 });
+        return { ...t, samplerZones: zones, samplerSampleId: undefined, samplerRootPitch: undefined };
+      });
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    updateSamplerZone: (trackId, zoneId, patch) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const zones = currentSamplerZones(t).map((z) =>
+          z.id === zoneId ? { ...z, ...patch } : z,
+        );
+        return { ...t, samplerZones: zones, samplerSampleId: undefined, samplerRootPitch: undefined };
+      });
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+    removeSamplerZone: (trackId, zoneId) => {
+      const tracks = get().project.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const zones = currentSamplerZones(t).filter((z) => z.id !== zoneId);
+        return {
+          ...t,
+          samplerZones: zones.length > 0 ? zones : undefined,
+          samplerSampleId: undefined,
+          samplerRootPitch: undefined,
+        };
+      });
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
     updateFx: (id, patch) => {
@@ -752,9 +976,15 @@ export const useStore = create<Store>()(
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
-    /** Snap every note's start in a MIDI clip to the nearest `gridBeats` boundary. */
-    quantizeClip: (trackId, clipId, gridBeats) => {
+    /**
+     * Snap notes' starts in a MIDI clip to the nearest `gridBeats` boundary.
+     * If `noteIds` is provided, only those notes are quantized; otherwise the
+     * whole clip is. Same shape as `humanizeClip` so selection-aware UI can
+     * pass through the active set from the piano roll.
+     */
+    quantizeClip: (trackId, clipId, gridBeats, noteIds) => {
       if (gridBeats <= 0) return;
+      const idSet = noteIds && noteIds.length > 0 ? new Set(noteIds) : null;
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -765,10 +995,11 @@ export const useStore = create<Store>()(
                   ? c
                   : {
                       ...c,
-                      notes: c.notes.map((n) => ({
-                        ...n,
-                        start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats),
-                      })),
+                      notes: c.notes.map((n) =>
+                        idSet && !idSet.has(n.id)
+                          ? n
+                          : { ...n, start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats) },
+                      ),
                     },
               ),
             },
@@ -777,13 +1008,15 @@ export const useStore = create<Store>()(
     },
 
     /**
-     * Randomly perturb every note in a clip — velocity by ±amount, start by
+     * Randomly perturb notes in a clip — velocity by ±amount, start by
      * ±amount*0.08 beats. Mechanical loops sound more played when humanised
      * a touch; over-humanising starts to feel sloppy. `amount` is 0..1.
+     * If `noteIds` is provided, only those notes are perturbed.
      */
-    humanizeClip: (trackId, clipId, amount) => {
+    humanizeClip: (trackId, clipId, amount, noteIds) => {
       const a = Math.max(0, Math.min(1, amount));
       if (a === 0) return;
+      const idSet = noteIds && noteIds.length > 0 ? new Set(noteIds) : null;
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -794,11 +1027,15 @@ export const useStore = create<Store>()(
                   ? c
                   : {
                       ...c,
-                      notes: c.notes.map((n) => ({
-                        ...n,
-                        velocity: Math.max(0.05, Math.min(1, n.velocity + (Math.random() - 0.5) * 2 * a * 0.3)),
-                        start: Math.max(0, n.start + (Math.random() - 0.5) * 2 * a * 0.08),
-                      })),
+                      notes: c.notes.map((n) =>
+                        idSet && !idSet.has(n.id)
+                          ? n
+                          : {
+                              ...n,
+                              velocity: Math.max(0.05, Math.min(1, n.velocity + (Math.random() - 0.5) * 2 * a * 0.3)),
+                              start: Math.max(0, n.start + (Math.random() - 0.5) * 2 * a * 0.08),
+                            },
+                      ),
                     },
               ),
             },
@@ -806,7 +1043,15 @@ export const useStore = create<Store>()(
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
+    selectNote: (noteId) => set({ selectedNoteIds: noteId ? [noteId] : [] }),
+    toggleNoteSelected: (noteId) => {
+      const cur = get().selectedNoteIds;
+      set({ selectedNoteIds: cur.includes(noteId) ? cur.filter((x) => x !== noteId) : [...cur, noteId] });
+    },
+    clearNoteSelection: () => set({ selectedNoteIds: [] }),
+
     addNote: (trackId, clipId, note) => {
+      const noteId = newId('n');
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -815,11 +1060,12 @@ export const useStore = create<Store>()(
               clips: t.clips.map((c) =>
                 c.id !== clipId || c.kind !== 'midi'
                   ? c
-                  : { ...c, notes: [...c.notes, { ...note, id: newId('n') }] },
+                  : { ...c, notes: [...c.notes, { ...note, id: noteId }] },
               ),
             },
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() });
+      return noteId;
     },
 
     removeNote: (trackId, clipId, noteId) => {
@@ -850,6 +1096,81 @@ export const useStore = create<Store>()(
             },
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    moveNotesBy: (trackId, clipId, noteIds, deltaStart, deltaPitch) => {
+      if (noteIds.length === 0) return;
+      if (deltaStart === 0 && deltaPitch === 0) return;
+      const idSet = new Set(noteIds);
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) =>
+                        idSet.has(n.id)
+                          ? {
+                              ...n,
+                              start: Math.max(0, n.start + deltaStart),
+                              pitch: Math.max(0, Math.min(127, n.pitch + deltaPitch)),
+                            }
+                          : n,
+                      ),
+                    },
+              ),
+            },
+      );
+      commit({ ...get().project, tracks, updatedAt: Date.now() });
+    },
+
+    setNotesVelocity: (trackId, clipId, noteIds, velocity) => {
+      const v = Math.max(0.05, Math.min(1, velocity));
+      const idSet = noteIds.length > 0 ? new Set(noteIds) : null;
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) => (!idSet || idSet.has(n.id) ? { ...n, velocity: v } : n)),
+                    },
+              ),
+            },
+      );
+      // not history-tracked — velocity drags are knob-like
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
+    },
+
+    setNoteVelocities: (trackId, clipId, valuesById) => {
+      const tracks = get().project.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId || c.kind !== 'midi'
+                  ? c
+                  : {
+                      ...c,
+                      notes: c.notes.map((n) =>
+                        valuesById[n.id] === undefined
+                          ? n
+                          : { ...n, velocity: Math.max(0.05, Math.min(1, valuesById[n.id])) },
+                      ),
+                    },
+              ),
+            },
+      );
+      set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
 
     loadProject: (p) => set({ project: p, selectedClipIds: [], selectedTrackId: null, past: [], future: [] }),

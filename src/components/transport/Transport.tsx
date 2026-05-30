@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { shallow } from 'zustand/shallow';
 import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
+import { midiInput } from '../../audio/midiInput';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { putSample } from '../../state/sampleDB';
@@ -11,6 +12,7 @@ export function Transport() {
   const micRecording = useStore((s) => s.micRecording);
   const bouncing = useStore((s) => s.bouncing);
   const metronome = useStore((s) => s.metronome);
+  const countInBars = useStore((s) => s.countInBars);
   const loopEnabled = useStore((s) => s.project.loopEnabled);
   const bpm = useStore((s) => s.project.bpm);
   const canUndo = useStore((s) => s.past.length > 0);
@@ -22,6 +24,7 @@ export function Transport() {
   const setMicRecording = useStore((s) => s.setMicRecording);
   const setBouncing = useStore((s) => s.setBouncing);
   const setLoop = useStore((s) => s.setLoop);
+  const setCountInBars = useStore((s) => s.setCountInBars);
   const addTrack = useStore((s) => s.addTrack);
   const addAudioClip = useStore((s) => s.addAudioClip);
   const undo = useStore((s) => s.undo);
@@ -66,6 +69,37 @@ export function Transport() {
     audioEngine.stop();
     setPlaying(false);
     transportClock.set(0);
+    // clearing the punch gate so a subsequent plain record captures everything
+    midiInput.setRecordGate(null);
+  }
+
+  /**
+   * Punch-in record: roll the transport from `countInBars` bars BEFORE the
+   * current playhead so the player gets a metronome pre-roll, but gate MIDI
+   * capture at the playhead — pre-roll bars monitor live without recording.
+   * With countInBars = 0 it's a straight punch-in at the playhead.
+   */
+  async function punchRecord() {
+    await audioEngine.init();
+    if (playing) {
+      stop();
+      return;
+    }
+    const st = useStore.getState();
+    const armed = st.project.tracks.find((t) => t.kind === 'synth' && t.arm);
+    if (!armed) {
+      alert('Arm a synth track first — the ● button in its track header.');
+      return;
+    }
+    const numerator = st.project.numerator;
+    const punchBeat = transportClock.getSnapshot();
+    const startBeat = Math.max(0, punchBeat - countInBars * numerator);
+    audioEngine.stop();
+    seek(startBeat);
+    midiInput.setRecordGate(punchBeat);
+    if (!metronome) setMetronome(true);
+    await audioEngine.play();
+    setPlaying(true);
   }
 
   async function toggleMicRec() {
@@ -166,6 +200,30 @@ export function Transport() {
           ●{lbl(micRecording ? 'STOP REC' : 'MIC REC')}
         </button>
         <button
+          className={`nerv-btn nerv-btn--rec touch-target ${playing ? 'is-active' : ''}`}
+          onClick={punchRecord}
+          title={
+            countInBars > 0
+              ? `Punch-in MIDI record with a ${countInBars}-bar count-in onto the armed synth track`
+              : 'Punch-in MIDI record at the playhead onto the armed synth track'
+          }
+        >
+          ⏺{lbl('PUNCH')}
+        </button>
+        <select
+          className="display touch-target"
+          value={countInBars}
+          onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
+          title="Count-in bars before a punch-in record"
+          style={{ minWidth: isMobile ? 44 : 64 }}
+        >
+          {[0, 1, 2, 4].map((n) => (
+            <option key={n} value={n}>
+              {isMobile ? `${n}` : `CI ${n}`}
+            </option>
+          ))}
+        </select>
+        <button
           className={`nerv-btn nerv-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
           onClick={toggleBounce}
           aria-pressed={bouncing}
@@ -251,10 +309,39 @@ export function Transport() {
         style={{ width: isMobile ? 100 : 160, flex: isMobile ? 1 : undefined }}
       />
 
+      <PreRollIndicator numerator={tparams.numerator} />
       <PositionBar />
     </div>
   );
 }
+
+/**
+ * PreRollIndicator — shows a "PRE-ROLL n" countdown while the transport is
+ * inside the punch-in pre-roll (position before the MIDI record gate).
+ * Renders nothing once recording is live, so it's invisible during normal
+ * playback. Memoized + playhead-subscribed so only this leaf re-renders.
+ */
+const PreRollIndicator = memo(function PreRollIndicator({ numerator }: { numerator: number }) {
+  const position = usePlayhead();
+  const playing = useStore((s) => s.isPlaying);
+  const gate = midiInput.getRecordGate();
+  if (!playing || !isFinite(gate) || position >= gate) return null;
+  const barsLeft = Math.ceil((gate - position) / Math.max(1, numerator));
+  return (
+    <div
+      className="hud-readout blink"
+      style={{
+        fontSize: 10,
+        padding: '2px 8px',
+        color: '#ff5a5a',
+        border: '1px solid rgba(255,60,60,0.6)',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      ⏺ PRE-ROLL {barsLeft}
+    </div>
+  );
+});
 
 const PositionBar = memo(function PositionBar() {
   const totalBeats = useStore((s) => s.project.lengthBars * s.project.numerator);

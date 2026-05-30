@@ -26,6 +26,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
   const selected = useStore((s) => s.selectedTrackId === track.id);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateTrack = useStore((s) => s.updateTrack);
+  const projectSwing = useStore((s) => s.project.swing ?? 0);
 
   return (
     <div
@@ -50,15 +51,26 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
       <div className="hud-label" style={{ fontSize: 8, textAlign: 'center' }}>
         {track.name}
       </div>
-      <Knob
-        value={track.pan}
-        min={-1}
-        max={1}
-        size={36}
-        label="PAN"
-        display={(v) => (v === 0 ? 'C' : v < 0 ? `L${Math.round(-v * 100)}` : `R${Math.round(v * 100)}`)}
-        onChange={(v) => updateTrack(track.id, { pan: v })}
-      />
+      <div style={{ display: 'flex', gap: 4 }}>
+        <Knob
+          value={track.pan}
+          min={-1}
+          max={1}
+          size={36}
+          label="PAN"
+          display={(v) => (v === 0 ? 'C' : v < 0 ? `L${Math.round(-v * 100)}` : `R${Math.round(v * 100)}`)}
+          onChange={(v) => updateTrack(track.id, { pan: v })}
+        />
+        <Knob
+          value={track.swing ?? projectSwing}
+          min={0}
+          max={1}
+          size={36}
+          label="SWING"
+          display={(v) => `${Math.round(v * 100)}%`}
+          onChange={(v) => updateTrack(track.id, { swing: v })}
+        />
+      </div>
       <div style={{ display: 'flex', gap: 4 }}>
         <button
           className={`nerv-btn nerv-btn--icon ${track.mute ? 'is-active' : ''}`}

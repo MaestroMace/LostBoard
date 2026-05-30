@@ -1,6 +1,6 @@
 # LostBoard — branch status & handoff notes
 
-Branch: `claude/evangelion-daw-app-tdqb7` (PR #1)
+Branch: `claude/plan-next-features-UGd6m` (post-PR-#1 follow-up round)
 
 A running record of what's been built on this branch, what's known to be
 incomplete or rough, and where to pick up next. Update this file when you
@@ -39,6 +39,34 @@ out here is wired into the running app — type-check + build pass clean.
 - **Consistency pass** (`840ed4f`) — shared `EditorTip` component, unified
   empty-state copy, MAGI codename added to the Synth panel for parity.
 
+### Feature rounds (this branch, recent → older)
+
+| Commit | Feature | Notes |
+| --- | --- | --- |
+| `4052116` | **MIDI clock input** | Transport locks to an external clock — BPM re-derived per quarter from a 24-pulse average; start/continue/stop drive the transport. CLOCK IN toggle in the MIDI SYNC panel. |
+| `f0a4f10` | **User-loadable wavetables** | `partialsFromBuffer` DFTs an imported sample's most energetic window into a 32-harmonic series; POSITION morphs sine → that wave. LOAD WAVETABLE button + live spectrum view. |
+| `65c50a6` | **iOS lock-screen transport** | Muted looping silent `<audio>` keep-alive so iOS Safari surfaces MediaSession play/pause/stop while the transport rolls. |
+| `9580b96` | **Session-view audio clips** | Audio clips fire from session cells — scheduleSession pre-builds a Player and the cell loop restarts it each cycle. |
+| `a2711c3` | **Per-track swing** | Swing moved off Tone.Transport's global swing to a per-note offset baked at schedule time; per-track override via a SWING knob in the mixer strip. |
+| `292fabe` | **Stacked arrange automation overlay** | The arrange "A" toggle now reveals every automation lane a track owns, stacked under the clip row, instead of one param at a time. |
+| `27ce3d1` | **MIDI clock output** | Engine sends 24-PPQN timing clock + start/continue/stop realtime messages to the selected Web MIDI port. MIDI SYNC panel in the PROJECT view. |
+| `67bd7a6` | **Bit-crusher automation** | `crusher.bits` is a real Param, so 'bitcrush' joins the automation targets (1..16 bits, smooth ramps). |
+| `b2f428e` | **Sidechain attack/release split** | Two Tone.Followers (fast/slow) combined by a signal-domain max — genuinely asymmetric attack vs release, replacing the geometric-mean compromise. |
+| `ccea615` | **Web MIDI output** | midiOutput bridge schedules note-on/off to an external port (audio→performance.now clock rebase). Per-track midiOutChannel routes notes to hardware instead of the internal voice. SynthPanel MIDI OUT panel. |
+| `20ac147` | **MIDI punch-in record** | ⏺ PUNCH transport button with a 0/1/2/4-bar count-in pre-roll; midiInput gates capture at the playhead so pre-roll bars monitor without recording. PRE-ROLL countdown indicator. |
+| `a42bacb` | **Sampler velocity layers** | SamplerZone gains velMin/velMax; zones sharing a range form a layer, one Tone.Sampler each, picked by note velocity on trigger. |
+| `d2cc938` | **Multi-zone sampler** | Sampler engine takes a SamplerZone[] (sampleId + rootPitch); Tone.Sampler interpolates between zones. Legacy single-sample fields migrate on the fly. Zone-table UI. |
+| `6401c4f` | **Global swing / groove** | Project.swing (0..1) + swingSubdivision drive Tone.Transport's built-in swing; applies live to scheduled events. SWING slider in PROJECT settings. |
+| `49ad6c8` | **Tempo curve preview + sample GC** | Read-only BPM sparkline above the tempo events table. `gcOrphanedSamples` deletes IndexedDB blobs no slot/project references (⌫ GC SAMPLES button). |
+| `c5c6cfc` | **FX-rack automation targets** | eqLow/Mid/High + compThreshold/Ratio added to AutomationParam; applyFx/applySends skip params under automation so a knob tweak can't stomp scheduled values. |
+| `1527d59` | **MAGI ticker telemetry + PWA install** | Ticker rotates through live engine readings (master peak dB, transport state, BPM, mode, track/clip/automation/tempo counts, MIDI device) plus a smaller pool of flavor lines. PROJECT view captures `beforeinstallprompt` and surfaces a ⬇ INSTALL TO HOME button on Chromium PWAs. |
+| `901a267` | **Per-note humanise/quantise + audio time-stretch** | Piano-roll notes are selectable (click / Cmd+click toggles / shift still deletes); QUANTIZE / HUMANIZE honour the selection. Audio clips gain `stretchMode: 'pitch' \| 'time'` — 'time' builds a Tone.GrainPlayer so pitch is preserved across tempo changes. |
+| `2caf4db` | **Curve modes + tempo ramps + arrange-view automation overlay** | AutomationPoint.curve dispatches setValueAtTime / linear / exponential / hold/step ramps. TempoEvent.curve adds 'ramp' (linear BPM glides via Transport.bpm.linearRampToValueAtTime). Each track in Arrange gets an "A" toggle that opens an inline lane with the same click/drag/dbl-click semantics as the AUTOMATION tab. |
+| `3f144ba` | **Automation lanes** | Per-track AutomationLane[] for volume / pan / cutoff / reverb / delay; engine chains `linearRampToValueAtTime` between points so the curve survives tempo changes. AUTOMATION tab: SVG sparkline (click-add, drag, dbl-click delete) + numeric points table. |
+| `4acf052` | **Tempo map** | Optional Project.tempoMap of (beat, bpm) events; engine queues `Transport.bpm.setValueAtTime` per event. PROJECT view sparse table editor. Offline bounce duration walks the map. |
+| `9a63ca4` | **Wavetable + chromatic sampler** | Two new SynthEngine values plugged into the synth track. Wavetable morphs partials across 4 frames via a POSITION knob; sampler uses Tone.Sampler over the runtime bank with a root-pitch knob and upload picker. |
+| `f1647c0` | **Offline bounce** | `Engine.bounceOffline` builds a parallel Engine inside `Tone.Offline` so the global Tone context swap binds new nodes to the offline destination. Master + per-track offline stems (16-bit PCM WAV). Tone.Recorder skipped when context isn't realtime. |
+
 ### Feature rounds (PR #1, recent → older)
 
 | Commit | Feature | Notes |
@@ -66,13 +94,10 @@ out here is wired into the running app — type-check + build pass clean.
 
 Things that work but have a trade-off worth flagging:
 
-- **Audio clip warp is varispeed.** Pitch shifts with tempo because we set
-  `player.playbackRate` directly. True time-stretch needs `Tone.GrainPlayer`
-  or a custom phase-vocoder.
-- **Sidechain attack/release are merged.** `Tone.Follower` in the version
-  we pin takes a single `smoothing` arg, so the two UI knobs feed
-  `sqrt(attack·release)`. State shape already carries both for forward
-  compatibility — a real split would chain two followers with `Tone.Max`.
+- **Audio clip warp defaults to varispeed.** `stretchMode: 'pitch'` sets
+  `player.playbackRate` directly (pitch follows tempo). `stretchMode:
+  'time'` switches to `Tone.GrainPlayer` for pitch-preserving granular
+  stretch — pick it per clip in the AudioClipInspector.
 - **Stems don't include reverb/delay tails.** Those processors live on the
   master bus, so per-track taps capture the dry-with-FX signal. Usually
   what you want when remixing, but worth knowing.
@@ -89,37 +114,58 @@ Things that work but have a trade-off worth flagging:
 - **Undo history can fill quickly during a MIDI record session** since
   every `addNote` is its own commit. The 80-deep cap protects memory but
   you may want a "merge MIDI take into one history entry" pass later.
-- **No automation lanes.** Continuous param edits (volume, cutoff, etc.)
-  don't record or play back as automation.
-- **Stem export is real-time.** No `Tone.Offline` bounce yet; long
-  projects bounce in their own length.
+## Known limitations / rough edges on the new round
+
+- **Chorus depth isn't automatable.** `chorus.depth` is a plain setter,
+  not a signal — unlike the EQ / comp / bitcrush params it can't take
+  AudioParam ramps. Everything else in the FX rack is automatable.
+- **Wavetable import is a spectral reinterpretation.** `partialsFromBuffer`
+  treats an FFT window's magnitude spectrum as a harmonic series rather
+  than extracting a literal single cycle — characterful but not a faithful
+  reproduction of the source waveform.
+- **MIDI clock-in is BPM-follow, not a PLL.** The transport matches the
+  external tempo and start/stop, but there's no sample-accurate phase
+  lock, so long sessions can drift slightly in phase.
+- **Sampler decay folds into release.** Tone.Sampler exposes only
+  attack/release, so the ADSR decay/sustain knobs don't fully apply.
+  Key zones + velocity layers both work.
+- **GrainPlayer time-stretch isn't free.** The granular path has more
+  CPU cost than the varispeed Player and audible grain artifacts on
+  large stretch ratios. Default stretchMode stays 'pitch'.
+- **Offline render rebuilds the full graph per stem.** N stems = N
+  separate Tone.Offline passes (one per track, others muted). Still
+  much faster than realtime on any non-trivial project, but a
+  single-pass multi-channel renderer would be cheaper.
+- **Per-clip swing.** Swing is global + per-track today; per-clip
+  groove would need a clip inspector for MIDI / pattern clips.
 
 ## Roadmap — what's next, ranked
 
-Highest-leverage to lowest, based on what I'd reach for after this:
+The original ranked roadmap is fully cleared. Remaining nice-to-haves,
+highest-leverage to lowest:
 
-1. **Automation lanes per parameter.** The single biggest missing DAW
-   feature. Would need a per-track automation model, a curve UI in Arrange,
-   and engine `scheduleAutomation` that ramps params over time.
-2. **Offline bounce via `Tone.Offline`.** Faster-than-real-time master and
-   stem export. Mostly mechanical given the existing recorder paths.
-3. **Tempo automation / tempo map.** BPM changes over time.
-4. **Wavetable instrument + chromatic sampler.** Round out the synth side
-   beyond subtractive and FM.
-5. **Note humanise/quantise per-note, not whole-clip.** Honour
-   `selectedNoteIds` (which doesn't exist yet — would mirror the clip
-   selection refactor we did).
-6. **Audio time-stretch (real, not varispeed).** Drop in `GrainPlayer` or
-   build a small offline-resampled cache per source-BPM.
-7. **MIDI clip from arrange recording.** Today the MIDI bridge writes into
-   the armed synth track's active clip — wire a dedicated punch-in mode
-   with a pre-roll countdown.
-8. **Web MIDI output / external sync.** Send notes to a hardware synth
-   over MIDI; sync transport to MIDI clock.
-9. **Sidechain attack/release split.** Replace the geometric-mean follower
-   with two followers fed through `Tone.Max`.
-10. **PWA install prompt + iOS silent-audio hack.** For lock-screen
-    transport on iOS specifically.
+1. **Per-clip groove.** A clip inspector for MIDI / pattern clips would
+   let a single part swing independently of its track.
+2. **Single-pass multi-channel offline stems.** One Tone.Offline render
+   with a per-track channel split instead of N passes — needs raw
+   Web Audio multi-channel routing.
+3. **Sampler decay/sustain.** Tone.Sampler exposes only attack/release —
+   a custom amp envelope would restore the full ADSR.
+4. **MIDI clock-in phase lock.** Current sync-in is BPM-follow; a true
+   PLL would hold phase over long sessions.
+5. **Wavetable cycle extraction.** Detect a true single cycle from an
+   imported sample instead of the spectral reinterpretation.
+
+### Done on this branch
+
+Offline bounce, wavetable + sampler engines, tempo map (+ ramps), full
+automation lanes (curve modes, FX-rack targets, arrange overlay),
+per-note humanise/quantise, audio time-stretch, MAGI ticker telemetry,
+PWA install, tempo curve preview, orphaned-sample GC, global + per-track
+swing, multi-zone sampler with velocity layers, MIDI punch-in with
+pre-roll, Web MIDI note output, MIDI clock in + out, sidechain
+attack/release split, session-view audio clips, iOS lock-screen
+transport, and user-loadable wavetables.
 
 ## Repo layout cheatsheet
 
@@ -127,15 +173,18 @@ Highest-leverage to lowest, based on what I'd reach for after this:
 src/
   App.tsx                          # top-level shell, boot, tabs, help overlay mount
   audio/
-    engine.ts                      # AudioEngine + TrackNode + Instrument
-    midiInput.ts                   # Web MIDI bridge (singleton)
-    types.ts                       # Project / Track / Clip / FxRack / SynthParams
+    engine.ts                      # AudioEngine + TrackNode + Instrument (+ offline bounce)
+    midiInput.ts                   # Web MIDI input bridge (singleton)
+    midiOutput.ts                  # Web MIDI output bridge (singleton)
+    wav.ts                         # AudioBuffer → 16-bit PCM WAV encoder
+    types.ts                       # Project / Track / Clip / FxRack / SynthParams / automation
   components/
-    arrange/ArrangeView.tsx        # timeline, clips, loop region, AudioClipInspector
+    arrange/ArrangeView.tsx        # timeline, clips, loop region, automation overlay
+    automation/AutomationView.tsx  # per-track automation lane editor
     session/SessionView.tsx        # scenes × tracks launcher
     sequencer/StepSequencer.tsx    # pad rows, prob mode, pad sample swap
-    pianoroll/PianoRoll.tsx        # notes, scale lock, quantize, humanize
-    instrument/SynthPanel.tsx      # subtractive + FM editors
+    pianoroll/PianoRoll.tsx        # notes, scale lock, quantize, humanize, selection
+    instrument/SynthPanel.tsx      # subtractive / FM / wavetable / sampler editors
     fx/FxPanel.tsx                 # EQ / comp / chorus / crush / sidechain
     mixer/MixerView.tsx            # channel strips + master
     project/ProjectView.tsx        # project settings, SlotLibrary, stem export

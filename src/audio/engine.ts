@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { midiOutput } from './midiOutput';
 import type {
   DrumPad,
   SynthParams,
@@ -7,6 +8,7 @@ import type {
   Clip,
   FxRack,
   SynthEngine,
+  AutomationParam,
 } from './types';
 
 /**
@@ -33,6 +35,12 @@ class Engine {
   private metronomeSynth?: Tone.MembraneSynth;
   private metronomeEvent?: number;
   metronomeEnabled = false;
+  private midiClockEvent?: number;
+  private midiClockEnabled = false;
+  /** Project-global groove, applied per note by the scheduler. */
+  private globalSwing = 0;
+  /** Swing subdivision in beats — 0.5 = 1/8, 0.25 = 1/16. */
+  private globalSwingSubdiv = 0.5;
 
   // recording
   private mic?: Tone.UserMedia;
@@ -61,8 +69,14 @@ class Engine {
     this.master.connect(this.fft);
     this.master.connect(this.masterMeter);
     this.master.toDestination();
-    this.masterRecorder = new Tone.Recorder();
-    this.master.connect(this.masterRecorder);
+    // Tone.Recorder wraps MediaRecorder, which doesn't exist on
+    // OfflineAudioContext. Inside Tone.Offline the global context is offline
+    // for the duration of the callback — skip the recorder there so a fresh
+    // Engine() can be init'd offline without throwing.
+    if (isRealtimeContext()) {
+      this.masterRecorder = new Tone.Recorder();
+      this.master.connect(this.masterRecorder);
+    }
     this.inited = true;
   }
 
@@ -84,6 +98,26 @@ class Engine {
 
   setTimeSig(num: number, den: number) {
     Tone.getTransport().timeSignature = [num, den];
+  }
+
+  /**
+   * Project-global groove. Stored (not pushed to Tone.Transport.swing,
+   * which is global-only) so the scheduler can apply swing per note and
+   * honour per-track overrides. `amount` 0..1; subdivision '8n' or '16n'.
+   */
+  setSwing(amount: number, subdivision = '8n') {
+    this.globalSwing = Math.max(0, Math.min(1, amount));
+    this.globalSwingSubdiv = subdivision === '16n' ? 0.25 : 0.5;
+  }
+
+  /** Swing-shifted beat position: off-grid subdivisions get dragged late. */
+  private swungBeat(beat: number, amount: number): number {
+    if (amount <= 0) return beat;
+    const sub = this.globalSwingSubdiv;
+    // which subdivision slot the event sits in; odd slots are the off-beats
+    const idx = Math.round(beat / sub);
+    if (idx % 2 === 1) return beat + (amount * sub) / 3;
+    return beat;
   }
 
   setMasterVolume(db: number) {
@@ -126,16 +160,46 @@ class Engine {
 
   async play() {
     if (!this.inited) await this.init();
+    if (this.midiClockEnabled) {
+      // start (0xFA) resets the external sequencer to bar 1; continue
+      // (0xFB) resumes mid-song — pick by current transport position
+      midiOutput.sendTransport(Tone.getTransport().ticks === 0 ? 'start' : 'continue');
+    }
     Tone.getTransport().start('+0.05');
   }
 
   pause() {
     Tone.getTransport().pause();
+    if (this.midiClockEnabled) midiOutput.sendTransport('stop');
   }
 
   stop() {
     Tone.getTransport().stop();
     Tone.getTransport().position = 0;
+    if (this.midiClockEnabled) midiOutput.sendTransport('stop');
+    // safety net for external gear — clear any notes still ringing
+    midiOutput.allNotesOff();
+  }
+
+  /**
+   * Toggle MIDI clock output. When enabled, a transport-locked repeat fires
+   * 24 pulses per quarter note (8 ticks at the default 192 PPQ) to the
+   * selected Web MIDI port, plus start/continue/stop realtime messages on
+   * transport changes — so external gear locks to LostBoard's tempo,
+   * including tempo-map changes since the repeat is transport-relative.
+   */
+  setMidiClockEnabled(on: boolean) {
+    this.midiClockEnabled = on;
+    if (this.midiClockEvent !== undefined) {
+      Tone.getTransport().clear(this.midiClockEvent);
+      this.midiClockEvent = undefined;
+    }
+    if (on) {
+      this.midiClockEvent = Tone.getTransport().scheduleRepeat((time) => {
+        midiOutput.sendClockPulse(time);
+      }, '8i');
+      if (this.isPlaying()) midiOutput.sendTransport('continue');
+    }
   }
 
   setPosition(beats: number) {
@@ -164,6 +228,15 @@ class Engine {
     return this.sampleBank.has(id);
   }
 
+  listSampleIds(): string[] {
+    return Array.from(this.sampleBank.keys());
+  }
+
+  /** Drop a sample from the runtime bank (used by orphaned-sample GC). */
+  dropSample(id: string): void {
+    this.sampleBank.delete(id);
+  }
+
   /** Decode an arbitrary audio File/Blob into the bank under a fresh id. */
   async loadAudioFile(file: Blob): Promise<{ id: string; duration: number }> {
     const id = `smp_${Math.random().toString(36).slice(2, 10)}`;
@@ -178,6 +251,12 @@ class Engine {
     const audioBuf = await Tone.getContext().rawContext.decodeAudioData(arrayBuf);
     this.sampleBank.set(id, audioBuf);
     return audioBuf.duration;
+  }
+
+  /** Decode a blob to an AudioBuffer WITHOUT storing it in the bank (for analysis). */
+  async decodeOnly(blob: Blob): Promise<AudioBuffer> {
+    const arrayBuf = await blob.arrayBuffer();
+    return Tone.getContext().rawContext.decodeAudioData(arrayBuf);
   }
 
   // ---------- MIC RECORDING ----------
@@ -267,6 +346,75 @@ class Engine {
     return await this.masterRecorder.stop();
   }
 
+  /**
+   * Render the project faster-than-real-time via `Tone.Offline`.
+   *
+   * `Tone.Offline` swaps Tone's default context to an `OfflineAudioContext`
+   * for the duration of the callback, so any `new Tone.*` constructed inside
+   * binds to that offline graph. We exploit that by spinning up a fresh
+   * `Engine` *inside* the callback, copying our sample bank into it, and
+   * scheduling the project against the offline transport. AudioBuffers are
+   * shareable across contexts so the sample bank copy is just reference
+   * passing.
+   *
+   * `mutedTrackIds` is used by the stems variant to render one track at a
+   * time without disposing/rebuilding the offline graph for each.
+   */
+  async bounceOffline(
+    project: Project,
+    durationSec: number,
+    options?: { mutedTrackIds?: Set<string> },
+  ): Promise<AudioBuffer> {
+    const sampleEntries = Array.from(this.sampleBank.entries());
+    const muted = options?.mutedTrackIds;
+    const toneBuf = await Tone.Offline(async ({ transport }) => {
+      const offline = new Engine();
+      for (const [id, buf] of sampleEntries) offline.registerSample(id, buf);
+      await offline.init();
+      offline.setBpm(project.bpm);
+      offline.setTimeSig(project.numerator, project.denominator);
+      offline.setSwing(project.swing ?? 0, project.swingSubdivision ?? '8n');
+      offline.setMasterVolume(project.master.volume);
+      const renderedTracks = muted
+        ? project.tracks.map((t) =>
+            muted.has(t.id) ? { ...t, mute: true } : t,
+          )
+        : project.tracks;
+      const renderedProject = muted ? { ...project, tracks: renderedTracks } : project;
+      for (const t of renderedTracks) offline.ensureTrack(t);
+      offline.applySidechains(renderedProject);
+      offline.schedule(renderedProject);
+      transport.start(0);
+    }, durationSec);
+    return toneBuf.get() as AudioBuffer;
+  }
+
+  /**
+   * Offline stems: bounce each track individually by running N offline
+   * renders, muting every other track. Each render is faster-than-real-time,
+   * so the total wall-clock cost is roughly N × (renderRatio · projectDur)
+   * — still vastly faster than the real-time `bounceStems` path on long
+   * projects, and unlike the real-time path the result is a clean WAV per
+   * track with no transport jitter.
+   */
+  async bounceStemsOffline(
+    project: Project,
+    durationSec: number,
+    onProgress?: (i: number, total: number, name: string) => void,
+  ): Promise<{ name: string; buffer: AudioBuffer }[]> {
+    const out: { name: string; buffer: AudioBuffer }[] = [];
+    const total = project.tracks.length;
+    for (let i = 0; i < total; i++) {
+      const target = project.tracks[i];
+      onProgress?.(i, total, target.name || target.id);
+      const muted = new Set(project.tracks.filter((t) => t.id !== target.id).map((t) => t.id));
+      const buffer = await this.bounceOffline(project, durationSec, { mutedTrackIds: muted });
+      out.push({ name: target.name || target.id, buffer });
+    }
+    onProgress?.(total, total, '');
+    return out;
+  }
+
   // ---------- TRACK MANAGEMENT ----------
 
   ensureTrack(track: Track) {
@@ -300,13 +448,20 @@ class Engine {
 
   trigger(trackId: string, pitch: number | DrumPad, velocity = 0.9, duration = '8n') {
     const node = this.trackNodes.get(trackId);
-    node?.trigger(pitch, velocity, duration);
+    if (!node) return;
+    if (node.midiOutChannel && typeof pitch === 'number') {
+      midiOutput.sendNoteNow(node.midiOutChannel, pitch, velocity);
+      return;
+    }
+    node.trigger(pitch, velocity, duration);
   }
 
   /** Schedule the entire project's clip content onto the transport. */
   schedule(project: Project) {
     if (!this.inited) return;
     this.clearArrangement();
+
+    this.scheduleTempoMap(project);
 
     for (const track of project.tracks) {
       const node = this.ensureTrack(track);
@@ -315,6 +470,102 @@ class Engine {
       for (const clip of track.clips) {
         this.scheduleClip(clip, node, project);
       }
+      this.scheduleAutomation(track, node);
+    }
+  }
+
+  /**
+   * Wire each automation lane onto its target AudioParam. Per breakpoint we
+   * queue a transport callback at the right beat that calls either
+   * `setValueAtTime` (first point) or `linearRampToValueAtTime` (subsequent
+   * points). Web Audio guarantees the ramp starts from the value of the
+   * previous scheduled event, so chaining linear ramps yields a piecewise-
+   * linear curve that survives tempo changes too — the callback fires at
+   * the right audio time regardless of how bpm shifts in between.
+   *
+   * Lanes with fewer than 1 point are skipped; param lookup that returns
+   * undefined (e.g. cutoff on an audio track with no filter) is silently
+   * ignored so projects with stale automation don't break.
+   */
+  private scheduleAutomation(track: Track, node: TrackNode) {
+    const lanes = track.automation;
+    if (!lanes || lanes.length === 0) return;
+    const t = Tone.getTransport();
+    for (const lane of lanes) {
+      const param = node.getAutomationParam(lane.param);
+      if (!param) continue;
+      const points = [...lane.points].sort((a, b) => a.beat - b.beat);
+      points.forEach((pt, i) => {
+        const curve = pt.curve ?? 'linear';
+        const prev = points[i - 1];
+        const id = t.schedule((time) => {
+          try {
+            if (i === 0) {
+              param.setValueAtTime(pt.value, time);
+              return;
+            }
+            switch (curve) {
+              case 'step':
+                param.setValueAtTime(pt.value, time);
+                break;
+              case 'hold':
+                // keep the previous value all the way until `time`, then jump
+                if (prev) param.setValueAtTime(prev.value, time);
+                param.setValueAtTime(pt.value, time);
+                break;
+              case 'exponential': {
+                // exponentialRampToValueAtTime rejects 0/negative — clamp.
+                const target = pt.value === 0 ? 0.00001 : Math.sign(pt.value) * Math.max(Math.abs(pt.value), 0.00001);
+                param.exponentialRampToValueAtTime(target, time);
+                break;
+              }
+              case 'linear':
+              default:
+                param.linearRampToValueAtTime(pt.value, time);
+                break;
+            }
+          } catch {
+            /* param may have been disposed mid-schedule */
+          }
+        }, beatsToBarsBeats(pt.beat));
+        this.scheduledIds.push(id);
+      });
+    }
+  }
+
+  /**
+   * Apply the project's tempo map onto the transport. The earliest event
+   * (typically at beat 0) sets the starting BPM immediately; later events
+   * fire as the transport reaches their beat position via
+   * `Transport.bpm.setValueAtTime`, so all bar-relative scheduling beyond
+   * that point automatically runs at the new tempo.
+   *
+   * Skips silently if the map is empty / absent — callers stick with
+   * `project.bpm` set imperatively.
+   */
+  private scheduleTempoMap(project: Project) {
+    const map = project.tempoMap;
+    if (!map || map.length === 0) return;
+    const sorted = [...map].sort((a, b) => a.beat - b.beat);
+    const t = Tone.getTransport();
+    // immediate apply for the earliest event so the first note is at the
+    // right tempo even before the scheduler fires
+    if (sorted[0].beat <= 0.0001) {
+      t.bpm.value = sorted[0].bpm;
+    }
+    for (const ev of sorted) {
+      if (ev.beat <= 0.0001) continue;
+      const id = t.schedule((time) => {
+        if (ev.curve === 'ramp') {
+          // chains from whatever was scheduled before — Web Audio ramps
+          // from the prior automation event's value, so consecutive ramp
+          // events produce piecewise-linear BPM glides
+          t.bpm.linearRampToValueAtTime(ev.bpm, time);
+        } else {
+          t.bpm.setValueAtTime(ev.bpm, time);
+        }
+      }, beatsToBarsBeats(ev.beat));
+      this.scheduledIds.push(id);
     }
   }
 
@@ -347,11 +598,31 @@ class Engine {
       const node = this.trackNodes.get(trackId);
       if (!node) return;
       const interval = `${clip.length}*4n`;
+      const midiCh = track.midiOutChannel;
+      const swing = track.swing ?? this.globalSwing;
       try {
-        const loop = new Tone.Loop((time) => {
-          this.fireClipInstance(clip, node, time);
-        }, interval).start(0);
-        this.sessionLoops.set(trackId, loop);
+        if (clip.kind === 'audio') {
+          // pre-build one Player; the loop restarts it each cycle so the
+          // sample re-triggers in time even if it's longer than the cell
+          const buffer = this.sampleBank.get(clip.sampleId);
+          if (!buffer) return;
+          const player = node.addPlayer(clip.id, buffer, clip.gain, clip.stretchMode ?? 'pitch');
+          const warp = clip.warp !== false && clip.sourceBpm && clip.sourceBpm > 0;
+          player.playbackRate = warp ? project.bpm / clip.sourceBpm! : 1;
+          const loop = new Tone.Loop((time) => {
+            try {
+              player.start(time, clip.offset);
+            } catch {
+              /* player may be mid-dispose */
+            }
+          }, interval).start(0);
+          this.sessionLoops.set(trackId, loop);
+        } else {
+          const loop = new Tone.Loop((time) => {
+            this.fireClipInstance(clip, node, time, midiCh, swing);
+          }, interval).start(0);
+          this.sessionLoops.set(trackId, loop);
+        }
       } catch (e) {
         console.warn('session loop create failed', e);
       }
@@ -394,12 +665,14 @@ class Engine {
   }
 
   /** Fires the contents of a clip starting at `baseTime` (seconds, transport-relative). */
-  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number) {
+  private fireClipInstance(clip: Clip, node: TrackNode, baseTime: number, midiCh?: number, swing = 0) {
     if (clip.kind === 'midi') {
+      const sendMidi = !!midiCh && isRealtimeContext();
       for (const note of clip.notes) {
-        const off = Tone.Time(`${note.start}*4n`).toSeconds();
+        const off = Tone.Time(`${this.swungBeat(note.start, swing)}*4n`).toSeconds();
         const dur = Tone.Time(`${note.length}*4n`).toSeconds();
-        node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
+        if (sendMidi) midiOutput.scheduleNote(midiCh!, note.pitch, note.velocity, baseTime + off, dur);
+        else node.triggerAt(note.pitch, note.velocity, dur, baseTime + off);
       }
     } else if (clip.kind === 'pattern') {
       const stepsPerBeat = clip.pattern.length / clip.length;
@@ -410,7 +683,7 @@ class Engine {
         steps.forEach((step, i) => {
           if (!step.on) return;
           if (step.probability !== undefined && step.probability < 1 && Math.random() > step.probability) return;
-          const off = Tone.Time(`${i * stepDurBeats}*4n`).toSeconds();
+          const off = Tone.Time(`${this.swungBeat(i * stepDurBeats, swing)}*4n`).toSeconds();
           const v = step.velocity * (step.accent ? 1.0 : 0.85);
           node.triggerAt(pad, v, 0.1, baseTime + off);
         });
@@ -422,12 +695,26 @@ class Engine {
   private scheduleClip(clip: Clip, node: TrackNode, project: Project) {
     const t = Tone.getTransport();
     const startBeats = clip.start;
+    const track = project.tracks.find((tr) => tr.id === clip.trackId);
+    // per-track swing override falls back to the project-global amount
+    const swing = track?.swing ?? this.globalSwing;
     if (clip.kind === 'midi') {
+      // Route to a Web MIDI output port instead of the internal voice when
+      // the track carries a midiOutChannel — but never during an offline
+      // render (audio-time and wall-time aren't related there), so the
+      // offline bounce captures the internal voice instead of silence.
+      const midiCh = track?.midiOutChannel;
+      const sendMidi = !!midiCh && isRealtimeContext();
       for (const note of clip.notes) {
-        const noteStartBeats = startBeats + note.start;
+        const noteStartBeats = this.swungBeat(startBeats + note.start, swing);
         const id = t.schedule((time) => {
-          const dur = note.length * (60 / project.bpm);
-          node.triggerAt(note.pitch, note.velocity, dur, time);
+          // tempo-aware duration: take BPM at the note's start beat, so a
+          // tempo-map change doesn't make every subsequent note the wrong
+          // length. Notes that straddle a tempo event still use the
+          // start-time tempo, matching standard DAW behaviour.
+          const dur = note.length * (60 / t.bpm.value);
+          if (sendMidi) midiOutput.scheduleNote(midiCh!, note.pitch, note.velocity, time, dur);
+          else node.triggerAt(note.pitch, note.velocity, dur, time);
         }, beatsToBarsBeats(noteStartBeats));
         this.scheduledIds.push(id);
       }
@@ -440,7 +727,7 @@ class Engine {
         if (!steps) continue;
         steps.forEach((step, i) => {
           if (!step.on) return;
-          const beat = startBeats + i * stepDur;
+          const beat = this.swungBeat(startBeats + i * stepDur, swing);
           const id = t.schedule((time) => {
             // re-roll probability at fire time so each cycle is independent
             if (step.probability !== undefined && step.probability < 1 && Math.random() > step.probability) return;
@@ -453,9 +740,11 @@ class Engine {
     } else if (clip.kind === 'audio') {
       const buffer = this.sampleBank.get(clip.sampleId);
       if (!buffer) return;
-      const player = node.addPlayer(clip.id, buffer, clip.gain);
-      // warp playback rate to match current project tempo if the clip carries a source BPM
       const warp = clip.warp !== false && clip.sourceBpm && clip.sourceBpm > 0;
+      const player = node.addPlayer(clip.id, buffer, clip.gain, clip.stretchMode ?? 'pitch');
+      // Both Tone.Player and Tone.GrainPlayer accept the same playbackRate
+      // assignment — the difference is whether pitch shifts with it
+      // (Player = varispeed) or stays put (GrainPlayer = granular stretch).
       player.playbackRate = warp ? project.bpm / clip.sourceBpm! : 1;
       const id = t.schedule((time) => {
         try {
@@ -483,6 +772,8 @@ class Engine {
 
 class TrackNode {
   trackId: string;
+  /** Mirror of Track.midiOutChannel — when set, live triggers go to Web MIDI out. */
+  midiOutChannel?: number;
   channel: Tone.Channel;
   reverbSend: Tone.Gain;
   delaySend: Tone.Gain;
@@ -497,13 +788,17 @@ class TrackNode {
   crusher: Tone.BitCrusher;
   /** Always-in-chain gain whose value is modulated by an external follower when sidechain is on. */
   sidechainGain: Tone.Gain;
-  private sidechainFollower?: Tone.Follower;
+  /** Every node in the current sidechain detector path — disposed wholesale on rebuild. */
+  private sidechainNodes: Tone.ToneAudioNode[] = [];
+  /** Live references for in-place param updates (avoids a rebuild on knob drag). */
+  private sidechainFast?: Tone.Follower;
+  private sidechainSlow?: Tone.Follower;
   private sidechainScale?: Tone.Multiply;
   private sidechainSourceId?: string;
   private sidechainState: { depth: number; attack: number; release: number } = { depth: 0, attack: 0.005, release: 0.15 };
 
-  // audio clip players
-  private players = new Map<string, Tone.Player>();
+  // audio clip players — either Tone.Player (varispeed) or Tone.GrainPlayer (time-stretch)
+  private players = new Map<string, Tone.Player | Tone.GrainPlayer>();
   // drum-pad sample players (per-pad one-shot, replaces the drum-synth voice for that pad when set)
   private padPlayers = new Map<DrumPad, Tone.Player>();
   private padSampleIds = new Map<DrumPad, string>();
@@ -545,10 +840,11 @@ class TrackNode {
     this.reverbSend.connect(reverb);
     this.delaySend.connect(delay);
 
-    this.instrument = buildInstrument(track);
+    this.instrument = buildInstrument(track, this.sampleBank);
     this.instrument.output.connect(this.fxInput);
-    this.applySends(track);
-    this.applyFx(track.fx);
+    const automated = automatedParams(track);
+    this.applySends(track, automated);
+    this.applyFx(track.fx, automated);
   }
 
   update(track: Track) {
@@ -556,13 +852,19 @@ class TrackNode {
     this.channel.pan.rampTo(track.pan, 0.02);
     this.channel.mute = track.mute;
     this.channel.solo = track.solo;
+    this.midiOutChannel = track.midiOutChannel;
 
     // rebuild the instrument if the requested synth engine changed
     if (track.kind === 'synth') {
-      const wantKind = track.synthEngine === 'fm' ? 'fm' : 'synth';
-      if (this.instrument.kind !== wantKind) {
+      const wantKind = synthEngineKind(track.synthEngine);
+      const samplerSourceChanged =
+        wantKind === 'sampler' &&
+        this.instrument.kind === 'sampler' &&
+        (this.instrument as SamplerInstrument).getSourceId() !==
+          samplerZoneSignature(resolveSamplerZones(track));
+      if (this.instrument.kind !== wantKind || samplerSourceChanged) {
         this.instrument.dispose();
-        this.instrument = buildInstrument(track);
+        this.instrument = buildInstrument(track, this.sampleBank);
         this.instrument.output.connect(this.fxInput);
       }
     }
@@ -572,10 +874,15 @@ class TrackNode {
         (this.instrument as SynthInstrument).applyParams(track.synth);
       } else if (this.instrument.kind === 'fm') {
         (this.instrument as FmInstrument).applyParams(track.synth);
+      } else if (this.instrument.kind === 'wavetable') {
+        (this.instrument as WavetableInstrument).applyParams(track.synth, track.wavetablePartials);
+      } else if (this.instrument.kind === 'sampler') {
+        (this.instrument as SamplerInstrument).applyParams(track.synth);
       }
     }
-    this.applySends(track);
-    this.applyFx(track.fx);
+    const automated = automatedParams(track);
+    this.applySends(track, automated);
+    this.applyFx(track.fx, automated);
     this.applyPadSamples(track);
   }
 
@@ -609,42 +916,62 @@ class TrackNode {
     }
   }
 
-  applyFx(fx?: FxRack) {
+  /**
+   * Apply the FX rack. `automated` carries the set of params currently
+   * driven by an automation lane — those are skipped here so a stray knob
+   * tweak elsewhere doesn't trigger a `rampTo` that stomps the automation's
+   * scheduled values. (The automation scheduler owns the param during
+   * playback; applyFx still owns it when no lane exists.)
+   */
+  applyFx(fx?: FxRack, automated?: Set<AutomationParam>) {
     if (!fx || !fx.enabled) {
-      this.eq.low.rampTo(0, 0.05);
-      this.eq.mid.rampTo(0, 0.05);
-      this.eq.high.rampTo(0, 0.05);
-      this.comp.threshold.rampTo(0, 0.05);
-      this.comp.ratio.rampTo(1, 0.05);
+      if (!automated?.has('eqLow')) this.eq.low.rampTo(0, 0.05);
+      if (!automated?.has('eqMid')) this.eq.mid.rampTo(0, 0.05);
+      if (!automated?.has('eqHigh')) this.eq.high.rampTo(0, 0.05);
+      if (!automated?.has('compThreshold')) this.comp.threshold.rampTo(0, 0.05);
+      if (!automated?.has('compRatio')) this.comp.ratio.rampTo(1, 0.05);
       this.chorus.wet.rampTo(0, 0.05);
       this.crusher.wet.rampTo(0, 0.05);
       return;
     }
-    this.eq.low.rampTo(fx.eqLow, 0.05);
-    this.eq.mid.rampTo(fx.eqMid, 0.05);
-    this.eq.high.rampTo(fx.eqHigh, 0.05);
-    this.comp.threshold.rampTo(fx.compOn ? fx.compThreshold : 0, 0.05);
-    this.comp.ratio.rampTo(fx.compOn ? fx.compRatio : 1, 0.05);
+    if (!automated?.has('eqLow')) this.eq.low.rampTo(fx.eqLow, 0.05);
+    if (!automated?.has('eqMid')) this.eq.mid.rampTo(fx.eqMid, 0.05);
+    if (!automated?.has('eqHigh')) this.eq.high.rampTo(fx.eqHigh, 0.05);
+    if (!automated?.has('compThreshold')) {
+      this.comp.threshold.rampTo(fx.compOn ? fx.compThreshold : 0, 0.05);
+    }
+    if (!automated?.has('compRatio')) {
+      this.comp.ratio.rampTo(fx.compOn ? fx.compRatio : 1, 0.05);
+    }
     this.chorus.depth = fx.chorusOn ? fx.chorusDepth : 0;
     this.chorus.wet.rampTo(fx.chorusOn ? 1 : 0, 0.05);
-    this.crusher.bits.value = fx.bitcrush;
+    if (!automated?.has('bitcrush')) this.crusher.bits.value = fx.bitcrush;
     this.crusher.wet.rampTo(fx.bitcrushOn ? 1 : 0, 0.05);
   }
 
-  applySends(track: Track) {
+  applySends(track: Track, automated?: Set<AutomationParam>) {
     const rev = track.synth?.reverb ?? 0.15;
     const dly = track.synth?.delay ?? 0.1;
-    this.reverbSend.gain.rampTo(rev, 0.05);
-    this.delaySend.gain.rampTo(dly, 0.05);
+    if (!automated?.has('reverb')) this.reverbSend.gain.rampTo(rev, 0.05);
+    if (!automated?.has('delay')) this.delaySend.gain.rampTo(dly, 0.05);
   }
 
   // audio clip players
-  addPlayer(clipId: string, buffer: AudioBuffer, gain: number): Tone.Player {
-    let player = this.players.get(clipId);
-    if (player) {
-      player.dispose();
-    }
-    player = new Tone.Player(buffer);
+  addPlayer(
+    clipId: string,
+    buffer: AudioBuffer,
+    gain: number,
+    mode: 'pitch' | 'time' = 'pitch',
+  ): Tone.Player | Tone.GrainPlayer {
+    const existing = this.players.get(clipId);
+    if (existing) existing.dispose();
+    // GrainPlayer does real time-stretch (pitch preserved) via overlapping
+    // grain windows; Player is the cheap varispeed path. We pick at build
+    // time so callers can swap by disposing + re-adding.
+    const player =
+      mode === 'time'
+        ? new Tone.GrainPlayer({ url: buffer, grainSize: 0.1, overlap: 0.05 })
+        : new Tone.Player(buffer);
     player.volume.value = Tone.gainToDb(Math.max(0.0001, gain));
     player.connect(this.fxInput);
     this.players.set(clipId, player);
@@ -719,42 +1046,82 @@ class TrackNode {
   }
 
   /**
-   * Install or update sidechain ducking. Builds an envelope follower from the
-   * source's channel output, scales it by `-depth`, and sums it into this
-   * track's always-in-chain `sidechainGain.gain` (intrinsic value = 1), so the
-   * effective gain is `1 - depth * envelope` — louder source → more ducking.
+   * Install or update sidechain ducking with a genuinely asymmetric
+   * attack/release envelope follower.
    *
-   * Passing `source = null` (or depth ≤ 0) disposes the follower path and
-   * leaves the gain at 1 (transparent).
+   * `Tone.Follower`'s smoothing is symmetric, so we run two — a fast one
+   * (attack) and a slow one (release) — and take their signal-domain
+   * maximum: `max(a,b) = (a + b + |a − b|) / 2`. On a rising source the
+   * fast follower leads and wins the max (fast attack); on a falling
+   * source the fast follower drops below the slow one, so the slow
+   * follower wins (slow release). The result is scaled by `−depth` and
+   * summed into the always-in-chain `sidechainGain.gain` (intrinsic value
+   * 1), giving an effective gain of `1 − depth · env`.
+   *
+   * Only rebuilds the detector graph when the SOURCE changes; depth /
+   * attack / release tweaks update the existing nodes in place
+   * (Follower.smoothing, Multiply.factor) so dragging a knob doesn't
+   * produce audio glitches from tearing down 8 audio nodes per frame.
+   *
+   * Passing `source = null` (or depth ≤ 0) disposes the detector path and
+   * leaves the gain transparent.
    */
   setSidechain(source: TrackNode | null, depth: number, attack: number, release: number) {
-    // tear down any existing follower path
-    this.sidechainFollower?.dispose();
-    this.sidechainScale?.dispose();
-    this.sidechainFollower = undefined;
-    this.sidechainScale = undefined;
-    this.sidechainSourceId = undefined;
-    this.sidechainState = { depth, attack, release };
-
     if (!source || depth <= 0 || source === this) {
-      // make sure gain is transparent
+      for (const n of this.sidechainNodes) n.dispose();
+      this.sidechainNodes = [];
+      this.sidechainFast = undefined;
+      this.sidechainSlow = undefined;
+      this.sidechainScale = undefined;
+      this.sidechainSourceId = undefined;
+      this.sidechainState = { depth, attack, release };
       this.sidechainGain.gain.cancelScheduledValues(0);
       this.sidechainGain.gain.value = 1;
       return;
     }
 
-    // Tone.Follower in this Tone version takes a single smoothing time; we
-    // approximate asymmetric attack/release with the geometric mean so both
-    // UI knobs at least nudge behaviour. A true split would need two
-    // followers averaged, which isn't worth the wiring for v1.
-    const smoothing = Math.sqrt(attack * release);
-    this.sidechainFollower = new Tone.Follower(smoothing);
-    this.sidechainScale = new Tone.Multiply(-depth);
-    source.connectTap(this.sidechainFollower);
-    this.sidechainFollower.connect(this.sidechainScale);
-    // Multiply output → AudioParam (gain.gain). Intrinsic value 1, summed audio-rate signal contributes -depth*env.
-    this.sidechainScale.connect(this.sidechainGain.gain);
+    const sourceSame = source.trackId === this.sidechainSourceId;
+    if (sourceSame && this.sidechainFast && this.sidechainSlow && this.sidechainScale) {
+      // in-place param update — no rebuild, no audio glitch
+      this.sidechainFast.smoothing = Math.max(0.001, attack);
+      this.sidechainSlow.smoothing = Math.max(0.001, release);
+      this.sidechainScale.factor.value = -depth;
+      this.sidechainState = { depth, attack, release };
+      return;
+    }
+
+    // full rebuild — source changed (or first install)
+    for (const n of this.sidechainNodes) n.dispose();
+    this.sidechainNodes = [];
+    this.sidechainState = { depth, attack, release };
+
+    const fast = new Tone.Follower(Math.max(0.001, attack));
+    const slow = new Tone.Follower(Math.max(0.001, release));
+    const diff = new Tone.Subtract();
+    const abs = new Tone.Abs();
+    const sum = new Tone.Add();
+    const total = new Tone.Add();
+    const half = new Tone.Multiply(0.5);
+    const scale = new Tone.Multiply(-depth);
+
+    source.connectTap(fast);
+    source.connectTap(slow);
+    fast.connect(diff);
+    slow.connect(diff.subtrahend);
+    diff.connect(abs);
+    fast.connect(sum);
+    slow.connect(sum.addend);
+    sum.connect(total);
+    abs.connect(total.addend);
+    total.connect(half);
+    half.connect(scale);
+    scale.connect(this.sidechainGain.gain);
     this.sidechainGain.gain.value = 1;
+
+    this.sidechainNodes = [fast, slow, diff, abs, sum, total, half, scale];
+    this.sidechainFast = fast;
+    this.sidechainSlow = slow;
+    this.sidechainScale = scale;
     this.sidechainSourceId = source.trackId;
   }
 
@@ -764,6 +1131,40 @@ class TrackNode {
 
   getSidechainState(): { depth: number; attack: number; release: number } {
     return this.sidechainState;
+  }
+
+  /**
+   * Resolve an automation-lane target to the right scheduling-capable param.
+   * Returns undefined for params that don't apply to this track (cutoff on
+   * a drum or audio track, etc.) — the scheduler silently skips those.
+   */
+  getAutomationParam(param: AutomationParam): Automatable | undefined {
+    switch (param) {
+      case 'volume':
+        return this.channel.volume as unknown as Automatable;
+      case 'pan':
+        return this.channel.pan as unknown as Automatable;
+      case 'reverb':
+        return this.reverbSend.gain as unknown as Automatable;
+      case 'delay':
+        return this.delaySend.gain as unknown as Automatable;
+      case 'cutoff':
+        return this.instrument.getFilterFreq?.();
+      case 'eqLow':
+        return this.eq.low as unknown as Automatable;
+      case 'eqMid':
+        return this.eq.mid as unknown as Automatable;
+      case 'eqHigh':
+        return this.eq.high as unknown as Automatable;
+      case 'compThreshold':
+        return this.comp.threshold as unknown as Automatable;
+      case 'compRatio':
+        return this.comp.ratio as unknown as Automatable;
+      case 'bitcrush':
+        return this.crusher.bits as unknown as Automatable;
+      default:
+        return undefined;
+    }
   }
 
   clearPadPlayers() {
@@ -781,8 +1182,8 @@ class TrackNode {
     this.instrument.dispose();
     this.clearPlayers();
     this.clearPadPlayers();
-    this.sidechainFollower?.dispose();
-    this.sidechainScale?.dispose();
+    for (const n of this.sidechainNodes) n.dispose();
+    this.sidechainNodes = [];
     this.sidechainGain.dispose();
     this.channel.dispose();
     this.reverbSend.dispose();
@@ -798,13 +1199,41 @@ class TrackNode {
 
 // -----------------------------------------------------------
 
+/**
+ * Anything that exposes the four scheduling methods we need — both Web Audio
+ * AudioParam and Tone's Signal/Param wrappers satisfy this shape, so the
+ * automation scheduler doesn't need to care which side of the wrapper it's
+ * driving.
+ */
+type Automatable = {
+  setValueAtTime(value: number, time: number): unknown;
+  linearRampToValueAtTime(value: number, time: number): unknown;
+  exponentialRampToValueAtTime(value: number, time: number): unknown;
+};
+
 type Instrument = {
-  kind: 'synth' | 'fm' | 'drum' | 'sampler';
+  kind: 'synth' | 'fm' | 'wavetable' | 'sampler' | 'drum' | 'null';
   output: Tone.ToneAudioNode;
   trigger(pitch: number | DrumPad, vel: number, dur: string | number): void;
   triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number): void;
   dispose(): void;
+  /** Filter cutoff param for automation, if the instrument has one. */
+  getFilterFreq?(): Automatable | undefined;
 };
+
+/** Map a SynthEngine value to its corresponding Instrument.kind. */
+function synthEngineKind(engine?: SynthEngine): Instrument['kind'] {
+  switch (engine) {
+    case 'fm':
+      return 'fm';
+    case 'wavetable':
+      return 'wavetable';
+    case 'sampler':
+      return 'sampler';
+    default:
+      return 'synth';
+  }
+}
 
 class SynthInstrument implements Instrument {
   kind = 'synth' as const;
@@ -859,6 +1288,10 @@ class SynthInstrument implements Instrument {
     if (typeof pitch !== 'number') return;
     const freq = Tone.Frequency(pitch, 'midi').toFrequency();
     this.poly.triggerAttackRelease(freq, dur, time, vel);
+  }
+
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
   }
 
   dispose() {
@@ -927,6 +1360,10 @@ class FmInstrument implements Instrument {
     if (typeof pitch !== 'number') return;
     const freq = Tone.Frequency(pitch, 'midi').toFrequency();
     this.poly.triggerAttackRelease(freq, dur, time, vel);
+  }
+
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
   }
 
   dispose() {
@@ -1055,9 +1492,272 @@ class DrumInstrument implements Instrument {
   }
 }
 
+/**
+ * Wavetable instrument — a PolySynth whose oscillator type is a `custom`
+ * partials array. The `wavePosition` param (0..1) sweeps the timbre with a
+ * single knob; cheap (no extra audio nodes) and reuses the same filter +
+ * ADSR + FX sends as the subtractive engine.
+ *
+ * Without a user wavetable, POSITION interpolates through 4 preset frames
+ * (sine → hollow → bright → saw). With a user-loaded `wavetablePartials`
+ * array, POSITION morphs pure sine → that wave instead.
+ *
+ * Tone's Synth accepts `oscillator: { type: 'custom', partials: [...] }`
+ * and rebuilds the underlying PeriodicWave on assignment.
+ */
+const WAVE_FRAMES: number[][] = [
+  // sine — fundamental only
+  [1, 0, 0, 0, 0, 0, 0, 0],
+  // hollow — odd partials, square-ish
+  [1, 0, 0.55, 0, 0.33, 0, 0.22, 0],
+  // bright — all partials, decaying slowly
+  [1, 0.85, 0.7, 0.55, 0.45, 0.35, 0.27, 0.2],
+  // saw-ish — 1/n falloff
+  [1, 0.5, 0.33, 0.25, 0.2, 0.166, 0.143, 0.125],
+];
+
+function morphPartials(pos: number, userWave?: number[]): number[] {
+  const clamped = Math.max(0, Math.min(1, pos));
+  if (userWave && userWave.length > 0) {
+    // morph pure sine → the user wavetable
+    const out: number[] = new Array(userWave.length);
+    for (let k = 0; k < userWave.length; k++) {
+      const sine = k === 0 ? 1 : 0;
+      out[k] = sine * (1 - clamped) + userWave[k] * clamped;
+    }
+    return out;
+  }
+  const segments = WAVE_FRAMES.length - 1;
+  const scaled = clamped * segments;
+  const i = Math.min(segments - 1, Math.floor(scaled));
+  const t = scaled - i;
+  const a = WAVE_FRAMES[i];
+  const b = WAVE_FRAMES[i + 1];
+  const out: number[] = new Array(a.length);
+  for (let k = 0; k < a.length; k++) out[k] = a[k] * (1 - t) + b[k] * t;
+  return out;
+}
+
+class WavetableInstrument implements Instrument {
+  kind = 'wavetable' as const;
+  output: Tone.Gain;
+  private poly: Tone.PolySynth;
+  private filter: Tone.Filter;
+  private drive: Tone.Distortion;
+
+  constructor(params: SynthParams, userWave?: number[]) {
+    this.output = new Tone.Gain(1);
+    this.drive = new Tone.Distortion({ distortion: params.drive, oversample: '2x' });
+    this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
+    this.poly = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'custom', partials: morphPartials(params.wavePosition ?? 0.33, userWave) } as any,
+      envelope: {
+        attack: params.attack,
+        decay: params.decay,
+        sustain: params.sustain,
+        release: params.release,
+      },
+      detune: params.detune,
+      portamento: params.glide,
+    });
+    this.poly.maxPolyphony = 16;
+    this.poly.chain(this.filter, this.drive, this.output);
+  }
+
+  applyParams(p: SynthParams, userWave?: number[]) {
+    this.filter.frequency.rampTo(p.cutoff, 0.05);
+    this.filter.Q.rampTo(p.resonance, 0.05);
+    this.drive.distortion = p.drive;
+    this.poly.set({
+      oscillator: { type: 'custom', partials: morphPartials(p.wavePosition ?? 0.33, userWave) } as any,
+      envelope: {
+        attack: p.attack,
+        decay: p.decay,
+        sustain: p.sustain,
+        release: p.release,
+      },
+      detune: p.detune,
+      portamento: p.glide,
+    });
+  }
+
+  trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
+    if (typeof pitch !== 'number') return;
+    const freq = Tone.Frequency(pitch, 'midi').toFrequency();
+    this.poly.triggerAttackRelease(freq, dur, undefined, vel);
+  }
+
+  triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
+    if (typeof pitch !== 'number') return;
+    const freq = Tone.Frequency(pitch, 'midi').toFrequency();
+    this.poly.triggerAttackRelease(freq, dur, time, vel);
+  }
+
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
+  }
+
+  dispose() {
+    this.poly.dispose();
+    this.filter.dispose();
+    this.drive.dispose();
+    this.output.dispose();
+  }
+}
+
+type ResolvedZone = { sampleId: string; rootPitch: number; velMin: number; velMax: number };
+
+/** Resolve a track's sampler zones, falling back to the legacy single-zone fields. */
+function resolveSamplerZones(track: Track): ResolvedZone[] {
+  if (track.samplerZones && track.samplerZones.length > 0) {
+    return track.samplerZones.map((z) => ({
+      sampleId: z.sampleId,
+      rootPitch: z.rootPitch,
+      velMin: z.velMin ?? 0,
+      velMax: z.velMax ?? 1,
+    }));
+  }
+  if (track.samplerSampleId) {
+    return [{ sampleId: track.samplerSampleId, rootPitch: track.samplerRootPitch ?? 60, velMin: 0, velMax: 1 }];
+  }
+  return [];
+}
+
+/** Stable signature of a zone list — drives the "rebuild on change" check. */
+function samplerZoneSignature(zones: ResolvedZone[]): string {
+  return zones
+    .map((z) => `${z.rootPitch}:${z.sampleId}:${z.velMin}:${z.velMax}`)
+    .sort()
+    .join('|');
+}
+
+/**
+ * Multi-zone chromatic sampler with velocity layers.
+ *
+ * Zones sharing a velocity range form one layer; each layer is its own
+ * Tone.Sampler (Tone.Sampler can't switch buffers by velocity, so we run
+ * one per layer). Within a layer, Tone.Sampler maps one buffer per key
+ * zone at its root pitch and interpolates across the keyboard. With a
+ * single full-range zone it behaves like a basic one-shot sampler.
+ *
+ * On trigger, the layer whose velocity range contains the note velocity
+ * plays; if velocity falls in a coverage gap, the nearest layer by range
+ * midpoint is used so a note never goes silent.
+ *
+ * Reuses the shared filter / ADSR-shaped amplitude envelope so the same
+ * SynthParams knobs still mean something. ADSR maps onto Tone.Sampler's
+ * built-in attack/release; sustain/decay aren't exposed on Sampler so they
+ * fold into release (still musical for one-shots).
+ *
+ * Zones whose sampleId isn't in the bank yet (project loaded before audio
+ * rehydrates) are skipped; the engine update pass rebuilds the instrument
+ * once the samples land.
+ */
+class SamplerInstrument implements Instrument {
+  kind = 'sampler' as const;
+  output: Tone.Gain;
+  private layers: { velMin: number; velMax: number; sampler: Tone.Sampler }[] = [];
+  private filter: Tone.Filter;
+  private sourceId: string;
+
+  constructor(
+    params: SynthParams,
+    zones: ResolvedZone[],
+    sampleBank: Map<string, AudioBuffer>,
+  ) {
+    this.output = new Tone.Gain(1);
+    this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
+    this.filter.connect(this.output);
+    this.sourceId = samplerZoneSignature(zones);
+
+    // group zones by velocity range → one Tone.Sampler per layer
+    const groups = new Map<string, ResolvedZone[]>();
+    for (const z of zones) {
+      const key = `${z.velMin}_${z.velMax}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(z);
+      groups.set(key, arr);
+    }
+    for (const group of groups.values()) {
+      const urls: Record<string, Tone.ToneAudioBuffer> = {};
+      for (const zone of group) {
+        const buf = sampleBank.get(zone.sampleId);
+        if (!buf) continue;
+        urls[Tone.Frequency(zone.rootPitch, 'midi').toNote()] = new Tone.ToneAudioBuffer(buf);
+      }
+      if (Object.keys(urls).length === 0) continue;
+      const sampler = new Tone.Sampler({
+        urls,
+        attack: params.attack,
+        release: Math.max(params.release, params.decay),
+      });
+      sampler.connect(this.filter);
+      this.layers.push({ velMin: group[0].velMin, velMax: group[0].velMax, sampler });
+    }
+  }
+
+  getSourceId(): string {
+    return this.sourceId;
+  }
+
+  /** Pick the layer for a note velocity: containing layer, else nearest by midpoint. */
+  private layerFor(vel: number): Tone.Sampler | undefined {
+    if (this.layers.length === 0) return undefined;
+    const inside = this.layers.filter((l) => vel >= l.velMin && vel <= l.velMax);
+    if (inside.length > 0) {
+      // narrowest containing range wins when layers overlap
+      inside.sort((a, b) => a.velMax - a.velMin - (b.velMax - b.velMin));
+      return inside[0].sampler;
+    }
+    let best = this.layers[0];
+    let bestDist = Infinity;
+    for (const l of this.layers) {
+      const dist = Math.abs(vel - (l.velMin + l.velMax) / 2);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = l;
+      }
+    }
+    return best.sampler;
+  }
+
+  applyParams(p: SynthParams) {
+    this.filter.frequency.rampTo(p.cutoff, 0.05);
+    this.filter.Q.rampTo(p.resonance, 0.05);
+    for (const l of this.layers) {
+      l.sampler.attack = p.attack;
+      l.sampler.release = Math.max(p.release, p.decay);
+    }
+  }
+
+  trigger(pitch: number | DrumPad, vel: number, dur: string | number) {
+    if (typeof pitch !== 'number') return;
+    const sampler = this.layerFor(vel);
+    if (!sampler) return;
+    sampler.triggerAttackRelease(Tone.Frequency(pitch, 'midi').toNote(), dur, undefined, vel);
+  }
+
+  triggerAt(pitch: number | DrumPad, vel: number, dur: string | number, time: number) {
+    if (typeof pitch !== 'number') return;
+    const sampler = this.layerFor(vel);
+    if (!sampler) return;
+    sampler.triggerAttackRelease(Tone.Frequency(pitch, 'midi').toNote(), dur, time, vel);
+  }
+
+  getFilterFreq(): Automatable {
+    return this.filter.frequency as unknown as Automatable;
+  }
+
+  dispose() {
+    for (const l of this.layers) l.sampler.dispose();
+    this.filter.dispose();
+    this.output.dispose();
+  }
+}
+
 /** Pass-through instrument for audio tracks (no synthesis — players feed FX directly). */
 class NullInstrument implements Instrument {
-  kind = 'sampler' as const;
+  kind = 'null' as const;
   output: Tone.Gain;
   constructor() {
     this.output = new Tone.Gain(1);
@@ -1088,15 +1788,33 @@ const FALLBACK_SYNTH: SynthParams = {
   drive: 0,
 };
 
-function buildInstrument(track: Track): Instrument {
+function buildInstrument(track: Track, sampleBank?: Map<string, AudioBuffer>): Instrument {
   if (track.kind === 'drum') return new DrumInstrument();
   if (track.kind === 'audio') return new NullInstrument();
   if (track.kind === 'synth') {
     const params = track.synth ?? FALLBACK_SYNTH;
     if (track.synthEngine === 'fm') return new FmInstrument(params);
+    if (track.synthEngine === 'wavetable') return new WavetableInstrument(params, track.wavetablePartials);
+    if (track.synthEngine === 'sampler') {
+      return new SamplerInstrument(params, resolveSamplerZones(track), sampleBank ?? new Map());
+    }
     return new SynthInstrument(params);
   }
   return new SynthInstrument(FALLBACK_SYNTH);
+}
+
+/** Set of automation params with at least one non-empty lane on a track. */
+function automatedParams(track: Track): Set<AutomationParam> {
+  const set = new Set<AutomationParam>();
+  for (const lane of track.automation ?? []) {
+    if (lane.points.length > 0) set.add(lane.param);
+  }
+  return set;
+}
+
+function isRealtimeContext(): boolean {
+  const raw = Tone.getContext().rawContext as unknown as { constructor: { name: string } };
+  return raw.constructor.name !== 'OfflineAudioContext';
 }
 
 function beatsToBarsBeats(beats: number): string {

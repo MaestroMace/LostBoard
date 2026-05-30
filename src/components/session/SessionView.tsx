@@ -173,8 +173,9 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
   const launchSessionClip = useStore((s) => s.launchSessionClip);
   const playingClipId = useStore((s) => s.sessionPlaying[track.id] ?? null);
 
-  // tracks that don't carry clip content (audio for now) can't be session-launched yet
-  const canLaunch = track.kind !== 'audio';
+  // every track kind can be session-launched — midi / pattern / audio clips
+  // all fire from a session cell
+  const canLaunch = true;
 
   return (
     <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
@@ -231,7 +232,7 @@ const Slot = memo(function Slot({
     [assignedId, track.clips],
   );
   const isPlaying = assigned && playingClipId === assigned.id;
-  const launchable = canLaunch && assigned && (assigned.kind === 'midi' || assigned.kind === 'pattern');
+  const launchable = !!(canLaunch && assigned);
 
   return (
     <div
@@ -295,7 +296,8 @@ const ClipPicker = memo(function ClipPicker({
   currentId: string | null;
   onAssign: (id: string | null) => void;
 }) {
-  const candidates = track.clips.filter((c) => c.kind === 'midi' || c.kind === 'pattern');
+  // every clip kind can be a session clip now (audio included)
+  const candidates = track.clips;
   if (candidates.length === 0) return null;
   return (
     <select

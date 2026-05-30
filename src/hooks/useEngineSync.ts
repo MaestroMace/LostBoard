@@ -19,13 +19,24 @@ type Snapshot = {
   bpm: number;
   numerator: number;
   denominator: number;
+  tempoMap: Project['tempoMap'];
+  swing: number;
+  swingSubdivision: string;
   trackById: Map<string, Track>;
 };
 
 function snapshot(p: Project): Snapshot {
   const trackById = new Map<string, Track>();
   for (const t of p.tracks) trackById.set(t.id, t);
-  return { bpm: p.bpm, numerator: p.numerator, denominator: p.denominator, trackById };
+  return {
+    bpm: p.bpm,
+    numerator: p.numerator,
+    denominator: p.denominator,
+    tempoMap: p.tempoMap,
+    swing: p.swing ?? 0,
+    swingSubdivision: p.swingSubdivision ?? '8n',
+    trackById,
+  };
 }
 
 function recordToMap(rec: Record<string, string>): Map<string, string> {
@@ -56,21 +67,43 @@ export function useEngineSync() {
             anyTrackChanged = true;
           }
         }
+        // dispose nodes for tracks that no longer exist in the project so a
+        // delete doesn't leak the channel / instrument / FX rack
+        const currentIds = new Set(project.tracks.map((t) => t.id));
+        for (const id of prev.trackById.keys()) {
+          if (!currentIds.has(id)) audioEngine.removeTrack(id);
+        }
         // sidechain wiring needs every node to exist; reconcile after the per-track pass
         if (anyTrackChanged || project.tracks.length !== prev.trackById.size) {
           audioEngine.applySidechains(project);
         }
 
+        // swing applies to already-scheduled events live — no re-schedule needed
+        // swing is now baked into the scheduled note times, so a swing
+        // change must re-apply (engine) AND re-schedule
+        const swing = project.swing ?? 0;
+        const swingSub = project.swingSubdivision ?? '8n';
+        const swingChanged = swing !== prev.swing || swingSub !== prev.swingSubdivision;
+        if (swingChanged) audioEngine.setSwing(swing, swingSub);
+
         // decide whether the transport needs a full re-schedule
         let needsSchedule =
+          swingChanged ||
           project.bpm !== prev.bpm ||
           project.numerator !== prev.numerator ||
           project.denominator !== prev.denominator ||
+          project.tempoMap !== prev.tempoMap ||
           project.tracks.length !== prev.trackById.size;
         if (!needsSchedule) {
           for (const t of project.tracks) {
             const pt = prev.trackById.get(t.id);
-            if (!pt || pt.clips !== t.clips) {
+            if (
+              !pt ||
+              pt.clips !== t.clips ||
+              pt.automation !== t.automation ||
+              pt.midiOutChannel !== t.midiOutChannel ||
+              pt.swing !== t.swing
+            ) {
               needsSchedule = true;
               break;
             }

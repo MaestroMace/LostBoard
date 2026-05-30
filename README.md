@@ -122,16 +122,56 @@ Done so far: full arrange/sequencer/piano-roll/mixer, dual-engine synth,
 per-track FX rack, audio tracks with mic recording + file import, master
 bounce, HUD scopes, keyboard control.
 
-Next moves (top of the queue — see [`docs/STATUS.md`](docs/STATUS.md) for the
-full ranked roadmap, known limitations, and per-commit changelog):
+Recently landed (see [`docs/STATUS.md`](docs/STATUS.md) for the full per-commit
+changelog and known limitations):
 
-- Automation lanes per parameter
-- Offline (faster-than-real-time) bounce via `Tone.Offline`
-- Tempo automation / tempo map
-- Wavetable instrument + chromatic sampler
-- Real audio time-stretch (vs. the current varispeed warp)
-- Sync the MAGI ticker to actual engine + transport telemetry
-- Garbage-collect orphaned samples from IndexedDB
+- **Offline bounce** via `Tone.Offline` — master + per-track stems as WAVs,
+  faster-than-real-time
+- **Wavetable** synth engine + **chromatic sampler** engine
+- **Tempo map** with per-event step / ramp curves
+- **Automation lanes** per track for volume / pan / cutoff / reverb /
+  delay with linear / exponential / hold / step curve modes; SVG
+  sparkline editor in a new AUTOMATION tab AND an inline overlay
+  under each track in the Arrange view
+- **Per-note humanise / quantise** in the piano roll (select notes
+  with click / Cmd+click, then run the action on just the selection)
+- **Real time-stretch** on audio clips via `Tone.GrainPlayer` — pitch
+  preserved across tempo changes
+- **Live MAGI ticker** reporting master peak, transport state, track /
+  clip / automation / tempo counts, and MIDI device
+- **PWA install prompt** on Chromium browsers (⬇ INSTALL TO HOME in
+  the PROJECT view)
+- **FX-rack automation** — EQ bands, compressor threshold/ratio, and
+  bit-crusher depth are automation targets alongside volume / pan /
+  cutoff / sends
+- **Tempo curve preview** — a BPM sparkline over the tempo events
+- **Orphaned-sample GC** — drop persisted audio nothing references
+- **Global swing / groove** via the transport
+- **Multi-zone sampler** with **velocity layers** — samples key-mapped
+  across the keyboard and switched by note velocity
+- **MIDI punch-in record** — ⏺ PUNCH with a count-in pre-roll
+- **Web MIDI output** — route a track's notes to external hardware,
+  plus **MIDI clock output** so external gear locks to the transport
+- **Sidechain attack/release split** — a genuinely asymmetric
+  envelope follower (two followers + signal-domain max)
+- **Stacked automation overlay** — every lane a track owns, shown
+  inline under its clip row in the Arrange view
+- **Per-track swing** — a SWING knob per mixer channel strip, so one
+  part can shuffle while another stays straight
+- **Session-view audio clips** — audio clips fire from session cells
+- **iOS lock-screen transport** — play/pause/stop from Control Center
+- **User-loadable wavetables** — derive an oscillator from any sample's
+  harmonic spectrum
+- **MIDI clock in + out** — sync the transport to, or drive, external
+  gear
+
+Next moves (see [`docs/STATUS.md`](docs/STATUS.md) — the original roadmap is
+fully cleared; these are remaining nice-to-haves):
+
+- Per-clip groove
+- Single-pass multi-channel offline stems
+- Sampler decay/sustain
+- MIDI clock-in phase lock
 
 ## Status & handoff
 

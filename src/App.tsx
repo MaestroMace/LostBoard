@@ -14,11 +14,13 @@ import { StepSequencer } from './components/sequencer/StepSequencer';
 import { PianoRoll } from './components/pianoroll/PianoRoll';
 import { ProjectView } from './components/project/ProjectView';
 import { FxPanel } from './components/fx/FxPanel';
+import { AutomationView } from './components/automation/AutomationView';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
 import { useEngineSync } from './hooks/useEngineSync';
 import { useMediaSession } from './hooks/useMediaSession';
 import { rehydrateSamples } from './state/samples';
 import { midiInput } from './audio/midiInput';
+import { midiOutput } from './audio/midiOutput';
 
 const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
   { id: 'arrange', label: 'ARRANGE' },
@@ -27,6 +29,7 @@ const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[
   { id: 'pianoroll', label: 'PIANO ROLL' },
   { id: 'instrument', label: 'INSTRUMENT' },
   { id: 'fx', label: 'FX RACK' },
+  { id: 'automation', label: 'AUTOMATION' },
   { id: 'mixer', label: 'MIXER' },
   { id: 'project', label: 'PROJECT' },
 ];
@@ -37,6 +40,7 @@ async function bootEngine() {
   const p = st.project;
   audioEngine.setBpm(p.bpm);
   audioEngine.setTimeSig(p.numerator, p.denominator);
+  audioEngine.setSwing(p.swing ?? 0, p.swingSubdivision ?? '8n');
   audioEngine.setMasterVolume(p.master.volume);
   audioEngine.setLoop(p.loopEnabled, p.loopStart, p.loopEnd);
   audioEngine.startMetronome(st.metronome);
@@ -62,8 +66,9 @@ export default function App() {
         audioEngine.schedule(useStore.getState().project);
       }
     });
-    // MIDI doesn't need a user gesture; arm the bridge as soon as the page loads
+    // MIDI doesn't need a user gesture; arm the bridges as soon as the page loads
     midiInput.init();
+    midiOutput.init();
   }, []);
 
   // Auto-save every 20s
@@ -124,6 +129,7 @@ export default function App() {
         {view === 'pianoroll' && <PianoRoll />}
         {view === 'instrument' && <SynthPanel />}
         {view === 'fx' && <FxPanel />}
+        {view === 'automation' && <AutomationView />}
         {view === 'mixer' && <MixerView />}
         {view === 'project' && <ProjectView />}
       </div>

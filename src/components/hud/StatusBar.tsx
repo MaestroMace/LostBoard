@@ -5,16 +5,14 @@ import { usePlayhead } from '../../state/transportClock';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { Scope } from './Scope';
 import { getMidiSnapshot, subscribeMidi } from '../../audio/midiInput';
+import { audioEngine } from '../../audio/engine';
 
-const MESSAGES = [
-  'MAGI SYSTEM ONLINE',
+/** Flavor lines that get mixed into the live telemetry rotation. */
+const FLAVOR = [
   'A.T. FIELD STABLE',
   'PATTERN BLUE NOT DETECTED',
-  'SYNC RATIO NOMINAL',
-  'ROUTING: BUS 01 / 02 / 03',
   'LCL PRESSURE NORMAL',
   'NEURAL INTERFACE ACTIVE',
-  'ENGINE: WEB AUDIO OK',
   'EVA UNIT READY FOR LAUNCH',
 ];
 
@@ -189,16 +187,64 @@ function NervMark() {
   );
 }
 
+/**
+ * Ticker — rotates through live engine + transport telemetry mixed with
+ * NERV flavor lines. Pulls a fresh snapshot every cycle so what scrolls
+ * past reflects what the engine actually sees (master peak dB, transport
+ * state, MIDI device, track / clip counts) rather than canned strings.
+ */
 function Ticker() {
-  const [msg, setMsg] = useState(MESSAGES[0]);
+  const trackCount = useStore((s) => s.project.tracks.length);
+  const clipCount = useStore((s) => s.project.tracks.reduce((n, t) => n + t.clips.length, 0));
+  const automationLanes = useStore((s) =>
+    s.project.tracks.reduce((n, t) => n + (t.automation?.length ?? 0), 0),
+  );
+  const tempoEvents = useStore((s) => s.project.tempoMap?.length ?? 0);
+  const playing = useStore((s) => s.isPlaying);
+  const sessionMode = useStore((s) => s.sessionMode);
+  const micRecording = useStore((s) => s.micRecording);
+  const midiClockOut = useStore((s) => s.midiClockOut);
+  const midiClockIn = useStore((s) => s.midiClockIn);
+  const bpm = useStore((s) => s.project.bpm);
+  const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
+  const [msg, setMsg] = useState('MAGI SYSTEM ONLINE');
+
   useEffect(() => {
+    const sample = () => {
+      const lines: string[] = [];
+      // Live engine telemetry first — pulled fresh so each cycle is current.
+      if (audioEngine.isInited()) {
+        const peak = audioEngine.getMasterLevel();
+        lines.push(`MASTER ${peak > -60 ? peak.toFixed(1) + ' dB' : '—∞ dB'}`);
+      } else {
+        lines.push('ENGINE WARMING UP');
+      }
+      lines.push(`TRANSPORT ${playing ? 'ROLLING' : 'HALTED'} @ ${bpm.toFixed(1)} BPM`);
+      lines.push(`MODE ${sessionMode ? 'SESSION' : 'ARRANGEMENT'}`);
+      lines.push(`TRACKS ${String(trackCount).padStart(2, '0')} / CLIPS ${String(clipCount).padStart(3, '0')}`);
+      if (automationLanes > 0) lines.push(`AUTO LANES ${automationLanes}`);
+      if (tempoEvents > 0) lines.push(`TEMPO MAP ${tempoEvents} EV`);
+      if (micRecording) lines.push('MIC RECORDING — ARMED');
+      if (midiClockOut) lines.push('MIDI CLOCK OUT ACTIVE');
+      if (midiClockIn) lines.push('MIDI CLOCK IN — TRANSPORT SLAVED');
+      if (midi.supported) {
+        lines.push(midi.connected ? `MIDI IN: ${midi.device.toUpperCase()}` : 'MIDI BUS IDLE');
+      }
+      // Sprinkle in flavor every few cycles.
+      lines.push(FLAVOR[Math.floor(Math.random() * FLAVOR.length)]);
+      return lines;
+    };
     let i = 0;
+    let lines = sample();
+    setMsg(lines[0]);
     const t = setInterval(() => {
-      i = (i + 1) % MESSAGES.length;
-      setMsg(MESSAGES[i]);
-    }, 3200);
+      i = (i + 1) % lines.length;
+      if (i === 0) lines = sample();
+      setMsg(lines[i]);
+    }, 2200);
     return () => clearInterval(t);
-  }, []);
+  }, [playing, sessionMode, micRecording, midiClockOut, midiClockIn, bpm, trackCount, clipCount, automationLanes, tempoEvents, midi.supported, midi.connected, midi.device]);
+
   return (
     <div
       className="hud-readout--green hud-readout"

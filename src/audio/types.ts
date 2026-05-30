@@ -17,6 +17,8 @@ export type SynthParams = {
   delay: number; // 0..1
   delayTime: string;
   drive: number; // 0..1
+  /** Wavetable engine: 0..1 morphs through preset wave frames. */
+  wavePosition?: number;
 };
 
 export const DEFAULT_SYNTH: SynthParams = {
@@ -36,6 +38,7 @@ export const DEFAULT_SYNTH: SynthParams = {
   delay: 0.12,
   delayTime: '8n',
   drive: 0.0,
+  wavePosition: 0.33,
 };
 
 export type DrumPad =
@@ -126,6 +129,13 @@ export type Clip =
       sourceBpm?: number;
       /** When true, clip plays back at currentBpm/sourceBpm so it stays in tempo. */
       warp?: boolean;
+      /**
+       * How warp is achieved:
+       *  - 'pitch' (default): Tone.Player + playbackRate — fast, pitch follows tempo (varispeed).
+       *  - 'time': Tone.GrainPlayer — granular time-stretch, pitch is preserved across tempo changes.
+       * Only meaningful when `warp` is on.
+       */
+      stretchMode?: 'pitch' | 'time';
       color?: string;
       name?: string;
     };
@@ -166,7 +176,7 @@ export const DEFAULT_FX: FxRack = {
   bitcrushOn: false,
 };
 
-export type SynthEngine = 'subtractive' | 'fm';
+export type SynthEngine = 'subtractive' | 'fm' | 'wavetable' | 'sampler';
 
 export type Track = {
   id: string;
@@ -186,7 +196,147 @@ export type Track = {
   sessionSlots?: (string | null)[];
   /** For drum tracks: map of pad → sampleId. When set, the pad fires that sample instead of the built-in drum synth voice. */
   padSamples?: Partial<Record<DrumPad, string>>;
+  /** Per-track automation lanes. Each lane targets one parameter and stores a sorted list of (beat, value) breakpoints; the engine queues linear ramps between consecutive points so the param moves smoothly across the arrangement. */
+  automation?: AutomationLane[];
+  /** For the sampler synth-engine: id of the sample to play chromatically. The sample is treated as the "root" pitch (samplerRootPitch) and resampled for other notes. Legacy single-zone field — `samplerZones` supersedes it when present. */
+  samplerSampleId?: string;
+  /** MIDI pitch the sample was recorded at; other pitches are resampled from there. Defaults to 60 (middle C). Legacy single-zone field. */
+  samplerRootPitch?: number;
+  /** Multi-zone sampler map. When present and non-empty, each zone's sample is mapped at its root pitch and Tone.Sampler interpolates between them across the keyboard. Supersedes samplerSampleId / samplerRootPitch. */
+  samplerZones?: SamplerZone[];
+  /** When set (1..16), the track's notes are sent to the selected Web MIDI output on this channel instead of its internal instrument. */
+  midiOutChannel?: number;
+  /** Per-track swing override 0..1. When undefined the track uses the project-global swing. */
+  swing?: number;
+  /** Wavetable engine: a user-loaded harmonic partials array derived from an imported sample. When present, POSITION morphs sine → this wave. */
+  wavetablePartials?: number[];
 };
+
+/** One key zone of a multi-sample instrument: a sample anchored at a root MIDI pitch, optionally restricted to a velocity range. */
+export type SamplerZone = {
+  id: string;
+  sampleId: string;
+  rootPitch: number;
+  /** Velocity range this zone responds to, 0..1. Omitted = full range (0..1). Zones sharing a range form one velocity layer. */
+  velMin?: number;
+  velMax?: number;
+};
+
+/**
+ * Automation lanes — per-track, per-parameter sparse breakpoint lists.
+ * Each lane targets one parameter on the track; the engine queues linear
+ * ramps between consecutive points using Web Audio AudioParam scheduling.
+ *
+ * Supported params and their unit conventions:
+ *   - volume:        dB, suggested range -60..+6
+ *   - pan:           -1..+1 (linear)
+ *   - cutoff:        Hz (50..18000), applied to the instrument's lowpass
+ *   - reverb:        0..1 send level
+ *   - delay:         0..1 send level
+ *   - eqLow/Mid/High: dB (-24..+24), FX-rack 3-band EQ
+ *   - compThreshold: dB (-60..0), FX-rack compressor
+ *   - compRatio:     1..20, FX-rack compressor
+ *   - bitcrush:      1..16 bits, FX-rack bit-crusher
+ */
+export type AutomationParam =
+  | 'volume'
+  | 'pan'
+  | 'cutoff'
+  | 'reverb'
+  | 'delay'
+  | 'eqLow'
+  | 'eqMid'
+  | 'eqHigh'
+  | 'compThreshold'
+  | 'compRatio'
+  | 'bitcrush';
+
+/**
+ * Curve mode controls how the param reaches a point's value:
+ *  - 'linear':      linearRampToValueAtTime — straight line from the previous point
+ *  - 'exponential': exponentialRampToValueAtTime — curve hugging the next value
+ *  - 'hold':        setValueAtTime — keep the previous value, then jump at this point
+ *  - 'step':        setValueAtTime at this point — jump to the new value immediately
+ * The first point always uses setValueAtTime regardless of mode (no prior anchor).
+ * Exponential ramps clamp to a tiny positive minimum because Web Audio rejects
+ * 0 / negative targets.
+ */
+export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 'step';
+
+export type AutomationPoint = {
+  id: string;
+  beat: number;
+  value: number;
+  /** Curve into this point (from the previous point). Defaults to 'linear'. */
+  curve?: AutomationCurve;
+};
+
+export type AutomationLane = {
+  param: AutomationParam;
+  points: AutomationPoint[];
+};
+
+export const AUTOMATION_PARAM_META: Record<AutomationParam, { label: string; min: number; max: number; step: number; unit: string }> = {
+  volume: { label: 'VOLUME', min: -60, max: 6, step: 0.5, unit: 'dB' },
+  pan: { label: 'PAN', min: -1, max: 1, step: 0.05, unit: '' },
+  cutoff: { label: 'CUTOFF', min: 50, max: 18000, step: 10, unit: 'Hz' },
+  reverb: { label: 'REVERB', min: 0, max: 1, step: 0.01, unit: '' },
+  delay: { label: 'DELAY', min: 0, max: 1, step: 0.01, unit: '' },
+  eqLow: { label: 'EQ LOW', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  eqMid: { label: 'EQ MID', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  eqHigh: { label: 'EQ HIGH', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  compThreshold: { label: 'COMP THRES', min: -60, max: 0, step: 0.5, unit: 'dB' },
+  compRatio: { label: 'COMP RATIO', min: 1, max: 20, step: 0.5, unit: '' },
+  bitcrush: { label: 'BITCRUSH', min: 1, max: 16, step: 1, unit: 'bit' },
+};
+
+/**
+ * Tempo-map event — step change in BPM at a given beat position. Engine
+ * applies these via `Transport.bpm.setValueAtTime` so subsequent
+ * bar-relative events automatically run at the new tempo. Events are
+ * sorted by beat; the first one (typically at beat 0) acts as the
+ * starting tempo.
+ */
+export type TempoEvent = {
+  id: string;
+  beat: number;
+  bpm: number;
+  /**
+   * How BPM moves from the previous event TO this one. 'step' (default)
+   * jumps; 'ramp' linearly interpolates via `Transport.bpm.linearRampToValueAtTime`.
+   * Ignored on the first event since there's nothing prior to ramp from.
+   */
+  curve?: 'step' | 'ramp';
+};
+
+/**
+ * Sum wall-clock seconds across a beat range, walking through tempo
+ * events. Step segments contribute `(beats / bpm) * 60`; ramp segments
+ * use `(beats / avgBpm) * 60` because a linear BPM ramp from `a` to `b`
+ * across N beats lasts `N * 60 / ((a + b) / 2)` seconds.
+ * `endBeat` exclusive. Empty tempo map → just uses `project.bpm`.
+ */
+export function projectDurationSec(project: Project, endBeat: number): number {
+  const map = (project.tempoMap ?? []).slice().sort((a, b) => a.beat - b.beat);
+  let bpm = map.length > 0 && map[0].beat <= 0 ? map[0].bpm : project.bpm;
+  let cursor = 0;
+  let total = 0;
+  for (const ev of map) {
+    if (ev.beat <= 0) continue;
+    if (ev.beat >= endBeat) break;
+    const segBeats = ev.beat - cursor;
+    if (ev.curve === 'ramp') {
+      const avg = (bpm + ev.bpm) / 2;
+      total += (segBeats / avg) * 60;
+    } else {
+      total += (segBeats / bpm) * 60;
+    }
+    cursor = ev.beat;
+    bpm = ev.bpm;
+  }
+  total += ((endBeat - cursor) / bpm) * 60;
+  return total;
+}
 
 export type Project = {
   id: string;
@@ -201,6 +351,12 @@ export type Project = {
   tracks: Track[];
   /** Scene names for the session view. Sessions are columns in the launcher grid; each track's sessionSlots indexes into this array. */
   scenes?: { name: string }[];
+  /** Optional tempo automation. When present and non-empty, the project's `bpm` is treated as the fallback for the very start, with events overriding from their beat onward. */
+  tempoMap?: TempoEvent[];
+  /** Global swing amount 0..1, applied via Tone.Transport.swing. 0 = straight. */
+  swing?: number;
+  /** Note value the swing offsets — '8n' (default) or '16n'. */
+  swingSubdivision?: string;
   loopStart: number;
   loopEnd: number;
   loopEnabled: boolean;
