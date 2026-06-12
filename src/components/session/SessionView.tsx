@@ -47,7 +47,7 @@ export function SessionView() {
       >
         <span className="hud-label">SESSION // SCENE LAUNCHER</span>
         <button
-          className={`nerv-btn ${sessionMode ? 'is-active' : ''}`}
+          className={`hud-btn ${sessionMode ? 'is-active' : ''}`}
           onClick={() => setSessionMode(true)}
           aria-pressed={sessionMode}
           title="Engine plays session loops"
@@ -55,7 +55,7 @@ export function SessionView() {
           SESSION MODE
         </button>
         <button
-          className={`nerv-btn ${!sessionMode ? 'is-active' : ''}`}
+          className={`hud-btn ${!sessionMode ? 'is-active' : ''}`}
           onClick={() => setSessionMode(false)}
           aria-pressed={!sessionMode}
           title="Engine plays the arrangement timeline"
@@ -63,7 +63,7 @@ export function SessionView() {
           ARRANGEMENT
         </button>
         <button
-          className="nerv-btn nerv-btn--ghost"
+          className="hud-btn hud-btn--ghost"
           onClick={() => {
             stopAllSessionClips();
             audioEngine.stopAllSessionClips();
@@ -73,7 +73,7 @@ export function SessionView() {
           ■ STOP ALL
         </button>
         <div style={{ flex: 1 }} />
-        <button className="nerv-btn nerv-btn--icon" onClick={addScene} title="Add scene column">
+        <button className="hud-btn hud-btn--icon" onClick={addScene} title="Add scene column">
           +SCENE
         </button>
       </div>
@@ -149,7 +149,7 @@ const SceneHeader = memo(function SceneHeader({
       />
       <div style={{ display: 'flex', gap: 3 }}>
         <button
-          className="nerv-btn nerv-btn--green nerv-btn--icon"
+          className="hud-btn hud-btn--green hud-btn--icon"
           onClick={onLaunch}
           title={`Launch ${name}`}
           style={{ minWidth: 28, padding: '2px 6px', fontSize: 12 }}
@@ -157,7 +157,7 @@ const SceneHeader = memo(function SceneHeader({
           ▶
         </button>
         <button
-          className="nerv-btn nerv-btn--icon"
+          className="hud-btn hud-btn--icon"
           onClick={onRemove}
           title="Remove scene"
           style={{ minWidth: 28, padding: '2px 6px', fontSize: 10 }}
@@ -196,7 +196,7 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
       >
         <span style={{ fontSize: 10, color: '#fff', letterSpacing: '0.1em' }}>{track.name}</span>
         <button
-          className="nerv-btn nerv-btn--icon"
+          className="hud-btn hud-btn--icon"
           onClick={() => launchSessionClip(track.id, null)}
           title="Stop this track's session clip"
           style={{ alignSelf: 'flex-start', minWidth: 30, padding: '1px 6px', fontSize: 9 }}
@@ -310,7 +310,7 @@ const ClipPicker = memo(function ClipPicker({
         fontSize: 9,
         background: 'transparent',
         border: 'none',
-        color: 'var(--nerv-orange-bright)',
+        color: 'var(--hud-orange-bright)',
         cursor: 'pointer',
         padding: 0,
         marginTop: 2,

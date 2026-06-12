@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "LostBoard / N.E.R.V. M.A.G.I. DAW — a browser-based digital audio workstation styled after the Evangelion HUD",
+  "description": "LostBoard / T.R.I.A.D. DAW — a browser-based digital audio workstation with a tactical command-console HUD",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",

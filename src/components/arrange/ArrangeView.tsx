@@ -113,7 +113,7 @@ export function ArrangeView() {
             {!isMobile && <span className="hud-label">TRACKS</span>}
             <div style={{ display: 'flex', gap: 3 }}>
               <button
-                className="nerv-btn nerv-btn--icon"
+                className="hud-btn hud-btn--icon"
                 onClick={() => addTrack('synth')}
                 title="Add synth track"
                 style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
@@ -121,7 +121,7 @@ export function ArrangeView() {
                 +SYN
               </button>
               <button
-                className="nerv-btn nerv-btn--icon"
+                className="hud-btn hud-btn--icon"
                 onClick={() => addTrack('drum')}
                 title="Add drum track"
                 style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
@@ -129,7 +129,7 @@ export function ArrangeView() {
                 +DRM
               </button>
               <button
-                className="nerv-btn nerv-btn--icon"
+                className="hud-btn hud-btn--icon"
                 onClick={() => addTrack('audio')}
                 title="Add audio track"
                 style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
@@ -231,7 +231,7 @@ const ZoomFloater = memo(function ZoomFloater({
       }}
     >
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
         style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
@@ -239,7 +239,7 @@ const ZoomFloater = memo(function ZoomFloater({
         −
       </button>
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Reset zoom to 1×"
         onClick={() => setZoom(() => 1)}
         style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
@@ -247,7 +247,7 @@ const ZoomFloater = memo(function ZoomFloater({
         {zoom.toFixed(2)}×
       </button>
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
         style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
@@ -375,7 +375,7 @@ const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
           top: 0,
           bottom: 0,
           background: loopEnabled ? 'rgba(255,106,0,0.4)' : 'rgba(255,106,0,0.12)',
-          border: `1px solid ${loopEnabled ? 'var(--nerv-orange)' : 'rgba(255,106,0,0.4)'}`,
+          border: `1px solid ${loopEnabled ? 'var(--hud-orange)' : 'rgba(255,106,0,0.4)'}`,
           boxShadow: loopEnabled ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
           cursor: 'grab',
           touchAction: 'none',
@@ -431,7 +431,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             background: 'transparent',
             border: '1px solid transparent',
             padding: '2px 4px',
-            color: 'var(--nerv-orange-bright)',
+            color: 'var(--hud-orange-bright)',
             minWidth: 0,
           }}
           value={track.name}
@@ -442,7 +442,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           <AudioImportButton trackId={track.id} />
         ) : (
           <button
-            className="nerv-btn nerv-btn--icon"
+            className="hud-btn hud-btn--icon"
             onClick={(e) => {
               e.stopPropagation();
               selectTrack(track.id);
@@ -454,7 +454,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           </button>
         )}
         <button
-          className={`nerv-btn nerv-btn--icon ${overlayActive ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon ${overlayActive ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             if (laneCount === 0) {
@@ -475,7 +475,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           A
         </button>
         <button
-          className="nerv-btn nerv-btn--icon"
+          className="hud-btn hud-btn--icon"
           onClick={(e) => {
             e.stopPropagation();
             if (confirm(`Delete track "${track.name}"?`)) removeTrack(track.id);
@@ -487,7 +487,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto' }}>
         <button
-          className={`nerv-btn nerv-btn--icon ${track.mute ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
@@ -497,7 +497,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           M
         </button>
         <button
-          className={`nerv-btn nerv-btn--green nerv-btn--icon ${track.solo ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
@@ -507,7 +507,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           S
         </button>
         <button
-          className={`nerv-btn nerv-btn--rec nerv-btn--icon ${track.arm ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec hud-btn--icon ${track.arm ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { arm: !track.arm });
@@ -525,7 +525,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
         </button>
         <input
           type="range"
-          className="nerv-slider"
+          className="hud-slider"
           min={-48}
           max={6}
           step={0.5}
@@ -631,7 +631,7 @@ function AutomationOverlayHeader({
       </span>
       {!compact && (
         <button
-          className="nerv-btn nerv-btn--icon"
+          className="hud-btn hud-btn--icon"
           onClick={(e) => {
             e.stopPropagation();
             selectTrack(track.id);
@@ -764,7 +764,7 @@ function AutomationOverlayLane({
       >
         <line x1={0} y1={50} x2={100} y2={50} stroke="rgba(255,106,0,0.15)" strokeWidth={0.2} strokeDasharray="1 1" />
         {sorted.length > 1 && (
-          <path d={pathD} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+          <path d={pathD} fill="none" stroke="var(--hud-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
         )}
         {sorted.map((pt) => (
           <circle
@@ -772,7 +772,7 @@ function AutomationOverlayLane({
             cx={xFor(pt.beat)}
             cy={yFor(pt.value)}
             r={1.8}
-            fill="var(--nerv-orange-bright)"
+            fill="var(--hud-orange-bright)"
             stroke="#000"
             strokeWidth={0.3}
             vectorEffect="non-scaling-stroke"
@@ -926,7 +926,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
       </div>
       <ClipPreview clip={clip} />
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         onClick={(e) => {
           e.stopPropagation();
           removeClip(clip.id);
@@ -1055,7 +1055,7 @@ function AudioImportButton({ trackId }: { trackId: string }) {
   const addAudioClip = useStore((s) => s.addAudioClip);
   return (
     <label
-      className="nerv-btn nerv-btn--icon"
+      className="hud-btn hud-btn--icon"
       title="Import audio file"
       onClick={(e) => e.stopPropagation()}
       style={{ cursor: 'pointer' }}
@@ -1094,8 +1094,8 @@ const Playhead = memo(function Playhead({ height }: { height: number }) {
         left: 0,
         width: 2,
         height,
-        background: 'var(--nerv-green)',
-        boxShadow: '0 0 6px var(--nerv-green)',
+        background: 'var(--hud-green)',
+        boxShadow: '0 0 6px var(--hud-green)',
         pointerEvents: 'none',
         zIndex: 10,
         transform: `translateX(${positionBeats * BEAT_W}px)`,
@@ -1139,7 +1139,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
     >
       <span className="hud-label">CLIP // {found.name ?? found.kind.toUpperCase()}</span>
       <button
-        className={`nerv-btn ${warp ? 'is-active' : ''}`}
+        className={`hud-btn ${warp ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { warp: !warp })}
         aria-pressed={warp}
         title="Warp playback rate to follow project tempo"
@@ -1148,7 +1148,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
       </button>
       <span className="hud-readout">MODE</span>
       <button
-        className={`nerv-btn ${(found.stretchMode ?? 'pitch') === 'pitch' ? 'is-active' : ''}`}
+        className={`hud-btn ${(found.stretchMode ?? 'pitch') === 'pitch' ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { stretchMode: 'pitch' })}
         title="Varispeed — pitch follows tempo (cheap, instant)"
         disabled={!warp}
@@ -1156,7 +1156,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         PITCH
       </button>
       <button
-        className={`nerv-btn ${found.stretchMode === 'time' ? 'is-active' : ''}`}
+        className={`hud-btn ${found.stretchMode === 'time' ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { stretchMode: 'time' })}
         title="Granular time-stretch — pitch preserved across tempo changes (Tone.GrainPlayer)"
         disabled={!warp}
@@ -1177,7 +1177,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
       <span className="hud-readout">GAIN</span>
       <input
         type="range"
-        className="nerv-slider"
+        className="hud-slider"
         min={0}
         max={2}
         step={0.01}

@@ -146,7 +146,7 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className="nerv-btn nerv-btn--green" onClick={() => setOpen((v) => !v)}>
+      <button className="hud-btn hud-btn--green" onClick={() => setOpen((v) => !v)}>
         + ADD LANE
       </button>
       {open && (
@@ -168,7 +168,7 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
           {unusedParams.map((p) => (
             <button
               key={p}
-              className="nerv-btn"
+              className="hud-btn"
               onClick={() => {
                 addAutomationPoint(track.id, p, 0, currentValueFor(track, p));
                 setOpen(false);
@@ -290,13 +290,13 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
           </span>
           <div style={{ flex: 1 }} />
           <button
-            className="nerv-btn nerv-btn--ghost"
+            className="hud-btn hud-btn--ghost"
             onClick={() => addAutomationPoint(track.id, lane.param, projectBeats / 2, currentValueFor(track, lane.param))}
           >
             + POINT
           </button>
           <button
-            className="nerv-btn nerv-btn--rec"
+            className="hud-btn hud-btn--rec"
             onClick={() => {
               if (confirm(`Remove the ${meta.label} automation lane?`)) {
                 removeAutomationLane(track.id, lane.param);
@@ -332,7 +332,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
           {/* horizontal mid line */}
           <line x1={0} y1={50} x2={100} y2={50} stroke="rgba(255,106,0,0.18)" strokeWidth={0.2} strokeDasharray="1 1" />
           {sorted.length > 1 && (
-            <path d={pathD} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+            <path d={pathD} fill="none" stroke="var(--hud-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           )}
           {sorted.map((pt) => (
             <circle
@@ -340,7 +340,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
               cx={xFor(pt.beat)}
               cy={yFor(pt.value)}
               r={1.4}
-              fill="var(--nerv-orange-bright)"
+              fill="var(--hud-orange-bright)"
               stroke="#000"
               strokeWidth={0.3}
               vectorEffect="non-scaling-stroke"
@@ -414,7 +414,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
                 ))}
               </select>
               <button
-                className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                className="hud-btn hud-btn--icon hud-btn--rec"
                 onClick={() => removeAutomationPoint(track.id, lane.param, pt.id)}
                 title="Remove point"
               >

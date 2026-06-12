@@ -9,11 +9,11 @@ import { audioEngine } from '../../audio/engine';
 
 /** Flavor lines that get mixed into the live telemetry rotation. */
 const FLAVOR = [
-  'A.T. FIELD STABLE',
-  'PATTERN BLUE NOT DETECTED',
-  'LCL PRESSURE NORMAL',
+  'HEX FIELD STABLE',
+  'NO SIGNAL ANOMALY DETECTED',
+  'BUS PRESSURE NOMINAL',
   'NEURAL INTERFACE ACTIVE',
-  'EVA UNIT READY FOR LAUNCH',
+  'ALL DECKS READY FOR LAUNCH',
 ];
 
 export function StatusBar() {
@@ -47,7 +47,7 @@ export function StatusBar() {
           contain: 'layout style',
         }}
       >
-        <NervMark />
+        <TriadMark />
         <span
           className="hud-value"
           style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -59,7 +59,7 @@ export function StatusBar() {
         {midi.connected && <Indicator label="MIDI" on color="green" />}
         <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 10 }}>
-          <span style={{ color: 'var(--nerv-orange-bright)' }}>{bpm.toFixed(0)}</span>
+          <span style={{ color: 'var(--hud-orange-bright)' }}>{bpm.toFixed(0)}</span>
         </div>
       </div>
     );
@@ -80,9 +80,9 @@ export function StatusBar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <NervMark />
+        <TriadMark />
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>NERV / M.A.G.I.</span>
+          <span className="hud-label" style={{ fontSize: 8 }}>T.R.I.A.D. SYSTEM</span>
           <span className="hud-value" style={{ fontSize: 12 }}>LOSTBOARD // {name}</span>
         </div>
       </div>
@@ -94,7 +94,7 @@ export function StatusBar() {
         <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 11 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>BPM</span>
-          <span style={{ color: 'var(--nerv-orange-bright)' }}>{bpm.toFixed(1)}</span>
+          <span style={{ color: 'var(--hud-orange-bright)' }}>{bpm.toFixed(1)}</span>
         </div>
         <div className="display" style={{ fontSize: 11 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>SIG</span>
@@ -124,11 +124,11 @@ const PositionReadout = memo(function PositionReadout({ numerator }: { numerator
   const sixteenth = Math.floor((positionBeats % 1) * 4) + 1;
   return (
     <div className="display display--big" style={{ minWidth: 110 }}>
-      <span style={{ color: 'var(--nerv-orange-bright)' }}>{String(bar).padStart(3, '0')}</span>
+      <span style={{ color: 'var(--hud-orange-bright)' }}>{String(bar).padStart(3, '0')}</span>
       <span style={{ color: 'rgba(255,106,0,0.5)' }}>:</span>
       <span>{String(beat).padStart(2, '0')}</span>
       <span style={{ color: 'rgba(255,106,0,0.5)' }}>:</span>
-      <span style={{ color: 'var(--nerv-amber)' }}>{String(sixteenth).padStart(2, '0')}</span>
+      <span style={{ color: 'var(--hud-amber)' }}>{String(sixteenth).padStart(2, '0')}</span>
     </div>
   );
 });
@@ -171,17 +171,18 @@ function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolea
   );
 }
 
-function NervMark() {
+function TriadMark() {
   return (
     <div style={{ width: 28, height: 28, position: 'relative' }}>
       <svg viewBox="0 0 100 100" width="28" height="28">
         <polygon
           points="50,4 92,28 92,72 50,96 8,72 8,28"
           fill="none"
-          stroke="var(--nerv-orange)"
+          stroke="var(--hud-orange)"
           strokeWidth="3"
         />
-        <path d="M22 44 L78 44 L50 88 Z" fill="var(--nerv-orange)" />
+        <path d="M50 12 L82 68 L18 68 Z" fill="var(--hud-orange)" />
+        <circle cx="50" cy="80" r="7" fill="var(--hud-orange)" />
       </svg>
     </div>
   );
@@ -189,7 +190,7 @@ function NervMark() {
 
 /**
  * Ticker — rotates through live engine + transport telemetry mixed with
- * NERV flavor lines. Pulls a fresh snapshot every cycle so what scrolls
+ * console flavor lines. Pulls a fresh snapshot every cycle so what scrolls
  * past reflects what the engine actually sees (master peak dB, transport
  * state, MIDI device, track / clip counts) rather than canned strings.
  */
@@ -207,7 +208,7 @@ function Ticker() {
   const midiClockIn = useStore((s) => s.midiClockIn);
   const bpm = useStore((s) => s.project.bpm);
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
-  const [msg, setMsg] = useState('MAGI SYSTEM ONLINE');
+  const [msg, setMsg] = useState('TRIAD SYSTEM ONLINE');
 
   useEffect(() => {
     const sample = () => {

@@ -139,7 +139,7 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
           maxHeight: '92vh',
           overflow: 'auto',
           background: 'rgba(10,0,0,0.95)',
-          border: '1px solid var(--nerv-orange)',
+          border: '1px solid var(--hud-orange)',
           boxShadow: 'var(--hud-glow)',
           padding: 18,
           clipPath: 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
@@ -147,14 +147,14 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <span className="hud-label" style={{ fontSize: 12 }}>
-            MAGI HELP // KEYBOARD &amp; GESTURE REFERENCE
+            TRIAD HELP // KEYBOARD &amp; GESTURE REFERENCE
           </span>
           <div style={{ flex: 1 }} />
           <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
             ESC or ? to close
           </span>
           <button
-            className="nerv-btn nerv-btn--icon"
+            className="hud-btn hud-btn--icon"
             onClick={onClose}
             title="Close"
             style={{ minWidth: 32 }}
@@ -191,7 +191,7 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
                           padding: '2px 8px 2px 0',
                           whiteSpace: 'nowrap',
                           fontFamily: 'var(--font-data)',
-                          color: 'var(--nerv-orange-bright)',
+                          color: 'var(--hud-orange-bright)',
                           verticalAlign: 'top',
                         }}
                       >

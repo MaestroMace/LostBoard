@@ -103,7 +103,7 @@ export function PianoRoll() {
       <div style={{ padding: 16 }}>
         <HexFrame title={activeTrack.name}>
           <p>This track has no MIDI clip.</p>
-          <button className="nerv-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
+          <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
             CREATE MIDI CLIP
           </button>
         </HexFrame>
@@ -237,7 +237,7 @@ export function PianoRoll() {
           borderBottom: '1px solid rgba(255,106,0,0.4)',
         }}
       >
-        <span className="hud-label">PIANO ROLL // M.A.G.I. MELCHIOR</span>
+        <span className="hud-label">PIANO ROLL // TRIAD DENEB</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {synthTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -253,24 +253,24 @@ export function PianoRoll() {
           ))}
         </select>
         <button
-          className="nerv-btn"
+          className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
         >
           + CLIP
         </button>
         <div style={{ flex: 1 }} />
-        <button className={`nerv-btn ${tool === 'draw' ? 'is-active' : ''}`} onClick={() => setTool('draw')}>
+        <button className={`hud-btn ${tool === 'draw' ? 'is-active' : ''}`} onClick={() => setTool('draw')}>
           DRAW
         </button>
         <button
-          className={`nerv-btn nerv-btn--green ${tool === 'select' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--green ${tool === 'select' ? 'is-active' : ''}`}
           onClick={() => setTool('select')}
           title="Drag a rectangle to select notes inside"
         >
           SELECT
         </button>
         <button
-          className={`nerv-btn nerv-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
           onClick={() => setTool('erase')}
         >
           ERASE
@@ -307,7 +307,7 @@ export function PianoRoll() {
           ))}
         </select>
         <button
-          className="nerv-btn nerv-btn--ghost"
+          className="hud-btn hud-btn--ghost"
           onClick={() =>
             quantizeClip(
               activeTrack.id,
@@ -325,7 +325,7 @@ export function PianoRoll() {
           ⎌ QUANTIZE{selectedNoteIds.length > 0 ? ` SEL` : ''}
         </button>
         <button
-          className="nerv-btn nerv-btn--ghost"
+          className="hud-btn hud-btn--ghost"
           onClick={() =>
             humanizeClip(
               activeTrack.id,
@@ -344,7 +344,7 @@ export function PianoRoll() {
         </button>
         {selectedNoteIds.length > 0 && (
           <button
-            className="nerv-btn nerv-btn--ghost"
+            className="hud-btn hud-btn--ghost"
             onClick={clearNoteSelection}
             title="Clear note selection"
           >
@@ -416,7 +416,7 @@ export function PianoRoll() {
                 width: Math.abs(marquee.x1 - marquee.x0),
                 height: Math.abs(marquee.y1 - marquee.y0),
                 background: 'rgba(120,255,140,0.08)',
-                border: '1px dashed var(--nerv-green)',
+                border: '1px dashed var(--hud-green)',
                 pointerEvents: 'none',
               }}
             />
@@ -468,7 +468,7 @@ const ZoomFloater = memo(function ZoomFloater({
       }}
     >
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
         style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
@@ -476,7 +476,7 @@ const ZoomFloater = memo(function ZoomFloater({
         −
       </button>
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Reset zoom to 1×"
         onClick={() => setZoom(() => 1)}
         style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
@@ -484,7 +484,7 @@ const ZoomFloater = memo(function ZoomFloater({
         {zoom.toFixed(2)}×
       </button>
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
         style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
@@ -525,7 +525,7 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
               justifyContent: 'flex-end',
               paddingRight: 4,
               fontSize: 8,
-              color: isC ? 'var(--nerv-amber)' : 'rgba(255,106,0,0.5)',
+              color: isC ? 'var(--hud-amber)' : 'rgba(255,106,0,0.5)',
               cursor: 'pointer',
               fontFamily: 'var(--font-data)',
             }}
@@ -785,9 +785,9 @@ const NoteEl = memo(function NoteEl({
         width: Math.max(8, note.length * BEAT_W),
         height: ROW_H - 2,
         background: `linear-gradient(180deg, ${color}cc, ${color}77)`,
-        border: selected ? '1px solid var(--nerv-green)' : '1px solid #fff',
+        border: selected ? '1px solid var(--hud-green)' : '1px solid #fff',
         boxShadow: selected
-          ? '0 0 8px var(--nerv-green), inset 0 0 0 1px rgba(120,255,140,0.4)'
+          ? '0 0 8px var(--hud-green), inset 0 0 0 1px rgba(120,255,140,0.4)'
           : '0 0 6px rgba(255,255,255,0.4)',
         cursor: 'move',
         borderRadius: 1,
@@ -929,12 +929,12 @@ const VelocityLane = memo(function VelocityLane({
                 bottom: 6,
                 width: Math.max(3, Math.min(beatW * 0.4, 10)),
                 height: h,
-                background: isSel ? 'var(--nerv-green)' : color,
+                background: isSel ? 'var(--hud-green)' : color,
                 opacity: isSel ? 0.95 : 0.7,
                 cursor: 'ns-resize',
                 touchAction: 'none',
                 borderTop: '1px solid #fff',
-                boxShadow: isSel ? '0 0 6px var(--nerv-green)' : undefined,
+                boxShadow: isSel ? '0 0 6px var(--hud-green)' : undefined,
               }}
               title={`vel ${(n.velocity * 100).toFixed(0)}%`}
             />
@@ -957,8 +957,8 @@ const PianoRollPlayhead = memo(function PianoRollPlayhead({ clipStart }: { clipS
         left: 0,
         width: 2,
         height: ROWS * ROW_H,
-        background: 'var(--nerv-green)',
-        boxShadow: '0 0 6px var(--nerv-green)',
+        background: 'var(--hud-green)',
+        boxShadow: '0 0 6px var(--hud-green)',
         pointerEvents: 'none',
         transform: `translateX(${x}px)`,
         willChange: 'transform',

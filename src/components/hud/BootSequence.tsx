@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 
 const STAGES = [
-  '> CHECKING MAGI SYSTEM .................. OK',
+  '> CHECKING TRIAD SYSTEM ................. OK',
   '> WAKING WEB AUDIO CONTEXT .............. OK',
-  '> SYNC CASPER / MELCHIOR / BALTHASAR .... OK',
+  '> SYNC VEGA / ALTAIR / DENEB ............ OK',
   '> LOADING SAMPLE BANK / OSC PRESETS ..... OK',
   '> ROUTING MASTER BUS // LIMITER -1.0dB .. OK',
-  '> A.T. FIELD ENGAGED .................... OK',
+  '> HEX FIELD ENGAGED ..................... OK',
   '> CLEAR FOR LAUNCH ......................',
 ];
 
@@ -40,11 +40,11 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
     >
       <div className="warning-stripe" style={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
       <div className="warning-stripe" style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} />
-      <div className="at-field" style={{ position: 'absolute', inset: 0, opacity: 0.2 }} />
+      <div className="hex-field" style={{ position: 'absolute', inset: 0, opacity: 0.2 }} />
 
-      <NervSeal />
-      <div className="hud-big" style={{ fontSize: 28, letterSpacing: '0.4em' }}>N.E.R.V.</div>
-      <div className="hud-label" style={{ fontSize: 11 }}>M.A.G.I. SYSTEM // LOSTBOARD DAW</div>
+      <TriadSeal />
+      <div className="hud-big" style={{ fontSize: 28, letterSpacing: '0.4em' }}>LOSTBOARD</div>
+      <div className="hud-label" style={{ fontSize: 11 }}>T.R.I.A.D. SYSTEM // TACTICAL AUDIO DECK</div>
 
       <div
         style={{
@@ -56,7 +56,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
           padding: 16,
           fontFamily: 'var(--font-data)',
           fontSize: 11,
-          color: 'var(--nerv-orange-bright)',
+          color: 'var(--hud-orange-bright)',
           lineHeight: 1.6,
         }}
       >
@@ -68,7 +68,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
 
       {done && (
         <button
-          className="nerv-btn nerv-btn--green pulse"
+          className="hud-btn hud-btn--green pulse"
           onClick={() => {
             setAcknowledged(true);
             onDone();
@@ -80,13 +80,13 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
         </button>
       )}
       <div className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
-        AUTHORIZATION: COMMANDER IKARI
+        AUTHORIZATION: DECK COMMANDER
       </div>
     </div>
   );
 }
 
-function NervSeal() {
+function TriadSeal() {
   return (
     <svg viewBox="0 0 200 200" width="120" height="120" className="pulse">
       <defs>
@@ -108,17 +108,20 @@ function NervSeal() {
         strokeWidth="1"
         opacity="0.8"
       />
-      <path d="M48 90 L152 90 L100 178 Z" fill="url(#seal)" />
+      <path d="M100 32 L154 126 L46 126 Z" fill="url(#seal)" />
+      <circle cx="76" cy="148" r="4" fill="#ff6600" opacity="0.8" />
+      <circle cx="100" cy="150" r="6" fill="url(#seal)" />
+      <circle cx="124" cy="148" r="4" fill="#ff6600" opacity="0.8" />
       <text
         x="100"
-        y="78"
+        y="116"
         textAnchor="middle"
         fontFamily="Orbitron"
         fontWeight="900"
-        fontSize="22"
+        fontSize="20"
         fill="#0a0a0a"
       >
-        NERV
+        TRIAD
       </text>
     </svg>
   );

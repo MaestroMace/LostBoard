@@ -98,11 +98,11 @@ export default function App() {
       <StatusBar />
       <Transport />
 
-      <div className="nerv-tabs">
+      <div className="hud-tabs">
         {TABS.map((t) => (
           <button
             key={t.id}
-            className={`nerv-tab ${view === t.id ? 'is-active' : ''}`}
+            className={`hud-tab ${view === t.id ? 'is-active' : ''}`}
             onClick={() => setView(t.id)}
           >
             {t.label}
@@ -110,7 +110,7 @@ export default function App() {
         ))}
         <div style={{ flex: 1 }} />
         <button
-          className="nerv-btn nerv-btn--ghost nerv-btn--icon"
+          className="hud-btn hud-btn--ghost hud-btn--icon"
           onClick={() => setHelpOpen(true)}
           title="Help (?)"
           style={{ alignSelf: 'center', minWidth: 32 }}
@@ -172,7 +172,7 @@ const FooterBar = memo(function FooterBar() {
       <span className="hud-readout">CLIPS {String(clipCount).padStart(3, '0')}</span>
       <span className="hud-readout">{playing ? 'TRANSPORT ROLLING' : 'TRANSPORT HALTED'}</span>
       <div style={{ flex: 1 }} />
-      <span className="hud-readout--dim hud-readout">A.T. FIELD STABLE // SYNC 87% // NO PATTERN BLUE</span>
+      <span className="hud-readout--dim hud-readout">HEX FIELD STABLE // CORES SYNCED // NO ANOMALY</span>
     </div>
   );
 });

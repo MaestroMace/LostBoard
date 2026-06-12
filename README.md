@@ -1,14 +1,14 @@
-# LOSTBOARD // N.E.R.V. M.A.G.I. DAW
+# LOSTBOARD // T.R.I.A.D. DAW
 
-A browser-based Digital Audio Workstation styled after the Evangelion HUD —
-intended to be reachable from an iPhone over Tailscale.
+A browser-based Digital Audio Workstation styled as a tactical command-console
+HUD — intended to be reachable from an iPhone over Tailscale.
 
-> _"Operation Yashima will commence in T-minus zero."_
+> _"All cores synced. Transport clear for launch."_
 
 ## What's inside
 
-- **Boot sequence** with NERV seal, MAGI startup checks and A.T.-field accents
-- **Top HUD** with bar:beat:sixteenth display, BPM/SIG readout, MAGI status ticker
+- **Boot sequence** with TRIAD seal, core startup checks and hex-field accents
+- **Top HUD** with bar:beat:sixteenth display, BPM/SIG readout, TRIAD status ticker
 - **Transport**: play / pause / stop / record / loop / metronome / tempo
 - **Arrange view** with multi-track timeline, draggable + resizable clips,
   bar/beat ruler, playhead, double-click to drop a new clip
@@ -20,8 +20,8 @@ intended to be reachable from an iPhone over Tailscale.
 - **Dual-engine synth** — switch each synth track between a **subtractive**
   engine (osc selector, detune, filter cutoff + resonance, drive) and an
   **FM** engine (harmonicity, mod index), both with ADSR, reverb + delay
-  sends, and Eva-themed presets (`BERSERK BASS`, `LCL PAD`, `AT-FIELD LEAD`,
-  `TANG PLUCK`, `ANGEL CHOIR`, `NERV ARP`)
+  sends, and console-flavored presets (`REDLINE BASS`, `NEBULA PAD`,
+  `HEX-FIELD LEAD`, `VECTOR PLUCK`, `STELLAR CHOIR`, `TRIAD ARP`)
 - **Per-track FX rack**: 3-band EQ, compressor, chorus and bit-crusher, each
   individually switchable, with a master rack bypass
 - **Audio tracks**: import audio files or **record from the microphone**
@@ -63,8 +63,8 @@ intended to be reachable from an iPhone over Tailscale.
   step-sequencer cells take a tap-to-toggle / drag-for-velocity gesture and
   the piano roll has a DRAW/ERASE tool, so velocity and note-delete work
   without a mouse wheel or modifier keys
-- **NERV aesthetic** everywhere: scan lines, CRT flicker, hex panels,
-  warning stripes, MAGI status ticker, glowing orange CRT type
+- **Command-console aesthetic** everywhere: scan lines, CRT flicker, hex
+  panels, warning stripes, status ticker, glowing orange CRT type
 
 ## Run it
 
@@ -84,7 +84,7 @@ http://<your-mac-hostname>.<your-tailnet>.ts.net:5173
 
 or the raw tailnet IP. Then **Share → Add to Home Screen** in Safari to install
 it as a standalone app — it will respect the iOS safe-area insets, use a
-black-translucent status bar, and adopt the NERV orange theme color.
+black-translucent status bar, and adopt the HUD orange theme color.
 
 ## Production build
 
@@ -103,7 +103,7 @@ src/
   state/
     store.ts           # Zustand store + localStorage helpers
   components/
-    hud/               # NERV HUD primitives: HexFrame, Knob, Meter, StatusBar, BootSequence
+    hud/               # HUD primitives: HexFrame, Knob, Meter, StatusBar, BootSequence
     transport/         # transport controls
     arrange/           # multi-track arrange view
     mixer/             # channel strips + master
@@ -113,7 +113,7 @@ src/
     project/           # save / load / export / import
   styles/
     globals.css        # base tokens, scroll, safe-area
-    nerv-hud.css       # HUD components (scanlines, hex frame, buttons, meters…)
+    hud.css            # HUD components (scanlines, hex frame, buttons, meters…)
 ```
 
 ## Roadmap
@@ -137,7 +137,7 @@ changelog and known limitations):
   with click / Cmd+click, then run the action on just the selection)
 - **Real time-stretch** on audio clips via `Tone.GrainPlayer` — pitch
   preserved across tempo changes
-- **Live MAGI ticker** reporting master peak, transport state, track /
+- **Live status ticker** reporting master peak, transport state, track /
   clip / automation / tempo counts, and MIDI device
 - **PWA install prompt** on Chromium browsers (⬇ INSTALL TO HOME in
   the PROJECT view)

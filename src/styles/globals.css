@@ -1,23 +1,23 @@
-/* ---------------- N.E.R.V. ROOT TOKENS ---------------- */
+/* ---------------- LOSTBOARD ROOT TOKENS ---------------- */
 :root {
   /* Palette */
-  --nerv-orange: #ff6a00;
-  --nerv-orange-bright: #ffb347;
-  --nerv-orange-deep: #8a1f00;
-  --nerv-amber: #ffaa00;
-  --nerv-green: #00ff88;
-  --nerv-green-dim: #0a4a2a;
-  --nerv-red: #ff2222;
-  --nerv-blue: #66ccff;
-  --nerv-purple: #b266ff;
-  --nerv-ink: #050505;
-  --nerv-ink-2: #0a0a0a;
-  --nerv-ink-3: #111111;
-  --nerv-ink-4: #1a1414;
-  --nerv-bone: #f2efe6;
-  --nerv-grid: rgba(255, 106, 0, 0.08);
-  --nerv-grid-strong: rgba(255, 106, 0, 0.22);
-  --nerv-scanline: rgba(0, 0, 0, 0.35);
+  --hud-orange: #ff6a00;
+  --hud-orange-bright: #ffb347;
+  --hud-orange-deep: #8a1f00;
+  --hud-amber: #ffaa00;
+  --hud-green: #00ff88;
+  --hud-green-dim: #0a4a2a;
+  --hud-red: #ff2222;
+  --hud-blue: #66ccff;
+  --hud-purple: #b266ff;
+  --hud-ink: #050505;
+  --hud-ink-2: #0a0a0a;
+  --hud-ink-3: #111111;
+  --hud-ink-4: #1a1414;
+  --hud-bone: #f2efe6;
+  --hud-grid: rgba(255, 106, 0, 0.08);
+  --hud-grid-strong: rgba(255, 106, 0, 0.22);
+  --hud-scanline: rgba(0, 0, 0, 0.35);
 
   /* Typography */
   --font-display: 'Orbitron', 'Share Tech Mono', monospace;
@@ -26,7 +26,7 @@
 
   /* Layout */
   --hud-radius: 2px;
-  --hud-border: 1px solid var(--nerv-orange);
+  --hud-border: 1px solid var(--hud-orange);
   --hud-glow: 0 0 8px rgba(255, 106, 0, 0.5), inset 0 0 12px rgba(255, 106, 0, 0.08);
   --hud-shadow: 0 0 24px rgba(255, 106, 0, 0.18);
 
@@ -48,8 +48,8 @@ body,
 }
 
 html {
-  background: var(--nerv-ink);
-  color: var(--nerv-orange);
+  background: var(--hud-ink);
+  color: var(--hud-orange);
   font-family: var(--font-mono);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;

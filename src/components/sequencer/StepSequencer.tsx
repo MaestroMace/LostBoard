@@ -50,7 +50,7 @@ export function StepSequencer() {
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <HexFrame title={activeTrack.name}>
           <p>This track has no pattern clip.</p>
-          <button className="nerv-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
+          <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
             CREATE PATTERN CLIP
           </button>
         </HexFrame>
@@ -75,7 +75,7 @@ export function StepSequencer() {
         className="hex-grid-bg"
       >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span className="hud-label">STEP SEQUENCER // M.A.G.I. BALTHASAR</span>
+        <span className="hud-label">STEP SEQUENCER // TRIAD VEGA</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {drumTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -91,7 +91,7 @@ export function StepSequencer() {
           ))}
         </select>
         <button
-          className="nerv-btn"
+          className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
         >
           + PATTERN
@@ -110,7 +110,7 @@ export function StepSequencer() {
         </select>
         <div style={{ flex: 1 }} />
         <button
-          className={`nerv-btn ${mode === 'normal' ? 'is-active' : ''}`}
+          className={`hud-btn ${mode === 'normal' ? 'is-active' : ''}`}
           onClick={() => setMode('normal')}
           aria-pressed={mode === 'normal'}
           title="Normal mode — tap toggles, drag sets velocity"
@@ -118,7 +118,7 @@ export function StepSequencer() {
           NORM
         </button>
         <button
-          className={`nerv-btn ${mode === 'prob' ? 'is-active' : ''}`}
+          className={`hud-btn ${mode === 'prob' ? 'is-active' : ''}`}
           onClick={() => setMode('prob')}
           aria-pressed={mode === 'prob'}
           title="Probability mode — tap cycles trigger chance (100/75/50/25%)"
@@ -200,7 +200,7 @@ const StepCursor = memo(function StepCursor({
         bottom: 0,
         left: `calc(64px + ${step + 1} * 4px + ${step} * ${colW})`,
         width: `calc(${colW})`,
-        border: '1px solid var(--nerv-green)',
+        border: '1px solid var(--hud-green)',
         boxShadow: '0 0 8px rgba(0,255,136,0.5)',
         background: 'rgba(0,255,136,0.08)',
         pointerEvents: 'none',
@@ -306,12 +306,12 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         flexDirection: 'column',
         gap: 2,
         alignItems: 'stretch',
-        outline: hover ? '2px dashed var(--nerv-orange-bright)' : 'none',
+        outline: hover ? '2px dashed var(--hud-orange-bright)' : 'none',
       }}
     >
       <button
         onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         style={{ fontSize: 9, padding: '3px 4px', width: '100%' }}
         title={
           sampleId
@@ -320,7 +320,7 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         }
       >
         {DRUM_LABELS[pad]}
-        {sampleId && <span style={{ color: 'var(--nerv-orange-bright)' }}> ◆</span>}
+        {sampleId && <span style={{ color: 'var(--hud-orange-bright)' }}> ◆</span>}
       </button>
       <select
         className="display"
@@ -424,7 +424,7 @@ const StepCell = memo(function StepCell({
         height: 38,
         background: cellBg(on, velocity),
         border: on
-          ? '1px solid var(--nerv-orange)'
+          ? '1px solid var(--hud-orange)'
           : `1px solid ${quarter ? 'rgba(255,106,0,0.45)' : 'rgba(255,106,0,0.18)'}`,
         boxShadow: on ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
         position: 'relative',

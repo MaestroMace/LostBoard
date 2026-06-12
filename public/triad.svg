@@ -10,7 +10,10 @@
   <g transform="translate(128 128)">
     <polygon points="0,-100 87,-50 87,50 0,100 -87,50 -87,-50" fill="none" stroke="url(#g)" stroke-width="6"/>
     <polygon points="0,-72 62,-36 62,36 0,72 -62,36 -62,-36" fill="none" stroke="#ff6600" stroke-width="2" opacity="0.8"/>
-    <path d="M-60 -8 L60 -8 L0 92 Z" fill="url(#g)"/>
-    <text x="0" y="-44" text-anchor="middle" font-family="Orbitron, sans-serif" font-weight="900" font-size="22" fill="#0a0a0a" stroke="#0a0a0a" stroke-width="0.5">NERV</text>
+    <path d="M0 -62 L56 34 L-56 34 Z" fill="url(#g)"/>
+    <circle cx="-24" cy="52" r="5" fill="#ff6600" opacity="0.8"/>
+    <circle cx="0" cy="56" r="7" fill="url(#g)"/>
+    <circle cx="24" cy="52" r="5" fill="#ff6600" opacity="0.8"/>
+    <text x="0" y="24" text-anchor="middle" font-family="Orbitron, sans-serif" font-weight="900" font-size="22" fill="#0a0a0a" stroke="#0a0a0a" stroke-width="0.5">TRIAD</text>
   </g>
 </svg>

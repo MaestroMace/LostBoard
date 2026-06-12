@@ -22,7 +22,7 @@ import {
   type TrackKind,
 } from '../audio/types';
 
-const NERV_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
+const HUD_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
 
 export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -96,9 +96,9 @@ function defaultMelody(lengthBeats: number): Note[] {
 function makeProject(): Project {
   const drumTrack: Track = {
     id: newId('trk'),
-    name: 'MAGI-01 // BALTHASAR',
+    name: 'TRIAD-01 // VEGA',
     kind: 'drum',
-    color: NERV_COLORS[0],
+    color: HUD_COLORS[0],
     volume: -6,
     pan: 0,
     mute: false,
@@ -109,10 +109,10 @@ function makeProject(): Project {
   };
   const bassTrack: Track = {
     id: newId('trk'),
-    name: 'MAGI-02 // CASPER',
+    name: 'TRIAD-02 // ALTAIR',
     kind: 'synth',
     synthEngine: 'subtractive',
-    color: NERV_COLORS[1],
+    color: HUD_COLORS[1],
     volume: -10,
     pan: -0.15,
     mute: false,
@@ -124,10 +124,10 @@ function makeProject(): Project {
   };
   const leadTrack: Track = {
     id: newId('trk'),
-    name: 'MAGI-03 // MELCHIOR',
+    name: 'TRIAD-03 // DENEB',
     kind: 'synth',
     synthEngine: 'subtractive',
-    color: NERV_COLORS[2],
+    color: HUD_COLORS[2],
     volume: -12,
     pan: 0.15,
     mute: false,
@@ -184,7 +184,7 @@ function makeProject(): Project {
 
   return {
     id: newId('proj'),
-    name: 'OPERATION YASHIMA',
+    name: 'OPERATION DOWNBEAT',
     bpm: 124,
     numerator: 4,
     denominator: 4,
@@ -611,7 +611,7 @@ export const useStore = create<Store>()(
 
     addTrack: (kind) => {
       const tracks = get().project.tracks;
-      const color = NERV_COLORS[tracks.length % NERV_COLORS.length];
+      const color = HUD_COLORS[tracks.length % HUD_COLORS.length];
       const name = `TRK ${String(tracks.length + 1).padStart(2, '0')} // ${kind.toUpperCase()}`;
       const t: Track = {
         id: newId('trk'),
