@@ -150,8 +150,12 @@ class Engine {
     }
     if (enabled) {
       this.metronomeEvent = Tone.getTransport().scheduleRepeat((time) => {
-        const pos = Tone.getTransport().position.toString();
-        const beat = parseInt(pos.split(':')[1] ?? '0', 10);
+        // derive the beat from the *scheduled* time — the callback runs
+        // lookAhead early, so reading the live position can still be on
+        // the previous beat and put the downbeat accent in the wrong place
+        const t = Tone.getTransport();
+        const tsNum = Array.isArray(t.timeSignature) ? t.timeSignature[0] : t.timeSignature;
+        const beat = Math.round(t.getTicksAtTime(time) / t.PPQ) % tsNum;
         const pitch = beat === 0 ? 'C5' : 'C4';
         this.metronomeSynth?.triggerAttackRelease(pitch, '32n', time, 0.9);
       }, '4n');
@@ -861,7 +865,7 @@ class TrackNode {
         wantKind === 'sampler' &&
         this.instrument.kind === 'sampler' &&
         (this.instrument as SamplerInstrument).getSourceId() !==
-          samplerZoneSignature(resolveSamplerZones(track));
+          samplerZoneSignature(resolveSamplerZones(track), this.sampleBank);
       if (this.instrument.kind !== wantKind || samplerSourceChanged) {
         this.instrument.dispose();
         this.instrument = buildInstrument(track, this.sampleBank);
@@ -917,6 +921,19 @@ class TrackNode {
   }
 
   /**
+   * Set a range-capped Param directly with clamping. Tone's ramp helpers
+   * (`rampTo` → `setRampPoint`) substitute a positive epsilon (1e-7) when
+   * the current value is exactly 0, and zero targets get the same
+   * substitution — both out of range for params capped at 0 like the
+   * compressor threshold ([-100, 0] dB), which throws a RangeError. Since
+   * the compressor is constructed at threshold 0, ANY threshold ramp threw
+   * and took down the whole TrackNode constructor / schedule pass.
+   */
+  private setClamped(param: { value: number; minValue: number; maxValue: number }, value: number) {
+    param.value = Math.max(param.minValue, Math.min(param.maxValue, value));
+  }
+
+  /**
    * Apply the FX rack. `automated` carries the set of params currently
    * driven by an automation lane — those are skipped here so a stray knob
    * tweak elsewhere doesn't trigger a `rampTo` that stomps the automation's
@@ -928,8 +945,8 @@ class TrackNode {
       if (!automated?.has('eqLow')) this.eq.low.rampTo(0, 0.05);
       if (!automated?.has('eqMid')) this.eq.mid.rampTo(0, 0.05);
       if (!automated?.has('eqHigh')) this.eq.high.rampTo(0, 0.05);
-      if (!automated?.has('compThreshold')) this.comp.threshold.rampTo(0, 0.05);
-      if (!automated?.has('compRatio')) this.comp.ratio.rampTo(1, 0.05);
+      if (!automated?.has('compThreshold')) this.setClamped(this.comp.threshold, 0);
+      if (!automated?.has('compRatio')) this.setClamped(this.comp.ratio, 1);
       this.chorus.wet.rampTo(0, 0.05);
       this.crusher.wet.rampTo(0, 0.05);
       return;
@@ -938,10 +955,10 @@ class TrackNode {
     if (!automated?.has('eqMid')) this.eq.mid.rampTo(fx.eqMid, 0.05);
     if (!automated?.has('eqHigh')) this.eq.high.rampTo(fx.eqHigh, 0.05);
     if (!automated?.has('compThreshold')) {
-      this.comp.threshold.rampTo(fx.compOn ? fx.compThreshold : 0, 0.05);
+      this.setClamped(this.comp.threshold, fx.compOn ? fx.compThreshold : 0);
     }
     if (!automated?.has('compRatio')) {
-      this.comp.ratio.rampTo(fx.compOn ? fx.compRatio : 1, 0.05);
+      this.setClamped(this.comp.ratio, fx.compOn ? fx.compRatio : 1);
     }
     this.chorus.depth = fx.chorusOn ? fx.chorusDepth : 0;
     this.chorus.wet.rampTo(fx.chorusOn ? 1 : 0, 0.05);
@@ -972,7 +989,10 @@ class TrackNode {
       mode === 'time'
         ? new Tone.GrainPlayer({ url: buffer, grainSize: 0.1, overlap: 0.05 })
         : new Tone.Player(buffer);
-    player.volume.value = Tone.gainToDb(Math.max(0.0001, gain));
+    // hand-edited / imported projects may carry a missing or bad gain —
+    // NaN here would silence the clip with no error
+    const g = Number.isFinite(gain) ? gain : 1;
+    player.volume.value = Tone.gainToDb(Math.max(0.0001, g));
     player.connect(this.fxInput);
     this.players.set(clipId, player);
     return player;
@@ -1623,10 +1643,16 @@ function resolveSamplerZones(track: Track): ResolvedZone[] {
   return [];
 }
 
-/** Stable signature of a zone list — drives the "rebuild on change" check. */
-function samplerZoneSignature(zones: ResolvedZone[]): string {
+/**
+ * Stable signature of a zone list — drives the "rebuild on change" check.
+ * Includes whether each zone's sample is decodable from the bank: a project
+ * can load before its samples rehydrate from IndexedDB, and zones with
+ * missing buffers are skipped at construction — the signature flipping from
+ * unresolved → resolved is what triggers the rebuild once the audio lands.
+ */
+function samplerZoneSignature(zones: ResolvedZone[], bank: Map<string, AudioBuffer>): string {
   return zones
-    .map((z) => `${z.rootPitch}:${z.sampleId}:${z.velMin}:${z.velMax}`)
+    .map((z) => `${z.rootPitch}:${z.sampleId}:${z.velMin}:${z.velMax}:${bank.has(z.sampleId) ? 1 : 0}`)
     .sort()
     .join('|');
 }
@@ -1668,7 +1694,7 @@ class SamplerInstrument implements Instrument {
     this.output = new Tone.Gain(1);
     this.filter = new Tone.Filter({ frequency: params.cutoff, type: 'lowpass', Q: params.resonance });
     this.filter.connect(this.output);
-    this.sourceId = samplerZoneSignature(zones);
+    this.sourceId = samplerZoneSignature(zones, sampleBank);
 
     // group zones by velocity range → one Tone.Sampler per layer
     const groups = new Map<string, ResolvedZone[]>();

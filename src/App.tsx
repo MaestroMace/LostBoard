@@ -91,7 +91,13 @@ export default function App() {
   return (
     <div className="scanlines crt-flicker" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {!booted && <BootSequence onDone={async () => {
-        await bootEngine();
+        try {
+          await bootEngine();
+        } catch (e) {
+          // never strand the user on the boot screen — the engine re-kicks
+          // itself on the next transport action via init-on-demand
+          console.error('engine boot failed', e);
+        }
         setBooted(true);
       }} />}
 

@@ -61,6 +61,11 @@ function collectSampleRefs(project: Project, into: Set<string>) {
       }
     }
     if (track.samplerSampleId) into.add(track.samplerSampleId);
+    // multi-zone sampler sources — without these the GC deletes every
+    // sampler sample written by the current zone editor (irrecoverably)
+    for (const zone of track.samplerZones ?? []) {
+      if (zone.sampleId) into.add(zone.sampleId);
+    }
   }
 }
 
@@ -75,7 +80,15 @@ function collectSampleRefs(project: Project, into: Set<string>) {
  */
 export async function gcOrphanedSamples(): Promise<number> {
   const referenced = new Set<string>();
-  collectSampleRefs(useStore.getState().project, referenced);
+  const st = useStore.getState();
+  collectSampleRefs(st.project, referenced);
+  // a sample referenced only by a cut clip on the clipboard, or by an
+  // undo/redo snapshot, is still reachable — deleting it would make the
+  // eventual paste/undo silently broken
+  for (const clip of st.clipboard) {
+    if (clip.kind === 'audio') referenced.add(clip.sampleId);
+  }
+  for (const snapshot of [...st.past, ...st.future]) collectSampleRefs(snapshot, referenced);
   try {
     for (const slot of await listSlots()) collectSampleRefs(slot.project, referenced);
   } catch (e) {

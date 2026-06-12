@@ -190,15 +190,17 @@ const StepCursor = memo(function StepCursor({
       ? Math.floor(localBeat * stepsInBeat)
       : -1;
   if (step < 0) return null;
-  // grid is `64px repeat(length, 1fr)` with a 4px gap (length gaps total)
-  const colW = `((100% - 64px - ${length} * 4px) / ${length})`;
+  // mirror the grid template: an 80px label column + `length` 1fr tracks
+  // separated by 4px gaps (length gaps total, including the one after the
+  // label column)
+  const colW = `((100% - 80px - ${length} * 4px) / ${length})`;
   return (
     <div
       style={{
         position: 'absolute',
         top: 0,
         bottom: 0,
-        left: `calc(64px + ${step + 1} * 4px + ${step} * ${colW})`,
+        left: `calc(80px + ${step + 1} * 4px + ${step} * ${colW})`,
         width: `calc(${colW})`,
         border: '1px solid var(--hud-green)',
         boxShadow: '0 0 8px rgba(0,255,136,0.5)',
@@ -376,6 +378,28 @@ const StepCell = memo(function StepCell({
   const drag = useRef<{ startY: number; startVel: number; vel: number; moved: boolean } | null>(null);
   const prob = probability ?? 1;
 
+  // Wheel-to-set-velocity must stop the container scrolling, but React's
+  // root-attached wheel listener is passive — preventDefault there is a
+  // no-op. Attach a native non-passive listener instead, reading the live
+  // cell state through a ref so the listener never needs re-binding.
+  const wheelState = useRef({ on, velocity });
+  useEffect(() => {
+    wheelState.current = { on, velocity };
+  });
+  useEffect(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const s = wheelState.current;
+      if (!s.on) return;
+      e.preventDefault();
+      const v = Math.max(0.05, Math.min(1, s.velocity - Math.sign(e.deltaY) * 0.05));
+      setStepVelocity(trackId, clipId, pad, index, v);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [trackId, clipId, pad, index, setStepVelocity]);
+
   function down(e: React.PointerEvent) {
     btnRef.current?.setPointerCapture(e.pointerId);
     drag.current = { startY: e.clientY, startVel: velocity, vel: velocity, moved: false };
@@ -414,12 +438,6 @@ const StepCell = memo(function StepCell({
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
-      onWheel={(e) => {
-        if (!on) return;
-        e.preventDefault();
-        const v = Math.max(0.05, Math.min(1, velocity - Math.sign(e.deltaY) * 0.05));
-        setStepVelocity(trackId, clipId, pad, index, v);
-      }}
       style={{
         height: 38,
         background: cellBg(on, velocity),

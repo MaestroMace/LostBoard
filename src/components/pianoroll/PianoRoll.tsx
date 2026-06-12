@@ -91,6 +91,45 @@ export function PianoRoll() {
   const [scaleRoot, setScaleRoot] = useState(0);
   const [scaleName, setScaleName] = useState<ScaleName>('chromatic');
 
+  // Every hook must run on every render — these used to sit below the
+  // early returns, which crashed React ("rendered fewer hooks") the moment
+  // the editor swapped to an empty state: deleting the open clip, undoing
+  // its creation, or switching to a synth track with no MIDI clips.
+  const hasEditor = !!activeTrack && !!activeClip;
+  const [zoom, setZoom] = useState(1);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom((z) => Math.max(0.25, Math.min(4, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+    // re-attach when the editor branch (and so the grid element) appears
+  }, [hasEditor]);
+  usePinchZoom(gridRef, setZoom, 0.25, 4, hasEditor);
+
+  /**
+   * Draft note state for DRAW + drag-on-create. While the user holds down,
+   * we render a translucent ghost at the cursor's pitch/start whose length
+   * tracks the pointer. On release we commit it via addNote — so dragging
+   * a few beats wide is one gesture instead of "tap, then drag the right
+   * edge".
+   */
+  const [draft, setDraft] = useState<
+    | { startBeat: number; pitch: number; length: number; pointerId: number }
+    | null
+  >(null);
+  /** Marquee selection rectangle while the user drags in SELECT mode. Coords are in grid pixels. */
+  const [marquee, setMarquee] = useState<
+    | { x0: number; y0: number; x1: number; y1: number; pointerId: number }
+    | null
+  >(null);
+
   if (!activeTrack) {
     return (
       <div style={{ padding: 16 }}>
@@ -112,39 +151,7 @@ export function PianoRoll() {
   }
 
   const beats = Math.max(4, activeClip.length);
-  const [zoom, setZoom] = useState(1);
   const BEAT_W = BASE_BEAT_W * zoom;
-  const gridRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      setZoom((z) => Math.max(0.25, Math.min(4, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-  usePinchZoom(gridRef, setZoom);
-
-  /**
-   * Draft note state for DRAW + drag-on-create. While the user holds down,
-   * we render a translucent ghost at the cursor's pitch/start whose length
-   * tracks the pointer. On release we commit it via addNote — so dragging
-   * a few beats wide is one gesture instead of "tap, then drag the right
-   * edge".
-   */
-  const [draft, setDraft] = useState<
-    | { startBeat: number; pitch: number; length: number; pointerId: number }
-    | null
-  >(null);
-  /** Marquee selection rectangle while the user drags in SELECT mode. Coords are in grid pixels. */
-  const [marquee, setMarquee] = useState<
-    | { x0: number; y0: number; x1: number; y1: number; pointerId: number }
-    | null
-  >(null);
 
   function gridLocal(e: React.PointerEvent): { x: number; y: number } {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -729,16 +736,24 @@ const NoteEl = memo(function NoteEl({
       el.style.top = `${(HI - d.nextPitch) * ROW_H}px`;
       return;
     }
-    // multi-drag: same delta applied to every tracked note (no scale snap)
-    const dStart = Math.round(dx / BEAT_W / snap) * snap;
-    const dPitchRows = Math.round(dy / ROW_H);
+    // multi-drag: same delta applied to every tracked note (no scale snap).
+    // Clamp the SHARED delta so the whole selection stays inside beat 0 and
+    // the visible LO..HI range — per-note clamping here while committing the
+    // raw delta made released notes jump past the preview (and land outside
+    // the editable pitch range, where they can't be grabbed again).
+    let dStart = Math.round(dx / BEAT_W / snap) * snap;
+    let dPitchRows = Math.round(dy / ROW_H);
+    const minStart = Math.min(...d.tracked.map((t) => t.baseStart));
+    const minPitch = Math.min(...d.tracked.map((t) => t.basePitch));
+    const maxPitch = Math.max(...d.tracked.map((t) => t.basePitch));
+    dStart = Math.max(dStart, -minStart);
+    dPitchRows = Math.min(dPitchRows, minPitch - LO);
+    dPitchRows = Math.max(dPitchRows, maxPitch - HI);
     d.nextDeltaStart = dStart;
     d.nextDeltaPitchRows = dPitchRows;
     for (const t of d.tracked) {
-      const newStart = Math.max(0, t.baseStart + dStart);
-      const newPitch = Math.max(LO, Math.min(HI, t.basePitch - dPitchRows));
-      t.el.style.left = `${newStart * BEAT_W}px`;
-      t.el.style.top = `${(HI - newPitch) * ROW_H}px`;
+      t.el.style.left = `${(t.baseStart + dStart) * BEAT_W}px`;
+      t.el.style.top = `${(HI - (t.basePitch - dPitchRows)) * ROW_H}px`;
     }
   }
   function up(e: React.PointerEvent) {

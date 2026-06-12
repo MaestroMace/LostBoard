@@ -260,6 +260,7 @@ const ZoomFloater = memo(function ZoomFloater({
 
 const Ruler = memo(function Ruler({ beats }: { beats: number }) {
   const BEAT_W = useBeatWidth();
+  const numerator = useStore((s) => s.project.numerator || 4);
   return (
     <div
       style={{
@@ -267,6 +268,11 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
         top: 0,
         zIndex: 5,
         height: 34,
+        // span the full timeline, not just the viewport — otherwise the
+        // flex tick cells shrink to fit and drift out of alignment with
+        // the clips below, and the loop strip is undraggable when scrolled
+        width: (beats + 1) * BEAT_W,
+        minWidth: '100%',
         background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
         borderBottom: '1px solid rgba(255,106,0,0.5)',
         display: 'flex',
@@ -275,12 +281,13 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
     >
       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
         {Array.from({ length: beats + 1 }).map((_, i) => {
-          const isBar = i % 4 === 0;
+          const isBar = i % numerator === 0;
           return (
             <div
               key={i}
               style={{
                 width: BEAT_W,
+                flexShrink: 0,
                 borderLeft: '1px solid rgba(255,106,0,0.4)',
                 height: isBar ? 15 : 7,
                 alignSelf: 'flex-end',
@@ -289,7 +296,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
             >
               {isBar && (
                 <span className="hud-label" style={{ position: 'absolute', top: -14, left: 2, fontSize: 9 }}>
-                  {i / 4 + 1}
+                  {i / numerator + 1}
                 </span>
               )}
             </div>
@@ -561,6 +568,7 @@ const TrackLane = memo(function TrackLane({
   const BEAT_W = useBeatWidth();
   const addClip = useStore((s) => s.addClip);
   const selectTrack = useStore((s) => s.selectTrack);
+  const numerator = useStore((s) => s.project.numerator || 4);
 
   return (
     <div
@@ -583,7 +591,7 @@ const TrackLane = memo(function TrackLane({
           position: 'absolute',
           inset: 0,
           backgroundImage: 'linear-gradient(90deg, rgba(255,106,0,0.18) 1px, transparent 1px)',
-          backgroundSize: `${BEAT_W * 4}px 100%`,
+          backgroundSize: `${BEAT_W * numerator}px 100%`,
           pointerEvents: 'none',
         }}
       />
@@ -812,6 +820,8 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         baseLen: number;
         groupIds: string[] | null;
         groupEls: HTMLElement[];
+        /** Leftmost start in the group — clamps the drag delta so the preview matches the committed move. */
+        groupMinStart: number;
       }
     | null
   >(null);
@@ -833,6 +843,12 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
           .map((id) => document.querySelector<HTMLElement>(`[data-clip-id="${id}"]`))
           .filter((el): el is HTMLElement => !!el)
       : [];
+    const idSet = groupIds ? new Set(groupIds) : null;
+    const groupStarts = idSet
+      ? useStore
+          .getState()
+          .project.tracks.flatMap((t) => t.clips.filter((c) => idSet.has(c.id)).map((c) => c.start))
+      : [];
     elRef.current?.setPointerCapture(e.pointerId);
     drag.current = {
       mode,
@@ -841,6 +857,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
       baseLen: clip.length,
       groupIds,
       groupEls,
+      groupMinStart: groupStarts.length > 0 ? Math.min(...groupStarts) : 0,
     };
   }
   function move(e: React.PointerEvent) {
@@ -850,8 +867,11 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
     const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
     if (d.mode === 'move') {
       if (d.groupIds) {
-        // group drag — translate every selected clip's DOM element together
-        const tx = `translateX(${dBeats * BEAT_W}px)`;
+        // group drag — translate every selected clip's DOM element together,
+        // clamped so the leftmost clip can't preview past beat 0 (the store
+        // clamps the committed delta the same way)
+        const dG = Math.max(dBeats, -d.groupMinStart);
+        const tx = `translateX(${dG * BEAT_W}px)`;
         d.groupEls.forEach((g) => (g.style.transform = tx));
       } else {
         el.style.left = `${Math.max(0, d.baseStart + dBeats) * BEAT_W}px`;
@@ -867,7 +887,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
     if (d.mode === 'move') {
       if (d.groupIds && dBeats !== 0) {
         d.groupEls.forEach((g) => (g.style.transform = ''));
-        moveClipsBy(d.groupIds, dBeats);
+        moveClipsBy(d.groupIds, Math.max(dBeats, -d.groupMinStart));
       } else if (d.groupIds) {
         d.groupEls.forEach((g) => (g.style.transform = ''));
       } else {
