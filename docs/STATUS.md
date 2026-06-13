@@ -207,7 +207,7 @@ src/
 
 ```bash
 npm install            # one-time
-npm run dev            # Vite dev server (binds 0.0.0.0:5173 for Tailscale)
+npm run dev            # Vite dev server (binds 0.0.0.0:5273 for Tailscale)
 npx tsc --noEmit       # type-check
 npm run build          # production build
 ```

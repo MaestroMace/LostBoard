@@ -217,8 +217,8 @@ export function ProjectView() {
 
       <HexFrame title="TAILSCALE // iOS NOTE" variant="green">
         <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6 }}>
-          The dev server binds to <span className="hud-value">0.0.0.0:5173</span>. From your iPhone connected to the
-          same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5173</span> (or the
+          The dev server binds to <span className="hud-value">0.0.0.0:5273</span>. From your iPhone connected to the
+          same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5273</span> (or the
           tailnet IP). For a more app-like feel, use Safari → Share → Add to Home Screen. The manifest registers a
           standalone display + iOS status-bar styling.
         </p>

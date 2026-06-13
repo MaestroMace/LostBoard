@@ -73,13 +73,13 @@ npm install
 npm run dev
 ```
 
-The dev server binds to `0.0.0.0:5173`, so any machine on the same
+The dev server binds to `0.0.0.0:5273`, so any machine on the same
 [Tailscale](https://tailscale.com/) tailnet can reach it.
 
 From an iPhone connected to the same tailnet, open:
 
 ```
-http://<your-mac-hostname>.<your-tailnet>.ts.net:5173
+http://<your-mac-hostname>.<your-tailnet>.ts.net:5273
 ```
 
 or the raw tailnet IP. Then **Share → Add to Home Screen** in Safari to install
@@ -90,7 +90,7 @@ black-translucent status bar, and adopt the HUD orange theme color.
 
 ```bash
 npm run build
-npm run preview   # serves the built bundle on 0.0.0.0:4173
+npm run preview   # serves the built bundle on 0.0.0.0:4273
 ```
 
 ## File map
