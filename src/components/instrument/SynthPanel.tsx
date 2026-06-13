@@ -124,7 +124,7 @@ export function SynthPanel() {
         ) : engine === 'sampler' ? (
           <SamplerSource trackId={active.id} />
         ) : (
-        <HexFrame title="OSC">
+        <HexFrame title="OSCILLATOR">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {OSCS.map((o) => (
               <button
@@ -147,18 +147,18 @@ export function SynthPanel() {
 
         <HexFrame title="FILTER">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="CUTOFF" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
-            <Knob label="RES" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
-            <Knob label="DRIVE" value={s.drive} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ drive: v })} />
+            <Knob label="CUTOFF" title="Filter cutoff frequency" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
+            <Knob label="RES" title="Resonance (filter Q)" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
+            <Knob label="DRIVE" title="Drive / distortion" value={s.drive} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ drive: v })} />
           </div>
         </HexFrame>
 
-        <HexFrame title="ENVELOPE">
+        <HexFrame title="ENVELOPE (ADSR)">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="A" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
-            <Knob label="D" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
-            <Knob label="S" value={s.sustain} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ sustain: v })} />
-            <Knob label="R" value={s.release} min={0.001} max={5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ release: v })} log />
+            <Knob label="A" title="Attack — fade-in time" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
+            <Knob label="D" title="Decay — drop to sustain" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
+            <Knob label="S" title="Sustain — held level" value={s.sustain} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ sustain: v })} />
+            <Knob label="R" title="Release — fade-out time" value={s.release} min={0.001} max={5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ release: v })} log />
           </div>
         </HexFrame>
 

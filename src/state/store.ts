@@ -96,7 +96,7 @@ function defaultMelody(lengthBeats: number): Note[] {
 function makeProject(): Project {
   const drumTrack: Track = {
     id: newId('trk'),
-    name: 'TRIAD-01 // VEGA',
+    name: 'DRUMS // VEGA',
     kind: 'drum',
     color: HUD_COLORS[0],
     volume: -6,
@@ -109,7 +109,7 @@ function makeProject(): Project {
   };
   const bassTrack: Track = {
     id: newId('trk'),
-    name: 'TRIAD-02 // ALTAIR',
+    name: 'BASS // ALTAIR',
     kind: 'synth',
     synthEngine: 'subtractive',
     color: HUD_COLORS[1],
@@ -124,7 +124,7 @@ function makeProject(): Project {
   };
   const leadTrack: Track = {
     id: newId('trk'),
-    name: 'TRIAD-03 // DENEB',
+    name: 'LEAD // DENEB',
     kind: 'synth',
     synthEngine: 'subtractive',
     color: HUD_COLORS[2],

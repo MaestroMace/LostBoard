@@ -17,6 +17,13 @@ import { EditorTip } from '../hud/EditorTip';
 
 const ROW_H = 64;
 const AUTO_LANE_H = 56;
+/** Plain-language name for a track kind, shown as a badge so the codename isn't the only label. */
+const TRACK_KIND_LABEL: Record<Track['kind'], string> = {
+  drum: 'DRUMS',
+  synth: 'SYNTH',
+  sampler: 'SAMPLER',
+  audio: 'AUDIO',
+};
 /** Default px per beat at zoom = 1×. Consumers read the current value through BeatWidthContext. */
 const BASE_BEAT_W = 24;
 const BeatWidthContext = createContext(BASE_BEAT_W);
@@ -118,7 +125,7 @@ export function ArrangeView() {
                 title="Add synth track"
                 style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
               >
-                +SYN
+                {isMobile ? '+SYN' : '+ SYNTH'}
               </button>
               <button
                 className="hud-btn hud-btn--icon"
@@ -126,7 +133,7 @@ export function ArrangeView() {
                 title="Add drum track"
                 style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
               >
-                +DRM
+                {isMobile ? '+DRM' : '+ DRUMS'}
               </button>
               <button
                 className="hud-btn hud-btn--icon"
@@ -134,7 +141,7 @@ export function ArrangeView() {
                 title="Add audio track"
                 style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
               >
-                +AUD
+                {isMobile ? '+AUD' : '+ AUDIO'}
               </button>
             </div>
           </div>
@@ -430,8 +437,12 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
     >
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: track.color }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* The narrow header column can't fit a type badge AND the name, and the
+            name (now function-first: "DRUMS // VEGA", "BASS // …") is the better
+            plain label — so the kind lives in the tooltip instead. */}
         <input
           className="hud-value"
+          title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
           style={{
             flex: 1,
             fontSize: 11,
@@ -500,6 +511,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             updateTrack(track.id, { mute: !track.mute });
           }}
           style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
+          title={track.mute ? 'Muted — click to unmute' : 'Mute this track'}
         >
           M
         </button>
@@ -510,6 +522,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             updateTrack(track.id, { solo: !track.solo });
           }}
           style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
+          title={track.solo ? 'Soloed — click to clear' : 'Solo — mute all other tracks'}
         >
           S
         </button>

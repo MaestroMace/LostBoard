@@ -104,14 +104,17 @@
 }
 
 .hud-readout--green { color: var(--hud-green); }
-.hud-readout--dim { color: rgba(255, 106, 0, 0.55); }
+/* lifted from 0.55 — the dim readout (tips, footers) was barely legible on black */
+.hud-readout--dim { color: rgba(255, 106, 0, 0.72); }
 
 .hud-label {
   font-family: var(--font-display);
-  font-size: 9px;
-  letter-spacing: 0.32em;
+  /* 9 -> 10px and tighter tracking: wide letter-spacing on tiny uppercase
+     text was a big part of why labels read as decoration, not words */
+  font-size: 10px;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(255, 106, 0, 0.75);
+  color: rgba(255, 106, 0, 0.9);
 }
 
 .hud-value {

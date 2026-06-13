@@ -8,12 +8,17 @@ import { getMidiSnapshot, subscribeMidi } from '../../audio/midiInput';
 import { audioEngine } from '../../audio/engine';
 
 /** Flavor lines that get mixed into the live telemetry rotation. */
+/**
+ * Ticker filler lines. Mostly turned into actual tips (the ticker is prime
+ * real estate for teaching the UI) with a couple of atmospheric lines kept
+ * for flavor.
+ */
 const FLAVOR = [
-  'HEX FIELD STABLE',
-  'NO SIGNAL ANOMALY DETECTED',
-  'BUS PRESSURE NOMINAL',
-  'NEURAL INTERFACE ACTIVE',
-  'ALL DECKS READY FOR LAUNCH',
+  'TIP — DOUBLE-CLICK A TIMELINE LANE TO ADD A CLIP',
+  'TIP — PRESS ? FOR THE FULL KEYBOARD / GESTURE LIST',
+  'TIP — ARM A SYNTH TRACK (●) TO RECORD MIDI',
+  'TIP — DOUBLE-CLICK A CLIP TO OPEN ITS EDITOR',
+  'HEX FIELD STABLE — ALL DECKS READY',
 ];
 
 export function StatusBar() {

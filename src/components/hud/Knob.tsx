@@ -7,6 +7,8 @@ type Props = {
   step?: number;
   size?: number;
   label?: string;
+  /** Full-word name for the hover tooltip (e.g. "Attack" for a knob labelled "A"). */
+  title?: string;
   unit?: string;
   display?: (v: number) => string;
   onChange: (v: number) => void;
@@ -20,6 +22,7 @@ export function Knob({
   step = 0.01,
   size = 48,
   label,
+  title,
   unit,
   display,
   onChange,
@@ -67,9 +70,16 @@ export function Knob({
   }
 
   const shown = display ? display(value) : `${value.toFixed(2)}${unit ?? ''}`;
+  // Hover/long-press help: full-word name when given, plus the live value and
+  // range, and a hint that double-click resets and Shift drags finely.
+  const name = title ?? label;
+  const tip = `${name ? name + ' — ' : ''}${shown}  ·  range ${display ? display(min) + '…' + display(max) : `${min}…${max}`}  ·  double-click to centre, Shift-drag for fine`;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size + 8 }}>
+    <div
+      title={tip}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size + 8 }}
+    >
       <div
         className="knob"
         style={{ width: size, height: size }}
