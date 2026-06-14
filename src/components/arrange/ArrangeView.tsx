@@ -469,7 +469,10 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
         height: ROW_H,
         padding: '4px 6px',
         borderBottom: '1px solid rgba(255,106,0,0.25)',
-        background: selected ? 'rgba(255,106,0,0.12)' : 'transparent',
+        // the selected track lights up in its OWN colour — a consistent
+        // "this is the track the editors are acting on" accent
+        background: selected ? `linear-gradient(90deg, ${track.color}26, ${track.color}0a)` : 'transparent',
+        boxShadow: selected ? `inset 0 0 0 1px ${track.color}99` : 'none',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
@@ -478,7 +481,17 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
         contain: 'layout style',
       }}
     >
-      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: track.color }} />
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: selected ? 5 : 3,
+          background: track.color,
+          boxShadow: selected ? `0 0 8px ${track.color}` : 'none',
+        }}
+      />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {/* The narrow header column can't fit a type badge AND the name, and the
             name (now function-first: "DRUMS // VEGA", "BASS // …") is the better

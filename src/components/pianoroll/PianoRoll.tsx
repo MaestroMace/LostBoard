@@ -14,7 +14,9 @@ const LO = 36; // C2
 const HI = 84; // C6
 const ROWS = HI - LO + 1;
 const VEL_LANE_H = 60;
-const KEYS_W = 48;
+const KEYS_W = 56;
+/** White-key letter by pitch-class, for the keyboard ruler labels. */
+const WHITE_NOTE: Record<number, string> = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B' };
 const BeatWidthContext = createContext(BASE_BEAT_W);
 const useBeatWidth = () => useContext(BeatWidthContext);
 
@@ -112,6 +114,21 @@ export function PianoRoll() {
     // re-attach when the editor branch (and so the grid element) appears
   }, [hasEditor]);
   usePinchZoom(gridRef, setZoom, 0.25, 4, hasEditor);
+
+  // When a clip opens, scroll the grid so its notes are centred — the bass
+  // range sits near the bottom of C2–C6, so opening at scrollTop 0 showed an
+  // empty grid and you had to hunt for your notes.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || !activeClip) return;
+    const ns = activeClip.notes;
+    const center =
+      ns.length > 0
+        ? (Math.min(...ns.map((n) => n.pitch)) + Math.max(...ns.map((n) => n.pitch))) / 2
+        : 60; // middle C
+    el.scrollTop = Math.max(0, (HI - center) * ROW_H - el.clientHeight / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClip?.id]);
 
   /**
    * Draft note state for DRAW + drag-on-create. While the user holds down,
@@ -506,7 +523,7 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
   return (
     <div
       style={{
-        width: 48,
+        width: KEYS_W,
         position: 'sticky',
         left: 0,
         background: 'rgba(0,0,0,0.85)',
@@ -519,25 +536,34 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
         const pitch = HI - i;
         const isBlack = [1, 3, 6, 8, 10].includes(pitch % 12);
         const isC = pitch % 12 === 0;
+        const letter = WHITE_NOTE[pitch % 12];
+        const oct = Math.floor(pitch / 12) - 1;
         return (
           <div
             key={i}
             onPointerDown={() => audioEngine.trigger(trackId, pitch, 0.9, '16n')}
+            title={`${letter ?? WHITE_NOTE[(pitch % 12) - 1] + '#'}${oct} — tap to preview`}
             style={{
               height: ROW_H,
-              background: isBlack ? '#0a0a0a' : '#1a0f0a',
-              borderBottom: '1px solid rgba(255,106,0,0.18)',
+              // piano look: black keys near-black, white keys a lit brown so
+              // the two read apart at a glance
+              background: isBlack ? '#070504' : '#2a1a12',
+              // brighter octave divider on every C
+              borderBottom: isC ? '1px solid rgba(255,170,0,0.55)' : '1px solid rgba(255,106,0,0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              paddingRight: 4,
-              fontSize: 8,
-              color: isC ? 'var(--hud-amber)' : 'rgba(255,106,0,0.5)',
+              paddingRight: 5,
+              fontSize: 9,
+              fontWeight: isC ? 700 : 400,
+              // label every white key, not just C — far easier to orient
+              color: isC ? 'var(--hud-amber)' : isBlack ? 'transparent' : 'rgba(255,179,71,0.8)',
               cursor: 'pointer',
               fontFamily: 'var(--font-data)',
+              userSelect: 'none',
             }}
           >
-            {isC ? `C${Math.floor(pitch / 12) - 1}` : ''}
+            {isC ? `C${oct}` : (letter ?? '')}
           </div>
         );
       })}
