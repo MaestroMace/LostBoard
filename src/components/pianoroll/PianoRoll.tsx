@@ -446,6 +446,20 @@ export function PianoRoll() {
             />
           )}
           <PianoRollPlayhead clipStart={activeClip.start} />
+          {/* clip-end marker so the grid reads as "this is the clip" rather
+              than a small box floating in a black void */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              right: 0,
+              width: 2,
+              background: 'var(--hud-orange)',
+              boxShadow: '0 0 6px rgba(255,106,0,0.5)',
+              pointerEvents: 'none',
+            }}
+          />
         </div>
         </div>
         <VelocityLane
