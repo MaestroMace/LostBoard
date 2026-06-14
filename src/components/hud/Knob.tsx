@@ -28,6 +28,7 @@ export function Knob({
   onChange,
   log = false,
 }: Props) {
+  const startX = useRef(0);
   const startY = useRef(0);
   const startV = useRef(0);
   const dragging = useRef(false);
@@ -52,14 +53,18 @@ export function Knob({
   function onPointerDown(e: React.PointerEvent) {
     (e.target as Element).setPointerCapture?.(e.pointerId);
     dragging.current = true;
+    startX.current = e.clientX;
     startY.current = e.clientY;
     startV.current = norm;
   }
   function onPointerMove(e: React.PointerEvent) {
     if (!dragging.current) return;
-    const dy = startY.current - e.clientY;
-    const sens = e.shiftKey ? 600 : 200;
-    setFromNorm(startV.current + dy / sens);
+    // respond to up-OR-right drag (whichever the user reaches for) instead of
+    // vertical only — a knob that ignores horizontal motion feels stuck.
+    // ~150px is a full sweep; Shift drags ~3.5× finer for precision.
+    const delta = startY.current - e.clientY + (e.clientX - startX.current);
+    const sens = e.shiftKey ? 520 : 150;
+    setFromNorm(startV.current + delta / sens);
   }
   function onPointerUp(e: React.PointerEvent) {
     dragging.current = false;

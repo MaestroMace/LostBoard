@@ -30,6 +30,25 @@ const BeatWidthContext = createContext(BASE_BEAT_W);
 const useBeatWidth = () => useContext(BeatWidthContext);
 
 /**
+ * Active snap grid for the timeline, in BEATS. 0 means "free" — we still
+ * round to a fine 1/16-beat so drags feel controlled without locking to the
+ * grid. Provided by ArrangeView and consumed by every lane / clip / loop
+ * drag handler so placement always matches the grid the toolbar advertises.
+ */
+const SnapContext = createContext(1);
+const useSnap = () => useContext(SnapContext);
+type SnapMode = 'bar' | 'beat' | 'half' | 'off';
+/** Resolve a snap mode to a beat grid given the project's beats-per-bar. */
+function snapBeatsFor(mode: SnapMode, numerator: number): number {
+  return mode === 'bar' ? numerator : mode === 'beat' ? 1 : mode === 'half' ? 0.5 : 0;
+}
+/** Round a beat position/length onto the active snap grid. */
+function snapTo(beats: number, snap: number): number {
+  const g = snap > 0 ? snap : 0.0625;
+  return Math.round(beats / g) * g;
+}
+
+/**
  * AutomationOverlayContext — transient per-track UI state for the arrange
  * automation overlay. `visible[trackId] === true` shows every automation
  * lane the track owns, stacked under its clip row. Not persisted — it's a
@@ -53,6 +72,9 @@ export function ArrangeView() {
   const headW = isMobile ? 144 : 196;
 
   const [zoom, setZoom] = useState(1);
+  const numerator = useStore((s) => s.project.numerator || 4);
+  const [snapMode, setSnapMode] = useState<SnapMode>('bar');
+  const snapBeats = snapBeatsFor(snapMode, numerator);
   const beatW = BASE_BEAT_W * zoom;
   const timelineW = totalBeats * beatW;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -90,6 +112,7 @@ export function ArrangeView() {
 
   return (
     <BeatWidthContext.Provider value={beatW}>
+    <SnapContext.Provider value={snapBeats}>
     <AutomationOverlayContext.Provider value={overlayCtx}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <div className="warning-stripe--thin warning-stripe" />
@@ -204,24 +227,29 @@ export function ArrangeView() {
       </div>
       <AudioClipInspector />
       <EditorTip>
-        double-click a lane to add a clip · double-click a clip to edit it · drag to move, drag the right edge to
-        resize · shift-click to multi-select · ⌘C / ⌘V / ⌘D / Del · ⌘+wheel to zoom · drag the strip under the
-        ruler to set the loop
+        drag across an empty lane to draw a clip (or double-click for one bar) · double-click a clip to edit it ·
+        drag to move, drag the right edge to resize · SNAP sets the grid · shift-click to multi-select · ⌘C / ⌘V /
+        ⌘D / Del · ⌘+wheel to zoom · drag the strip under the ruler to set the loop
       </EditorTip>
-      <ZoomFloater zoom={zoom} setZoom={setZoom} />
+      <ZoomFloater zoom={zoom} setZoom={setZoom} snapMode={snapMode} setSnapMode={setSnapMode} />
     </div>
     </AutomationOverlayContext.Provider>
+    </SnapContext.Provider>
     </BeatWidthContext.Provider>
   );
 }
 
-/** Floating zoom indicator + buttons over the timeline (bottom-right). */
+/** Floating snap + zoom controls over the timeline (bottom-right). */
 const ZoomFloater = memo(function ZoomFloater({
   zoom,
   setZoom,
+  snapMode,
+  setSnapMode,
 }: {
   zoom: number;
   setZoom: (updater: (z: number) => number) => void;
+  snapMode: SnapMode;
+  setSnapMode: (m: SnapMode) => void;
 }) {
   return (
     <div
@@ -230,13 +258,26 @@ const ZoomFloater = memo(function ZoomFloater({
         right: 12,
         bottom: 28,
         display: 'flex',
-        gap: 2,
+        gap: 4,
+        alignItems: 'center',
         background: 'rgba(0,0,0,0.85)',
         border: '1px solid rgba(255,106,0,0.4)',
         padding: 2,
         zIndex: 6,
       }}
     >
+      <select
+        className="display"
+        value={snapMode}
+        onChange={(e) => setSnapMode(e.target.value as SnapMode)}
+        title="Snap grid — clip moves, resizes and new clips lock to this"
+        style={{ fontSize: 9, minHeight: 24, padding: '2px 4px' }}
+      >
+        <option value="bar">SNAP·BAR</option>
+        <option value="beat">SNAP·BEAT</option>
+        <option value="half">SNAP·½</option>
+        <option value="off">SNAP·OFF</option>
+      </select>
       <button
         className="hud-btn hud-btn--icon"
         title="Zoom out"
@@ -318,6 +359,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
 /** Draggable loop-region strip along the bottom of the ruler. */
 const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
   const BEAT_W = useBeatWidth();
+  const snap = useSnap();
   const loopEnabled = useStore((s) => s.project.loopEnabled);
   const loopStart = useStore((s) => s.project.loopStart);
   const loopEnd = useStore((s) => s.project.loopEnd);
@@ -330,7 +372,8 @@ const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
   function beatAt(clientX: number): number {
     const r = laneRef.current?.getBoundingClientRect();
     if (!r) return 0;
-    return Math.max(0, Math.min(beats, Math.round((clientX - r.left) / BEAT_W)));
+    // loop edges obey the same snap grid as clips
+    return Math.max(0, Math.min(beats, snapTo((clientX - r.left) / BEAT_W, snap)));
   }
   function begin(e: React.PointerEvent, mode: 'new' | 'move' | 'l' | 'r') {
     if (mode !== 'new') e.stopPropagation();
@@ -579,25 +622,94 @@ const TrackLane = memo(function TrackLane({
   color: string;
 }) {
   const BEAT_W = useBeatWidth();
+  const snap = useSnap();
   const addClip = useStore((s) => s.addClip);
   const selectTrack = useStore((s) => s.selectTrack);
   const numerator = useStore((s) => s.project.numerator || 4);
+  const laneRef = useRef<HTMLDivElement>(null);
+  // drag-to-create: a draft span the user is sweeping out on the empty lane
+  const [draft, setDraft] = useState<{ from: number; to: number } | null>(null);
+  const drag = useRef<{ from: number; pointerId: number; moved: boolean } | null>(null);
+  // We detect double-tap ourselves: capturing the pointer on pointerdown (for
+  // drag-to-create) suppresses the browser's native dblclick.
+  const lastTap = useRef(0);
+
+  // Default new-clip length when the user just clicks/double-clicks: one bar,
+  // or the snap grid if that's coarser. Far more musical than a fixed 4 beats.
+  const defaultLen = Math.max(snap || 0, numerator);
+
+  function beatAt(clientX: number): number {
+    const r = laneRef.current?.getBoundingClientRect();
+    if (!r) return 0;
+    return Math.max(0, snapTo((clientX - r.left) / BEAT_W, snap));
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    // only the lane background starts a draw — clips/handles stopPropagation
+    if (e.target !== e.currentTarget) return;
+    if (e.button !== 0) return;
+    laneRef.current?.setPointerCapture(e.pointerId);
+    const from = beatAt(e.clientX);
+    drag.current = { from, pointerId: e.pointerId, moved: false };
+    setDraft({ from, to: from });
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d) return;
+    const to = beatAt(e.clientX);
+    if (to !== d.from) d.moved = true;
+    setDraft({ from: d.from, to });
+  }
+  function onPointerUp(e: React.PointerEvent) {
+    const d = drag.current;
+    drag.current = null;
+    setDraft(null);
+    if (!d) return;
+    try {
+      laneRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    const to = beatAt(e.clientX);
+    const lo = Math.min(d.from, to);
+    const hi = Math.max(d.from, to);
+    // a real sweep makes a sized clip
+    if (d.moved && hi - lo >= (snap || 0.25) / 2) {
+      selectTrack(trackId);
+      addClip(trackId, lo, Math.max(snap || 0.25, hi - lo));
+      lastTap.current = 0;
+      return;
+    }
+    // a tap that's the second within 380ms is a double-tap → quick-add one
+    // default clip (single stray taps do nothing, so the lane stays clean)
+    const now = performance.now();
+    if (now - lastTap.current < 380) {
+      selectTrack(trackId);
+      addClip(trackId, d.from, defaultLen);
+      lastTap.current = 0;
+    } else {
+      lastTap.current = now;
+    }
+  }
+
+  const draftLo = draft ? Math.min(draft.from, draft.to) : 0;
+  const draftW = draft ? Math.abs(draft.to - draft.from) : 0;
 
   return (
     <div
+      ref={laneRef}
       style={{
         position: 'relative',
         height: ROW_H,
         borderBottom: '1px solid rgba(255,106,0,0.18)',
         background: `linear-gradient(180deg, ${color}10, transparent)`,
         contain: 'layout style',
+        touchAction: 'none',
       }}
-      onDoubleClick={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        const beat = Math.max(0, Math.floor((e.clientX - r.left) / BEAT_W));
-        selectTrack(trackId);
-        addClip(trackId, beat, 4);
-      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
       <div
         style={{
@@ -608,6 +720,20 @@ const TrackLane = memo(function TrackLane({
           pointerEvents: 'none',
         }}
       />
+      {draft && draftW > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 4,
+            height: ROW_H - 8,
+            left: draftLo * BEAT_W,
+            width: draftW * BEAT_W,
+            background: `${color}33`,
+            border: `1px dashed ${color}`,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       {clips.map((c) => (
         <ClipBlock key={c.id} clip={c} color={color} />
       ))}
@@ -813,6 +939,7 @@ function AutomationOverlayLane({
 /** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
 const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {
   const BEAT_W = useBeatWidth();
+  const snap = useSnap();
   const selected = useStore((s) => s.selectedClipIds.includes(clip.id));
   const selectClip = useStore((s) => s.selectClip);
   const toggleClipSelected = useStore((s) => s.toggleClipSelected);
@@ -824,6 +951,9 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
   const removeClip = useStore((s) => s.removeClip);
 
   const elRef = useRef<HTMLDivElement>(null);
+  // We detect double-tap-to-edit ourselves — capturing the pointer on
+  // pointerdown (for drag) suppresses the browser's native dblclick.
+  const lastTap = useRef(0);
   /** During a multi-clip drag we translate every selected clip's DOM node. */
   const drag = useRef<
     | {
@@ -835,9 +965,16 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         groupEls: HTMLElement[];
         /** Leftmost start in the group — clamps the drag delta so the preview matches the committed move. */
         groupMinStart: number;
+        /** Set once the pointer travels far enough to count as a drag (vs a tap). */
+        moved: boolean;
       }
     | null
   >(null);
+
+  function openEditor() {
+    selectTrack(clip.trackId);
+    setView(clip.kind === 'pattern' ? 'sequencer' : clip.kind === 'midi' ? 'pianoroll' : 'arrange');
+  }
 
   function down(e: React.PointerEvent, mode: 'move' | 'resize') {
     e.stopPropagation();
@@ -871,14 +1008,22 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
       groupIds,
       groupEls,
       groupMinStart: groupStarts.length > 0 ? Math.min(...groupStarts) : 0,
+      moved: false,
     };
+  }
+  const minLen = snap > 0 ? snap : 0.25;
+  // Snap the drag DELTA to the grid for moves (clip start is already on-grid,
+  // so start+delta stays on-grid); snap the absolute LENGTH for resizes.
+  function deltaBeats(clientX: number, startX: number) {
+    return snapTo((clientX - startX) / BEAT_W, snap);
   }
   function move(e: React.PointerEvent) {
     const d = drag.current;
     const el = elRef.current;
     if (!d || !el) return;
-    const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
+    if (Math.abs(e.clientX - d.startX) > 4) d.moved = true;
     if (d.mode === 'move') {
+      const dBeats = deltaBeats(e.clientX, d.startX);
       if (d.groupIds) {
         // group drag — translate every selected clip's DOM element together,
         // clamped so the leftmost clip can't preview past beat 0 (the store
@@ -890,14 +1035,29 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         el.style.left = `${Math.max(0, d.baseStart + dBeats) * BEAT_W}px`;
       }
     } else {
-      el.style.width = `${Math.max(0.5, d.baseLen + dBeats) * BEAT_W - 2}px`;
+      const len = Math.max(minLen, snapTo(d.baseLen + (e.clientX - d.startX) / BEAT_W, snap));
+      el.style.width = `${len * BEAT_W - 2}px`;
     }
   }
   function up(e: React.PointerEvent) {
     const d = drag.current;
     if (!d) return;
-    const dBeats = Math.round((e.clientX - d.startX) / BEAT_W);
+    // a tap (no real drag) on the clip body: second tap within 380ms opens
+    // the editor — replacing the native dblclick that pointer capture eats
+    if (d.mode === 'move' && !d.moved) {
+      const now = performance.now();
+      if (now - lastTap.current < 380) {
+        openEditor();
+        lastTap.current = 0;
+      } else {
+        lastTap.current = now;
+      }
+      drag.current = null;
+      elRef.current?.releasePointerCapture(e.pointerId);
+      return;
+    }
     if (d.mode === 'move') {
+      const dBeats = deltaBeats(e.clientX, d.startX);
       if (d.groupIds && dBeats !== 0) {
         d.groupEls.forEach((g) => (g.style.transform = ''));
         moveClipsBy(d.groupIds, Math.max(dBeats, -d.groupMinStart));
@@ -907,7 +1067,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         moveClip(clip.id, Math.max(0, d.baseStart + dBeats));
       }
     } else {
-      resizeClip(clip.id, Math.max(0.5, d.baseLen + dBeats));
+      resizeClip(clip.id, Math.max(minLen, snapTo(d.baseLen + (e.clientX - d.startX) / BEAT_W, snap)));
     }
     drag.current = null;
     elRef.current?.releasePointerCapture(e.pointerId);
@@ -921,11 +1081,6 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        selectTrack(clip.trackId);
-        setView(clip.kind === 'pattern' ? 'sequencer' : clip.kind === 'midi' ? 'pianoroll' : 'arrange');
-      }}
       style={{
         position: 'absolute',
         top: 4,
@@ -965,20 +1120,27 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
           removeClip(clip.id);
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '2px 4px', fontSize: 9 }}
+        title="Delete clip"
+        style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '1px 4px', fontSize: 9, zIndex: 3, lineHeight: 1 }}
       >
         ✕
       </button>
+      {/* Resize handle starts BELOW the ✕ so the two no longer fight for the
+          same top-right corner (you'd hit delete while trying to resize). */}
       <div
         onPointerDown={(e) => down(e, 'resize')}
+        title="Drag to resize"
         style={{
           position: 'absolute',
           right: 0,
-          top: 0,
+          top: 20,
           bottom: 0,
-          width: 10,
+          width: 14,
           cursor: 'ew-resize',
-          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2))',
+          // visible grip so the edge reads as draggable
+          background:
+            'linear-gradient(90deg, transparent, rgba(255,255,255,0.18)), repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,0.5) 3px 4px)',
+          backgroundPosition: 'right',
           touchAction: 'none',
         }}
       />

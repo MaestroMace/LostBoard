@@ -84,11 +84,19 @@ export function StatusBar() {
         contain: 'layout style',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flexShrink: 1 }}>
         <TriadMark />
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, minWidth: 0 }}>
           <span className="hud-label" style={{ fontSize: 8 }}>T.R.I.A.D. SYSTEM</span>
-          <span className="hud-value" style={{ fontSize: 12 }}>LOSTBOARD // {name}</span>
+          {/* one line + ellipsis — long project names used to wrap to 3 lines
+              and shove the bar taller at medium widths */}
+          <span
+            className="hud-value"
+            style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}
+            title={`LOSTBOARD // ${name}`}
+          >
+            LOSTBOARD // {name}
+          </span>
         </div>
       </div>
 
