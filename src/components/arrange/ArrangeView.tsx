@@ -642,7 +642,7 @@ const TrackLane = memo(function TrackLane({
   const laneRef = useRef<HTMLDivElement>(null);
   // drag-to-create: a draft span the user is sweeping out on the empty lane
   const [draft, setDraft] = useState<{ from: number; to: number } | null>(null);
-  const drag = useRef<{ from: number; pointerId: number; moved: boolean } | null>(null);
+  const drag = useRef<{ from: number; downX: number; moved: boolean; touch: boolean } | null>(null);
   // We detect double-tap ourselves: capturing the pointer on pointerdown (for
   // drag-to-create) suppresses the browser's native dblclick.
   const lastTap = useRef(0);
@@ -660,41 +660,56 @@ const TrackLane = memo(function TrackLane({
   function onPointerDown(e: React.PointerEvent) {
     // only the lane background starts a draw — clips/handles stopPropagation
     if (e.target !== e.currentTarget) return;
-    if (e.button !== 0) return;
-    laneRef.current?.setPointerCapture(e.pointerId);
-    const from = beatAt(e.clientX);
-    drag.current = { from, pointerId: e.pointerId, moved: false };
-    setDraft({ from, to: from });
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const touch = e.pointerType === 'touch';
+    // On touch we must NOT capture the pointer or draw a draft — that blocks
+    // native timeline scrolling (swipe-to-scroll is essential on a phone). We
+    // still record the tap so double-tap-to-create works by finger; mouse
+    // gets the full sweep-to-draw with a live preview.
+    if (!touch) {
+      laneRef.current?.setPointerCapture(e.pointerId);
+      setDraft({ from: beatAt(e.clientX), to: beatAt(e.clientX) });
+    }
+    drag.current = { from: beatAt(e.clientX), downX: e.clientX, moved: false, touch };
   }
   function onPointerMove(e: React.PointerEvent) {
     const d = drag.current;
     if (!d) return;
-    const to = beatAt(e.clientX);
-    if (to !== d.from) d.moved = true;
-    setDraft({ from: d.from, to });
+    if (Math.abs(e.clientX - d.downX) > 6) d.moved = true;
+    if (d.touch) return; // let the timeline scroll; no draft on touch
+    setDraft({ from: d.from, to: beatAt(e.clientX) });
+  }
+  function clearDrag(e: React.PointerEvent) {
+    const d = drag.current;
+    drag.current = null;
+    if (d && !d.touch) {
+      setDraft(null);
+      try {
+        laneRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    }
   }
   function onPointerUp(e: React.PointerEvent) {
     const d = drag.current;
-    drag.current = null;
-    setDraft(null);
+    clearDrag(e);
     if (!d) return;
-    try {
-      laneRef.current?.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
-    }
-    const to = beatAt(e.clientX);
-    const lo = Math.min(d.from, to);
-    const hi = Math.max(d.from, to);
-    // a real sweep makes a sized clip
-    if (d.moved && hi - lo >= (snap || 0.25) / 2) {
-      selectTrack(trackId);
-      addClip(trackId, lo, Math.max(snap || 0.25, hi - lo));
-      lastTap.current = 0;
+    // mouse sweep → sized clip (touch never drag-creates, so swipes scroll)
+    if (!d.touch && d.moved) {
+      const to = beatAt(e.clientX);
+      const lo = Math.min(d.from, to);
+      const hi = Math.max(d.from, to);
+      if (hi - lo >= (snap || 0.25) / 2) {
+        selectTrack(trackId);
+        addClip(trackId, lo, Math.max(snap || 0.25, hi - lo));
+        lastTap.current = 0;
+      }
       return;
     }
-    // a tap that's the second within 380ms is a double-tap → quick-add one
-    // default clip (single stray taps do nothing, so the lane stays clean)
+    if (d.moved) return; // a touch scroll, not a tap
+    // second tap within 380ms → quick-add one default clip (single stray taps
+    // do nothing, so the lane stays clean)
     const now = performance.now();
     if (now - lastTap.current < 380) {
       selectTrack(trackId);
@@ -717,12 +732,13 @@ const TrackLane = memo(function TrackLane({
         borderBottom: '1px solid rgba(255,106,0,0.18)',
         background: `linear-gradient(180deg, ${color}10, transparent)`,
         contain: 'layout style',
-        touchAction: 'none',
+        // no touch-action:none here — the timeline must stay swipe-scrollable
+        // on touch; mouse drag-create doesn't need it
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={clearDrag}
     >
       <div
         style={{
