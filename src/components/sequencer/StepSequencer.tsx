@@ -50,7 +50,7 @@ export function StepSequencer() {
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <HexFrame title={activeTrack.name}>
           <p>This track has no pattern clip.</p>
-          <button className="nerv-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
+          <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
             CREATE PATTERN CLIP
           </button>
         </HexFrame>
@@ -75,7 +75,7 @@ export function StepSequencer() {
         className="hex-grid-bg"
       >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span className="hud-label">STEP SEQUENCER // M.A.G.I. BALTHASAR</span>
+        <span className="hud-label">STEP SEQUENCER // TRIAD VEGA</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {drumTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -91,7 +91,7 @@ export function StepSequencer() {
           ))}
         </select>
         <button
-          className="nerv-btn"
+          className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
         >
           + PATTERN
@@ -110,7 +110,7 @@ export function StepSequencer() {
         </select>
         <div style={{ flex: 1 }} />
         <button
-          className={`nerv-btn ${mode === 'normal' ? 'is-active' : ''}`}
+          className={`hud-btn ${mode === 'normal' ? 'is-active' : ''}`}
           onClick={() => setMode('normal')}
           aria-pressed={mode === 'normal'}
           title="Normal mode — tap toggles, drag sets velocity"
@@ -118,7 +118,7 @@ export function StepSequencer() {
           NORM
         </button>
         <button
-          className={`nerv-btn ${mode === 'prob' ? 'is-active' : ''}`}
+          className={`hud-btn ${mode === 'prob' ? 'is-active' : ''}`}
           onClick={() => setMode('prob')}
           aria-pressed={mode === 'prob'}
           title="Probability mode — tap cycles trigger chance (100/75/50/25%)"
@@ -190,17 +190,19 @@ const StepCursor = memo(function StepCursor({
       ? Math.floor(localBeat * stepsInBeat)
       : -1;
   if (step < 0) return null;
-  // grid is `64px repeat(length, 1fr)` with a 4px gap (length gaps total)
-  const colW = `((100% - 64px - ${length} * 4px) / ${length})`;
+  // mirror the grid template: an 80px label column + `length` 1fr tracks
+  // separated by 4px gaps (length gaps total, including the one after the
+  // label column)
+  const colW = `((100% - 80px - ${length} * 4px) / ${length})`;
   return (
     <div
       style={{
         position: 'absolute',
         top: 0,
         bottom: 0,
-        left: `calc(64px + ${step + 1} * 4px + ${step} * ${colW})`,
+        left: `calc(80px + ${step + 1} * 4px + ${step} * ${colW})`,
         width: `calc(${colW})`,
-        border: '1px solid var(--nerv-green)',
+        border: '1px solid var(--hud-green)',
         boxShadow: '0 0 8px rgba(0,255,136,0.5)',
         background: 'rgba(0,255,136,0.08)',
         pointerEvents: 'none',
@@ -306,12 +308,12 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         flexDirection: 'column',
         gap: 2,
         alignItems: 'stretch',
-        outline: hover ? '2px dashed var(--nerv-orange-bright)' : 'none',
+        outline: hover ? '2px dashed var(--hud-orange-bright)' : 'none',
       }}
     >
       <button
         onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         style={{ fontSize: 9, padding: '3px 4px', width: '100%' }}
         title={
           sampleId
@@ -320,7 +322,7 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         }
       >
         {DRUM_LABELS[pad]}
-        {sampleId && <span style={{ color: 'var(--nerv-orange-bright)' }}> ◆</span>}
+        {sampleId && <span style={{ color: 'var(--hud-orange-bright)' }}> ◆</span>}
       </button>
       <select
         className="display"
@@ -376,6 +378,28 @@ const StepCell = memo(function StepCell({
   const drag = useRef<{ startY: number; startVel: number; vel: number; moved: boolean } | null>(null);
   const prob = probability ?? 1;
 
+  // Wheel-to-set-velocity must stop the container scrolling, but React's
+  // root-attached wheel listener is passive — preventDefault there is a
+  // no-op. Attach a native non-passive listener instead, reading the live
+  // cell state through a ref so the listener never needs re-binding.
+  const wheelState = useRef({ on, velocity });
+  useEffect(() => {
+    wheelState.current = { on, velocity };
+  });
+  useEffect(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const s = wheelState.current;
+      if (!s.on) return;
+      e.preventDefault();
+      const v = Math.max(0.05, Math.min(1, s.velocity - Math.sign(e.deltaY) * 0.05));
+      setStepVelocity(trackId, clipId, pad, index, v);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [trackId, clipId, pad, index, setStepVelocity]);
+
   function down(e: React.PointerEvent) {
     btnRef.current?.setPointerCapture(e.pointerId);
     drag.current = { startY: e.clientY, startVel: velocity, vel: velocity, moved: false };
@@ -414,17 +438,11 @@ const StepCell = memo(function StepCell({
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
-      onWheel={(e) => {
-        if (!on) return;
-        e.preventDefault();
-        const v = Math.max(0.05, Math.min(1, velocity - Math.sign(e.deltaY) * 0.05));
-        setStepVelocity(trackId, clipId, pad, index, v);
-      }}
       style={{
         height: 38,
         background: cellBg(on, velocity),
         border: on
-          ? '1px solid var(--nerv-orange)'
+          ? '1px solid var(--hud-orange)'
           : `1px solid ${quarter ? 'rgba(255,106,0,0.45)' : 'rgba(255,106,0,0.18)'}`,
         boxShadow: on ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
         position: 'relative',

@@ -73,7 +73,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
       </div>
       <div style={{ display: 'flex', gap: 4 }}>
         <button
-          className={`nerv-btn nerv-btn--icon ${track.mute ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
@@ -83,7 +83,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
           M
         </button>
         <button
-          className={`nerv-btn nerv-btn--green nerv-btn--icon ${track.solo ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
@@ -96,7 +96,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 150 }}>
         <input
           type="range"
-          className="nerv-slider"
+          className="hud-slider"
           min={-48}
           max={6}
           step={0.5}
@@ -128,7 +128,7 @@ const MasterStrip = memo(function MasterStrip({
         flexShrink: 0,
         padding: 8,
         background: 'rgba(40,10,0,0.7)',
-        border: '1px solid var(--nerv-orange)',
+        border: '1px solid var(--hud-orange)',
         boxShadow: 'var(--hud-glow)',
         display: 'flex',
         flexDirection: 'column',
@@ -143,7 +143,7 @@ const MasterStrip = memo(function MasterStrip({
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 160 }}>
         <input
           type="range"
-          className="nerv-slider"
+          className="hud-slider"
           min={-48}
           max={6}
           step={0.5}

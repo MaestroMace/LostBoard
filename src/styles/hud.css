@@ -1,4 +1,4 @@
-/* ---------------- N.E.R.V. HUD COMPONENTS ---------------- */
+/* ---------------- LOSTBOARD HUD COMPONENTS ---------------- */
 
 /* Scanlines overlay — promoted to its own compositor layer so scrolling
    content underneath never repaints it. No mix-blend-mode (expensive on iOS). */
@@ -11,8 +11,8 @@
     to bottom,
     transparent 0px,
     transparent 2px,
-    var(--nerv-scanline) 2px,
-    var(--nerv-scanline) 3px
+    var(--hud-scanline) 2px,
+    var(--hud-scanline) 3px
   );
   opacity: 0.22;
   z-index: 9999;
@@ -34,7 +34,7 @@
 .hex-frame {
   position: relative;
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.04), rgba(0, 0, 0, 0.6));
-  border: 1px solid var(--nerv-orange);
+  border: 1px solid var(--hud-orange);
   box-shadow: var(--hud-glow);
   clip-path: polygon(
     10px 0,
@@ -54,15 +54,15 @@
 }
 
 .hex-frame--green {
-  border-color: var(--nerv-green);
+  border-color: var(--hud-green);
   box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
-  color: var(--nerv-green);
+  color: var(--hud-green);
 }
 
 .hex-frame--red {
-  border-color: var(--nerv-red);
+  border-color: var(--hud-red);
   box-shadow: 0 0 12px rgba(255, 0, 0, 0.5);
-  color: var(--nerv-red);
+  color: var(--hud-red);
 }
 
 .hex-frame__title {
@@ -73,20 +73,20 @@
   font-size: 9px;
   letter-spacing: 0.3em;
   padding: 0 8px;
-  background: var(--nerv-ink);
-  color: var(--nerv-orange);
+  background: var(--hud-ink);
+  color: var(--hud-orange);
   text-transform: uppercase;
 }
 
-.hex-frame--green .hex-frame__title { color: var(--nerv-green); }
-.hex-frame--red .hex-frame__title { color: var(--nerv-red); }
+.hex-frame--green .hex-frame__title { color: var(--hud-green); }
+.hex-frame--red .hex-frame__title { color: var(--hud-red); }
 
 /* Warning stripe */
 .warning-stripe {
   height: 10px;
   background: repeating-linear-gradient(
     -45deg,
-    var(--nerv-amber) 0 12px,
+    var(--hud-amber) 0 12px,
     #000 12px 24px
   );
   opacity: 0.7;
@@ -98,45 +98,48 @@
 .hud-readout {
   font-family: var(--font-data);
   font-size: 10px;
-  color: var(--nerv-orange-bright);
+  color: var(--hud-orange-bright);
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
-.hud-readout--green { color: var(--nerv-green); }
-.hud-readout--dim { color: rgba(255, 106, 0, 0.55); }
+.hud-readout--green { color: var(--hud-green); }
+/* lifted from 0.55 — the dim readout (tips, footers) was barely legible on black */
+.hud-readout--dim { color: rgba(255, 106, 0, 0.72); }
 
 .hud-label {
   font-family: var(--font-display);
-  font-size: 9px;
-  letter-spacing: 0.32em;
+  /* 9 -> 10px and tighter tracking: wide letter-spacing on tiny uppercase
+     text was a big part of why labels read as decoration, not words */
+  font-size: 10px;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(255, 106, 0, 0.75);
+  color: rgba(255, 106, 0, 0.9);
 }
 
 .hud-value {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: var(--nerv-orange-bright);
+  color: var(--hud-orange-bright);
 }
 
 .hud-big {
   font-family: var(--font-display);
   font-weight: 900;
   font-size: 24px;
-  color: var(--nerv-orange-bright);
+  color: var(--hud-orange-bright);
   text-shadow: 0 0 10px rgba(255, 106, 0, 0.6);
 }
 
 /* Buttons */
-.nerv-btn {
+.hud-btn {
   position: relative;
   font-family: var(--font-display);
   font-size: 10px;
   letter-spacing: 0.25em;
   text-transform: uppercase;
-  color: var(--nerv-orange);
+  color: var(--hud-orange);
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.1), rgba(255, 106, 0, 0.02));
   border: 1px solid rgba(255, 106, 0, 0.55);
   padding: 8px 14px;
@@ -155,23 +158,23 @@
   justify-content: center;
   gap: 6px;
 }
-.nerv-btn:hover {
+.hud-btn:hover {
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.25), rgba(255, 106, 0, 0.05));
-  color: var(--nerv-orange-bright);
+  color: var(--hud-orange-bright);
   box-shadow: 0 0 12px rgba(255, 106, 0, 0.4);
 }
-.nerv-btn:active {
+.hud-btn:active {
   transform: translateY(1px);
 }
-.nerv-btn.is-active,
-.nerv-btn[aria-pressed='true'] {
-  background: linear-gradient(180deg, var(--nerv-orange), #b34b00);
+.hud-btn.is-active,
+.hud-btn[aria-pressed='true'] {
+  background: linear-gradient(180deg, var(--hud-orange), #b34b00);
   color: #0a0a0a;
   text-shadow: none;
   box-shadow: 0 0 14px rgba(255, 106, 0, 0.8);
 }
-.nerv-btn--rec.is-active {
-  background: linear-gradient(180deg, var(--nerv-red), #8a0000);
+.hud-btn--rec.is-active {
+  background: linear-gradient(180deg, var(--hud-red), #8a0000);
   color: #fff;
   box-shadow: 0 0 14px rgba(255, 0, 0, 0.9);
   animation: recBlink 1s infinite;
@@ -180,57 +183,57 @@
   0%, 100% { box-shadow: 0 0 18px rgba(255, 0, 0, 0.95); }
   50% { box-shadow: 0 0 4px rgba(255, 0, 0, 0.4); }
 }
-.nerv-btn--green {
-  color: var(--nerv-green);
+.hud-btn--green {
+  color: var(--hud-green);
   border-color: rgba(0, 255, 136, 0.55);
   background: linear-gradient(180deg, rgba(0, 255, 136, 0.08), rgba(0, 255, 136, 0.02));
 }
-.nerv-btn--green.is-active {
-  background: linear-gradient(180deg, var(--nerv-green), #0a8a4a);
+.hud-btn--green.is-active {
+  background: linear-gradient(180deg, var(--hud-green), #0a8a4a);
   color: #050505;
   box-shadow: 0 0 14px rgba(0, 255, 136, 0.7);
 }
-.nerv-btn--ghost {
+.hud-btn--ghost {
   background: transparent;
   border-color: rgba(255, 106, 0, 0.3);
   color: rgba(255, 106, 0, 0.7);
 }
-.nerv-btn--icon {
+.hud-btn--icon {
   padding: 6px 8px;
   min-width: 36px;
 }
 
 /* Sliders / knobs */
-.nerv-slider {
+.hud-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 6px;
-  background: linear-gradient(to right, var(--nerv-orange-deep), var(--nerv-orange));
+  background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
   border: 1px solid rgba(255, 106, 0, 0.5);
   outline: none;
 }
-.nerv-slider::-webkit-slider-thumb {
+.hud-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
   height: 18px;
-  background: var(--nerv-orange-bright);
+  background: var(--hud-orange-bright);
   border: 1px solid #000;
   cursor: pointer;
   box-shadow: 0 0 6px rgba(255, 106, 0, 0.8);
   clip-path: polygon(50% 0, 100% 30%, 100% 100%, 0 100%, 0 30%);
 }
-.nerv-slider::-moz-range-thumb {
+.hud-slider::-moz-range-thumb {
   width: 16px;
   height: 18px;
-  background: var(--nerv-orange-bright);
+  background: var(--hud-orange-bright);
   border: 1px solid #000;
   cursor: pointer;
   box-shadow: 0 0 6px rgba(255, 106, 0, 0.8);
 }
 
-.nerv-fader {
+.hud-fader {
   -webkit-appearance: slider-vertical;
   appearance: slider-vertical;
   writing-mode: vertical-lr;
@@ -239,7 +242,7 @@
   height: 140px;
 }
 
-.nerv-fader-track {
+.hud-fader-track {
   position: relative;
   width: 24px;
   height: 140px;
@@ -256,13 +259,13 @@
   border-radius: 50%;
   box-shadow: inset 0 0 2px #000;
 }
-.led.on { background: var(--nerv-orange); box-shadow: 0 0 6px var(--nerv-orange-bright), inset 0 0 2px #000; }
+.led.on { background: var(--hud-orange); box-shadow: 0 0 6px var(--hud-orange-bright), inset 0 0 2px #000; }
 .led.green { background: #060; }
-.led.green.on { background: var(--nerv-green); box-shadow: 0 0 6px var(--nerv-green); }
+.led.green.on { background: var(--hud-green); box-shadow: 0 0 6px var(--hud-green); }
 .led.red { background: #400; }
-.led.red.on { background: var(--nerv-red); box-shadow: 0 0 6px var(--nerv-red); }
+.led.red.on { background: var(--hud-red); box-shadow: 0 0 6px var(--hud-red); }
 .led.amber { background: #420; }
-.led.amber.on { background: var(--nerv-amber); box-shadow: 0 0 6px var(--nerv-amber); }
+.led.amber.on { background: var(--hud-amber); box-shadow: 0 0 6px var(--hud-amber); }
 
 /* Meters */
 .meter {
@@ -278,15 +281,15 @@
 }
 .meter__bar {
   width: 100%;
-  background: linear-gradient(to top, var(--nerv-green) 0%, var(--nerv-green) 65%, var(--nerv-amber) 80%, var(--nerv-red) 95%);
+  background: linear-gradient(to top, var(--hud-green) 0%, var(--hud-green) 65%, var(--hud-amber) 80%, var(--hud-red) 95%);
   /* driven directly by the meter bus at 60fps — no CSS transition */
 }
 
 /* Hex grid background */
 .hex-grid-bg {
   background-image:
-    linear-gradient(var(--nerv-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--nerv-grid) 1px, transparent 1px);
+    linear-gradient(var(--hud-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hud-grid) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -295,7 +298,7 @@
   position: absolute;
   width: 14px;
   height: 14px;
-  border: 1px solid var(--nerv-orange);
+  border: 1px solid var(--hud-orange);
   pointer-events: none;
 }
 .crosshair-corner.tl { top: 4px; left: 4px; border-right: none; border-bottom: none; }
@@ -303,8 +306,8 @@
 .crosshair-corner.bl { bottom: 4px; left: 4px; border-right: none; border-top: none; }
 .crosshair-corner.br { bottom: 4px; right: 4px; border-left: none; border-top: none; }
 
-/* AT-field hex pattern accent */
-.at-field {
+/* Hex-field pattern accent */
+.hex-field {
   background:
     radial-gradient(circle at 50% 50%, rgba(255, 106, 0, 0.1), transparent 60%),
     repeating-conic-gradient(from 30deg, rgba(255, 106, 0, 0.06) 0 60deg, transparent 60deg 120deg);
@@ -312,7 +315,7 @@
 }
 
 /* Tabs */
-.nerv-tabs {
+.hud-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -321,7 +324,7 @@
   background: rgba(255, 106, 0, 0.04);
 }
 
-.nerv-tab {
+.hud-tab {
   font-family: var(--font-display);
   font-size: 10px;
   letter-spacing: 0.2em;
@@ -332,11 +335,11 @@
   background: transparent;
   clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
 }
-.nerv-tab.is-active {
-  color: var(--nerv-orange-bright);
+.hud-tab.is-active {
+  color: var(--hud-orange-bright);
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.18), transparent);
   border-color: rgba(255, 106, 0, 0.6);
-  box-shadow: inset 0 -2px 0 var(--nerv-orange);
+  box-shadow: inset 0 -2px 0 var(--hud-orange);
 }
 
 /* Knob */
@@ -358,9 +361,9 @@
   left: 50%;
   width: 2px;
   height: 18px;
-  background: var(--nerv-orange-bright);
+  background: var(--hud-orange-bright);
   transform-origin: 50% 20px;
-  box-shadow: 0 0 4px var(--nerv-orange-bright);
+  box-shadow: 0 0 4px var(--hud-orange-bright);
 }
 .knob__ring {
   position: absolute;
@@ -377,7 +380,7 @@
   padding: 4px 8px;
   font-family: var(--font-display);
   letter-spacing: 0.18em;
-  color: var(--nerv-orange-bright);
+  color: var(--hud-orange-bright);
   text-shadow: 0 0 6px rgba(255, 106, 0, 0.5);
   display: inline-flex;
   align-items: center;
@@ -396,8 +399,8 @@
   width: 10px;
   height: 10px;
   background:
-    linear-gradient(0deg, var(--nerv-orange) 0 100%) no-repeat 50% 0 / 2px 100%,
-    linear-gradient(0deg, var(--nerv-orange) 0 100%) no-repeat 0 50% / 100% 2px;
+    linear-gradient(0deg, var(--hud-orange) 0 100%) no-repeat 50% 0 / 2px 100%,
+    linear-gradient(0deg, var(--hud-orange) 0 100%) no-repeat 0 50% / 100% 2px;
 }
 
 /* Animations */
@@ -417,7 +420,7 @@
 .pulse { animation: pulse 1.6s ease-in-out infinite; }
 
 /* iPhone-friendly touch */
-button, .nerv-btn { touch-action: manipulation; }
+button, .hud-btn { touch-action: manipulation; }
 .touch-target { min-width: 44px; min-height: 44px; }
 
 /* ---------------- MOBILE / PHONE LAYOUT ---------------- */
@@ -427,29 +430,29 @@ button, .nerv-btn { touch-action: manipulation; }
   }
 
   /* Tabs become a single swipeable row instead of wrapping */
-  .nerv-tabs {
+  .hud-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding: 4px 6px;
   }
-  .nerv-tabs::-webkit-scrollbar {
+  .hud-tabs::-webkit-scrollbar {
     display: none;
   }
-  .nerv-tab {
+  .hud-tab {
     flex: 0 0 auto;
     padding: 8px 10px;
     font-size: 9px;
   }
 
   /* Tighter chrome */
-  .nerv-btn {
+  .hud-btn {
     padding: 7px 9px;
     letter-spacing: 0.12em;
     min-height: 38px;
   }
-  .nerv-btn--icon {
+  .hud-btn--icon {
     padding: 6px 7px;
     min-width: 38px;
   }
@@ -492,11 +495,11 @@ button, .nerv-btn { touch-action: manipulation; }
 
 /* Coarse-pointer (touch) tuning regardless of width */
 @media (pointer: coarse) {
-  .nerv-slider::-webkit-slider-thumb {
+  .hud-slider::-webkit-slider-thumb {
     width: 22px;
     height: 24px;
   }
-  .nerv-slider::-moz-range-thumb {
+  .hud-slider::-moz-range-thumb {
     width: 22px;
     height: 24px;
   }

@@ -1,7 +1,7 @@
 {
-  "name": "N.E.R.V. M.A.G.I. // LostBoard DAW",
-  "short_name": "NERV DAW",
-  "description": "Evangelion-flavored DAW for the browser and iPhone over Tailscale.",
+  "name": "LostBoard // T.R.I.A.D. DAW",
+  "short_name": "LOSTBOARD",
+  "description": "Tactical command-console DAW for the browser and iPhone over Tailscale.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
@@ -9,7 +9,7 @@
   "theme_color": "#ff6600",
   "icons": [
     {
-      "src": "/nerv.svg",
+      "src": "/triad.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

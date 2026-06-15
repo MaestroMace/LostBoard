@@ -26,7 +26,8 @@ const KEY_TO_SEMITONE: Record<string, number> = {
   j: 11,
   k: 12,
   o: 13,
-  l: 14,
+  // no 'l' — it's the documented loop-toggle shortcut, which runs first;
+  // listing it here would promise a note that can never sound
   p: 15,
 };
 

@@ -14,7 +14,9 @@ const LO = 36; // C2
 const HI = 84; // C6
 const ROWS = HI - LO + 1;
 const VEL_LANE_H = 60;
-const KEYS_W = 48;
+const KEYS_W = 56;
+/** White-key letter by pitch-class, for the keyboard ruler labels. */
+const WHITE_NOTE: Record<number, string> = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B' };
 const BeatWidthContext = createContext(BASE_BEAT_W);
 const useBeatWidth = () => useContext(BeatWidthContext);
 
@@ -91,29 +93,12 @@ export function PianoRoll() {
   const [scaleRoot, setScaleRoot] = useState(0);
   const [scaleName, setScaleName] = useState<ScaleName>('chromatic');
 
-  if (!activeTrack) {
-    return (
-      <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No synth track. Add one from the Arrange view.</HexFrame>
-      </div>
-    );
-  }
-  if (!activeClip) {
-    return (
-      <div style={{ padding: 16 }}>
-        <HexFrame title={activeTrack.name}>
-          <p>This track has no MIDI clip.</p>
-          <button className="nerv-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
-            CREATE MIDI CLIP
-          </button>
-        </HexFrame>
-      </div>
-    );
-  }
-
-  const beats = Math.max(4, activeClip.length);
+  // Every hook must run on every render — these used to sit below the
+  // early returns, which crashed React ("rendered fewer hooks") the moment
+  // the editor swapped to an empty state: deleting the open clip, undoing
+  // its creation, or switching to a synth track with no MIDI clips.
+  const hasEditor = !!activeTrack && !!activeClip;
   const [zoom, setZoom] = useState(1);
-  const BEAT_W = BASE_BEAT_W * zoom;
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -126,8 +111,24 @@ export function PianoRoll() {
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-  usePinchZoom(gridRef, setZoom);
+    // re-attach when the editor branch (and so the grid element) appears
+  }, [hasEditor]);
+  usePinchZoom(gridRef, setZoom, 0.25, 4, hasEditor);
+
+  // When a clip opens, scroll the grid so its notes are centred — the bass
+  // range sits near the bottom of C2–C6, so opening at scrollTop 0 showed an
+  // empty grid and you had to hunt for your notes.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || !activeClip) return;
+    const ns = activeClip.notes;
+    const center =
+      ns.length > 0
+        ? (Math.min(...ns.map((n) => n.pitch)) + Math.max(...ns.map((n) => n.pitch))) / 2
+        : 60; // middle C
+    el.scrollTop = Math.max(0, (HI - center) * ROW_H - el.clientHeight / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClip?.id]);
 
   /**
    * Draft note state for DRAW + drag-on-create. While the user holds down,
@@ -145,6 +146,29 @@ export function PianoRoll() {
     | { x0: number; y0: number; x1: number; y1: number; pointerId: number }
     | null
   >(null);
+
+  if (!activeTrack) {
+    return (
+      <div style={{ padding: 16 }}>
+        <HexFrame title="N/A">No synth track. Add one from the Arrange view.</HexFrame>
+      </div>
+    );
+  }
+  if (!activeClip) {
+    return (
+      <div style={{ padding: 16 }}>
+        <HexFrame title={activeTrack.name}>
+          <p>This track has no MIDI clip.</p>
+          <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
+            CREATE MIDI CLIP
+          </button>
+        </HexFrame>
+      </div>
+    );
+  }
+
+  const beats = Math.max(4, activeClip.length);
+  const BEAT_W = BASE_BEAT_W * zoom;
 
   function gridLocal(e: React.PointerEvent): { x: number; y: number } {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -237,7 +261,7 @@ export function PianoRoll() {
           borderBottom: '1px solid rgba(255,106,0,0.4)',
         }}
       >
-        <span className="hud-label">PIANO ROLL // M.A.G.I. MELCHIOR</span>
+        <span className="hud-label">PIANO ROLL // TRIAD DENEB</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {synthTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -253,24 +277,24 @@ export function PianoRoll() {
           ))}
         </select>
         <button
-          className="nerv-btn"
+          className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
         >
           + CLIP
         </button>
         <div style={{ flex: 1 }} />
-        <button className={`nerv-btn ${tool === 'draw' ? 'is-active' : ''}`} onClick={() => setTool('draw')}>
+        <button className={`hud-btn ${tool === 'draw' ? 'is-active' : ''}`} onClick={() => setTool('draw')}>
           DRAW
         </button>
         <button
-          className={`nerv-btn nerv-btn--green ${tool === 'select' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--green ${tool === 'select' ? 'is-active' : ''}`}
           onClick={() => setTool('select')}
           title="Drag a rectangle to select notes inside"
         >
           SELECT
         </button>
         <button
-          className={`nerv-btn nerv-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
           onClick={() => setTool('erase')}
         >
           ERASE
@@ -307,7 +331,7 @@ export function PianoRoll() {
           ))}
         </select>
         <button
-          className="nerv-btn nerv-btn--ghost"
+          className="hud-btn hud-btn--ghost"
           onClick={() =>
             quantizeClip(
               activeTrack.id,
@@ -325,7 +349,7 @@ export function PianoRoll() {
           ⎌ QUANTIZE{selectedNoteIds.length > 0 ? ` SEL` : ''}
         </button>
         <button
-          className="nerv-btn nerv-btn--ghost"
+          className="hud-btn hud-btn--ghost"
           onClick={() =>
             humanizeClip(
               activeTrack.id,
@@ -344,7 +368,7 @@ export function PianoRoll() {
         </button>
         {selectedNoteIds.length > 0 && (
           <button
-            className="nerv-btn nerv-btn--ghost"
+            className="hud-btn hud-btn--ghost"
             onClick={clearNoteSelection}
             title="Clear note selection"
           >
@@ -416,12 +440,26 @@ export function PianoRoll() {
                 width: Math.abs(marquee.x1 - marquee.x0),
                 height: Math.abs(marquee.y1 - marquee.y0),
                 background: 'rgba(120,255,140,0.08)',
-                border: '1px dashed var(--nerv-green)',
+                border: '1px dashed var(--hud-green)',
                 pointerEvents: 'none',
               }}
             />
           )}
           <PianoRollPlayhead clipStart={activeClip.start} />
+          {/* clip-end marker so the grid reads as "this is the clip" rather
+              than a small box floating in a black void */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              right: 0,
+              width: 2,
+              background: 'var(--hud-orange)',
+              boxShadow: '0 0 6px rgba(255,106,0,0.5)',
+              pointerEvents: 'none',
+            }}
+          />
         </div>
         </div>
         <VelocityLane
@@ -468,7 +506,7 @@ const ZoomFloater = memo(function ZoomFloater({
       }}
     >
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
         style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
@@ -476,7 +514,7 @@ const ZoomFloater = memo(function ZoomFloater({
         −
       </button>
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Reset zoom to 1×"
         onClick={() => setZoom(() => 1)}
         style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
@@ -484,7 +522,7 @@ const ZoomFloater = memo(function ZoomFloater({
         {zoom.toFixed(2)}×
       </button>
       <button
-        className="nerv-btn nerv-btn--icon"
+        className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
         style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
@@ -499,7 +537,7 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
   return (
     <div
       style={{
-        width: 48,
+        width: KEYS_W,
         position: 'sticky',
         left: 0,
         background: 'rgba(0,0,0,0.85)',
@@ -512,25 +550,34 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
         const pitch = HI - i;
         const isBlack = [1, 3, 6, 8, 10].includes(pitch % 12);
         const isC = pitch % 12 === 0;
+        const letter = WHITE_NOTE[pitch % 12];
+        const oct = Math.floor(pitch / 12) - 1;
         return (
           <div
             key={i}
             onPointerDown={() => audioEngine.trigger(trackId, pitch, 0.9, '16n')}
+            title={`${letter ?? WHITE_NOTE[(pitch % 12) - 1] + '#'}${oct} — tap to preview`}
             style={{
               height: ROW_H,
-              background: isBlack ? '#0a0a0a' : '#1a0f0a',
-              borderBottom: '1px solid rgba(255,106,0,0.18)',
+              // piano look: black keys near-black, white keys a lit brown so
+              // the two read apart at a glance
+              background: isBlack ? '#070504' : '#2a1a12',
+              // brighter octave divider on every C
+              borderBottom: isC ? '1px solid rgba(255,170,0,0.55)' : '1px solid rgba(255,106,0,0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              paddingRight: 4,
-              fontSize: 8,
-              color: isC ? 'var(--nerv-amber)' : 'rgba(255,106,0,0.5)',
+              paddingRight: 5,
+              fontSize: 9,
+              fontWeight: isC ? 700 : 400,
+              // label every white key, not just C — far easier to orient
+              color: isC ? 'var(--hud-amber)' : isBlack ? 'transparent' : 'rgba(255,179,71,0.8)',
               cursor: 'pointer',
               fontFamily: 'var(--font-data)',
+              userSelect: 'none',
             }}
           >
-            {isC ? `C${Math.floor(pitch / 12) - 1}` : ''}
+            {isC ? `C${oct}` : (letter ?? '')}
           </div>
         );
       })}
@@ -729,16 +776,24 @@ const NoteEl = memo(function NoteEl({
       el.style.top = `${(HI - d.nextPitch) * ROW_H}px`;
       return;
     }
-    // multi-drag: same delta applied to every tracked note (no scale snap)
-    const dStart = Math.round(dx / BEAT_W / snap) * snap;
-    const dPitchRows = Math.round(dy / ROW_H);
+    // multi-drag: same delta applied to every tracked note (no scale snap).
+    // Clamp the SHARED delta so the whole selection stays inside beat 0 and
+    // the visible LO..HI range — per-note clamping here while committing the
+    // raw delta made released notes jump past the preview (and land outside
+    // the editable pitch range, where they can't be grabbed again).
+    let dStart = Math.round(dx / BEAT_W / snap) * snap;
+    let dPitchRows = Math.round(dy / ROW_H);
+    const minStart = Math.min(...d.tracked.map((t) => t.baseStart));
+    const minPitch = Math.min(...d.tracked.map((t) => t.basePitch));
+    const maxPitch = Math.max(...d.tracked.map((t) => t.basePitch));
+    dStart = Math.max(dStart, -minStart);
+    dPitchRows = Math.min(dPitchRows, minPitch - LO);
+    dPitchRows = Math.max(dPitchRows, maxPitch - HI);
     d.nextDeltaStart = dStart;
     d.nextDeltaPitchRows = dPitchRows;
     for (const t of d.tracked) {
-      const newStart = Math.max(0, t.baseStart + dStart);
-      const newPitch = Math.max(LO, Math.min(HI, t.basePitch - dPitchRows));
-      t.el.style.left = `${newStart * BEAT_W}px`;
-      t.el.style.top = `${(HI - newPitch) * ROW_H}px`;
+      t.el.style.left = `${(t.baseStart + dStart) * BEAT_W}px`;
+      t.el.style.top = `${(HI - (t.basePitch - dPitchRows)) * ROW_H}px`;
     }
   }
   function up(e: React.PointerEvent) {
@@ -785,9 +840,9 @@ const NoteEl = memo(function NoteEl({
         width: Math.max(8, note.length * BEAT_W),
         height: ROW_H - 2,
         background: `linear-gradient(180deg, ${color}cc, ${color}77)`,
-        border: selected ? '1px solid var(--nerv-green)' : '1px solid #fff',
+        border: selected ? '1px solid var(--hud-green)' : '1px solid #fff',
         boxShadow: selected
-          ? '0 0 8px var(--nerv-green), inset 0 0 0 1px rgba(120,255,140,0.4)'
+          ? '0 0 8px var(--hud-green), inset 0 0 0 1px rgba(120,255,140,0.4)'
           : '0 0 6px rgba(255,255,255,0.4)',
         cursor: 'move',
         borderRadius: 1,
@@ -929,12 +984,12 @@ const VelocityLane = memo(function VelocityLane({
                 bottom: 6,
                 width: Math.max(3, Math.min(beatW * 0.4, 10)),
                 height: h,
-                background: isSel ? 'var(--nerv-green)' : color,
+                background: isSel ? 'var(--hud-green)' : color,
                 opacity: isSel ? 0.95 : 0.7,
                 cursor: 'ns-resize',
                 touchAction: 'none',
                 borderTop: '1px solid #fff',
-                boxShadow: isSel ? '0 0 6px var(--nerv-green)' : undefined,
+                boxShadow: isSel ? '0 0 6px var(--hud-green)' : undefined,
               }}
               title={`vel ${(n.velocity * 100).toFixed(0)}%`}
             />
@@ -957,8 +1012,8 @@ const PianoRollPlayhead = memo(function PianoRollPlayhead({ clipStart }: { clipS
         left: 0,
         width: 2,
         height: ROWS * ROW_H,
-        background: 'var(--nerv-green)',
-        boxShadow: '0 0 6px var(--nerv-green)',
+        background: 'var(--hud-green)',
+        boxShadow: '0 0 6px var(--hud-green)',
         pointerEvents: 'none',
         transform: `translateX(${x}px)`,
         willChange: 'transform',

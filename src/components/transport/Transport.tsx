@@ -177,22 +177,22 @@ export function Transport() {
       }}
     >
       <div style={{ display: 'flex', gap: 4 }}>
-        <button className="nerv-btn touch-target" onClick={() => seek(0)} title="Return to start">
+        <button className="hud-btn touch-target" onClick={() => seek(0)} title="Return to start">
           ⏮
         </button>
         <button
-          className={`nerv-btn touch-target ${playing ? 'is-active' : ''}`}
+          className={`hud-btn touch-target ${playing ? 'is-active' : ''}`}
           onClick={play}
           aria-pressed={playing}
           title="Play / Pause"
         >
           {playing ? `⏸${lbl('PAUSE')}` : `▶${lbl('PLAY')}`}
         </button>
-        <button className="nerv-btn touch-target" onClick={stop} title="Stop">
+        <button className="hud-btn touch-target" onClick={stop} title="Stop">
           ■{lbl('STOP')}
         </button>
         <button
-          className={`nerv-btn nerv-btn--rec touch-target ${micRecording ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec touch-target ${micRecording ? 'is-active' : ''}`}
           onClick={toggleMicRec}
           aria-pressed={micRecording}
           title="Record from microphone into an audio track"
@@ -200,7 +200,7 @@ export function Transport() {
           ●{lbl(micRecording ? 'STOP REC' : 'MIC REC')}
         </button>
         <button
-          className={`nerv-btn nerv-btn--rec touch-target ${playing ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec touch-target ${playing ? 'is-active' : ''}`}
           onClick={punchRecord}
           title={
             countInBars > 0
@@ -224,7 +224,7 @@ export function Transport() {
           ))}
         </select>
         <button
-          className={`nerv-btn nerv-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
           onClick={toggleBounce}
           aria-pressed={bouncing}
           title="Bounce the master output to an audio file"
@@ -232,7 +232,7 @@ export function Transport() {
           ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
         </button>
         <button
-          className={`nerv-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
+          className={`hud-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
           onClick={() => setLoop(!loopEnabled)}
           aria-pressed={loopEnabled}
           title="Loop"
@@ -240,7 +240,7 @@ export function Transport() {
           ↻{lbl('LOOP')}
         </button>
         <button
-          className={`nerv-btn touch-target ${metronome ? 'is-active' : ''}`}
+          className={`hud-btn touch-target ${metronome ? 'is-active' : ''}`}
           onClick={() => setMetronome(!metronome)}
           aria-pressed={metronome}
           title="Metronome"
@@ -248,7 +248,7 @@ export function Transport() {
           ⛬{lbl('CLICK')}
         </button>
         <button
-          className="nerv-btn nerv-btn--ghost touch-target"
+          className="hud-btn hud-btn--ghost touch-target"
           onClick={undo}
           disabled={!canUndo}
           title="Undo"
@@ -257,7 +257,7 @@ export function Transport() {
           ↶{lbl('UNDO')}
         </button>
         <button
-          className="nerv-btn nerv-btn--ghost touch-target"
+          className="hud-btn hud-btn--ghost touch-target"
           onClick={redo}
           disabled={!canRedo}
           title="Redo"
@@ -266,7 +266,7 @@ export function Transport() {
           ↷{lbl('REDO')}
         </button>
         <button
-          className="nerv-btn nerv-btn--ghost touch-target"
+          className="hud-btn hud-btn--ghost touch-target"
           onClick={() => saveProjectToStorage()}
           title="Save current project to local storage"
         >
@@ -277,7 +277,7 @@ export function Transport() {
       {!isMobile && <div style={{ flex: 1 }} />}
 
       <button
-        className="nerv-btn touch-target"
+        className="hud-btn touch-target"
         onClick={() => setShowBpmEdit((v) => !v)}
         style={{ minWidth: isMobile ? 64 : 100 }}
         title="Tempo"
@@ -299,7 +299,7 @@ export function Transport() {
       )}
 
       <input
-        className="nerv-slider"
+        className="hud-slider"
         type="range"
         min={60}
         max={200}
@@ -434,7 +434,7 @@ const TapTempoButton = memo(function TapTempoButton({
 
   return (
     <button
-      className="nerv-btn nerv-btn--ghost touch-target"
+      className="hud-btn hud-btn--ghost touch-target"
       onClick={tap}
       title="Tap repeatedly to set the tempo"
       // tiny visual blink on each tap so the user sees their input

@@ -43,14 +43,14 @@ export function ProjectView() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${project.name.replace(/\s+/g, '_')}_${Date.now()}.nervproj.json`;
+    a.download = `${project.name.replace(/\s+/g, '_')}_${Date.now()}.lostproj.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
-      <HexFrame title="PROJECT // MAGI HEADQUARTERS">
+      <HexFrame title="PROJECT // COMMAND DECK">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           <Field label="NAME">
             <input
@@ -110,7 +110,7 @@ export function ProjectView() {
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <input
                 type="range"
-                className="nerv-slider"
+                className="hud-slider"
                 min={0}
                 max={1}
                 step={0.01}
@@ -141,7 +141,7 @@ export function ProjectView() {
       <HexFrame title="STORAGE // SAVE / LOAD">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
-            className="nerv-btn"
+            className="hud-btn"
             onClick={() => {
               saveProjectToStorage();
               setSavedAt(new Date().toLocaleString());
@@ -150,18 +150,18 @@ export function ProjectView() {
             💾 SAVE TO BROWSER
           </button>
           <button
-            className="nerv-btn"
+            className="hud-btn"
             onClick={() => {
               if (!loadProjectFromStorage()) alert('No saved project found.');
             }}
           >
             ⤓ LOAD FROM BROWSER
           </button>
-          <button className="nerv-btn" onClick={exportFile}>⬇ EXPORT JSON</button>
+          <button className="hud-btn" onClick={exportFile}>⬇ EXPORT JSON</button>
           <OfflineBounceButton />
           <OfflineStemsButton />
           <StemBounceButton />
-          <label className="nerv-btn" style={{ cursor: 'pointer' }}>
+          <label className="hud-btn" style={{ cursor: 'pointer' }}>
             ⬆ IMPORT JSON
             <input
               type="file"
@@ -177,7 +177,7 @@ export function ProjectView() {
             />
           </label>
           <button
-            className="nerv-btn nerv-btn--rec"
+            className="hud-btn hud-btn--rec"
             onClick={() => {
               if (confirm('Discard current project and start new?')) newProject();
             }}
@@ -200,7 +200,7 @@ export function ProjectView() {
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button
-            className="nerv-btn"
+            className="hud-btn"
             onClick={() => {
               if (!json) return;
               importProject(json);
@@ -209,7 +209,7 @@ export function ProjectView() {
           >
             APPLY JSON
           </button>
-          <button className="nerv-btn nerv-btn--ghost" onClick={() => setJson(exportProject())}>RELOAD</button>
+          <button className="hud-btn hud-btn--ghost" onClick={() => setJson(exportProject())}>RELOAD</button>
         </div>
       </HexFrame>
 
@@ -217,8 +217,8 @@ export function ProjectView() {
 
       <HexFrame title="TAILSCALE // iOS NOTE" variant="green">
         <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6 }}>
-          The dev server binds to <span className="hud-value">0.0.0.0:5173</span>. From your iPhone connected to the
-          same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5173</span> (or the
+          The dev server binds to <span className="hud-value">0.0.0.0:5273</span>. From your iPhone connected to the
+          same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5273</span> (or the
           tailnet IP). For a more app-like feel, use Safari → Share → Add to Home Screen. The manifest registers a
           standalone display + iOS status-bar styling.
         </p>
@@ -272,7 +272,7 @@ function InstallBanner() {
     <HexFrame title="INSTALL // PWA" variant="green">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
-          className="nerv-btn nerv-btn--green"
+          className="hud-btn hud-btn--green"
           onClick={async () => {
             await prompt.prompt();
             try {
@@ -366,7 +366,7 @@ function SlotLibrary() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${slot.name.replace(/\s+/g, '_')}_${slot.savedAt}.nervproj.json`;
+    a.download = `${slot.name.replace(/\s+/g, '_')}_${slot.savedAt}.lostproj.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -375,14 +375,14 @@ function SlotLibrary() {
     <HexFrame title="PROJECT LIBRARY // SLOTS">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="nerv-btn nerv-btn--green" onClick={saveAsNew}>
+          <button className="hud-btn hud-btn--green" onClick={saveAsNew}>
             + SAVE AS NEW SLOT
           </button>
-          <button className="nerv-btn nerv-btn--ghost" onClick={refresh} title="Re-read the slot list">
+          <button className="hud-btn hud-btn--ghost" onClick={refresh} title="Re-read the slot list">
             ↻ REFRESH
           </button>
           <button
-            className="nerv-btn nerv-btn--ghost"
+            className="hud-btn hud-btn--ghost"
             onClick={async () => {
               if (!confirm('Delete persisted audio samples not referenced by any slot or the current project?')) return;
               const n = await gcOrphanedSamples();
@@ -425,25 +425,25 @@ function SlotLibrary() {
                   {slot.project.tracks.length}t · {slot.project.bpm.toFixed(0)} bpm
                 </span>
                 <div style={{ flex: 1 }} />
-                <button className="nerv-btn nerv-btn--icon" onClick={() => load(slot)} title="Load this slot">
+                <button className="hud-btn hud-btn--icon" onClick={() => load(slot)} title="Load this slot">
                   ⤓ LOAD
                 </button>
                 <button
-                  className="nerv-btn nerv-btn--icon"
+                  className="hud-btn hud-btn--icon"
                   onClick={() => overwrite(slot)}
                   title="Overwrite with current project"
                 >
                   ↻ OVR
                 </button>
                 <button
-                  className="nerv-btn nerv-btn--icon"
+                  className="hud-btn hud-btn--icon"
                   onClick={() => exportSlot(slot)}
                   title="Download as JSON"
                 >
                   ⬇
                 </button>
                 <button
-                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  className="hud-btn hud-btn--icon hud-btn--rec"
                   onClick={() => remove(slot)}
                   title="Delete this slot"
                 >
@@ -482,7 +482,7 @@ function MidiSyncPanel() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
-            className={`nerv-btn ${midiClockOut ? 'is-active' : ''}`}
+            className={`hud-btn ${midiClockOut ? 'is-active' : ''}`}
             onClick={() => {
               const next = !midiClockOut;
               setMidiClockOut(next);
@@ -503,7 +503,7 @@ function MidiSyncPanel() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
-            className={`nerv-btn ${midiClockIn ? 'is-active' : ''}`}
+            className={`hud-btn ${midiClockIn ? 'is-active' : ''}`}
             onClick={() => {
               const next = !midiClockIn;
               setMidiClockIn(next);
@@ -579,9 +579,9 @@ function TempoCurve({
       }}
     >
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height={64} style={{ display: 'block' }}>
-        <path d={path} fill="none" stroke="var(--nerv-orange-bright)" strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
+        <path d={path} fill="none" stroke="var(--hud-orange-bright)" strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
         {verts.map((v, i) => (
-          <circle key={i} cx={x(v.beat)} cy={y(v.bpm)} r={1} fill="var(--nerv-amber)" vectorEffect="non-scaling-stroke" />
+          <circle key={i} cx={x(v.beat)} cy={y(v.bpm)} r={1} fill="var(--hud-amber)" vectorEffect="non-scaling-stroke" />
         ))}
       </svg>
       <span
@@ -622,13 +622,13 @@ function TempoMapEditor() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
-            className="nerv-btn nerv-btn--green"
+            className="hud-btn hud-btn--green"
             onClick={() => addTempoEvent(events.length === 0 ? 0 : projectBeats / 2, project.bpm)}
           >
             + ADD EVENT
           </button>
           {events.length > 0 && (
-            <button className="nerv-btn nerv-btn--ghost" onClick={() => clearTempoMap()}>
+            <button className="hud-btn hud-btn--ghost" onClick={() => clearTempoMap()}>
               ✕ CLEAR MAP
             </button>
           )}
@@ -702,7 +702,7 @@ function TempoMapEditor() {
                   <option value="ramp">╱ ramp</option>
                 </select>
                 <button
-                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  className="hud-btn hud-btn--icon hud-btn--rec"
                   onClick={() => removeTempoEvent(ev.id)}
                   title="Remove this tempo event"
                 >
@@ -761,7 +761,7 @@ function OfflineBounceButton() {
 
   return (
     <button
-      className="nerv-btn"
+      className="hud-btn"
       onClick={bounce}
       disabled={running}
       title="Render the full project to WAV faster-than-real-time (Tone.Offline)"
@@ -818,7 +818,7 @@ function OfflineStemsButton() {
 
   return (
     <button
-      className="nerv-btn"
+      className="hud-btn"
       onClick={bounce}
       disabled={running}
       title="Render each track to its own WAV faster-than-real-time"
@@ -880,7 +880,7 @@ function StemBounceButton() {
 
   return (
     <button
-      className="nerv-btn"
+      className="hud-btn"
       onClick={bounce}
       disabled={busy}
       title="Bounce each track to its own audio file (real-time playthrough)"

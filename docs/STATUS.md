@@ -14,7 +14,7 @@ out here is wired into the running app — type-check + build pass clean.
 ### Foundation
 
 - **Scaffold** (`84b591f`) — Vite + React + TypeScript, Tone.js engine,
-  Zustand store, NERV / MAGI Evangelion HUD aesthetic, iOS PWA meta, safe
+  Zustand store, tactical command-console HUD aesthetic, iOS PWA meta, safe
   Tailscale dev binding.
 - **FX rack, audio tracks, FM synth, scopes, hotkeys** (`778dbd5`) — second
   big scaffolding round; first cut of the FX rack lived here before the
@@ -37,7 +37,7 @@ out here is wired into the running app — type-check + build pass clean.
   syncs the editors' fallback track choice back to the global selection so
   the Arrange highlight and the editors can never disagree.
 - **Consistency pass** (`840ed4f`) — shared `EditorTip` component, unified
-  empty-state copy, MAGI codename added to the Synth panel for parity.
+  empty-state copy, TRIAD codename added to the Synth panel for parity.
 
 ### Feature rounds (this branch, recent → older)
 
@@ -59,7 +59,7 @@ out here is wired into the running app — type-check + build pass clean.
 | `6401c4f` | **Global swing / groove** | Project.swing (0..1) + swingSubdivision drive Tone.Transport's built-in swing; applies live to scheduled events. SWING slider in PROJECT settings. |
 | `49ad6c8` | **Tempo curve preview + sample GC** | Read-only BPM sparkline above the tempo events table. `gcOrphanedSamples` deletes IndexedDB blobs no slot/project references (⌫ GC SAMPLES button). |
 | `c5c6cfc` | **FX-rack automation targets** | eqLow/Mid/High + compThreshold/Ratio added to AutomationParam; applyFx/applySends skip params under automation so a knob tweak can't stomp scheduled values. |
-| `1527d59` | **MAGI ticker telemetry + PWA install** | Ticker rotates through live engine readings (master peak dB, transport state, BPM, mode, track/clip/automation/tempo counts, MIDI device) plus a smaller pool of flavor lines. PROJECT view captures `beforeinstallprompt` and surfaces a ⬇ INSTALL TO HOME button on Chromium PWAs. |
+| `1527d59` | **Status ticker telemetry + PWA install** | Ticker rotates through live engine readings (master peak dB, transport state, BPM, mode, track/clip/automation/tempo counts, MIDI device) plus a smaller pool of flavor lines. PROJECT view captures `beforeinstallprompt` and surfaces a ⬇ INSTALL TO HOME button on Chromium PWAs. |
 | `901a267` | **Per-note humanise/quantise + audio time-stretch** | Piano-roll notes are selectable (click / Cmd+click toggles / shift still deletes); QUANTIZE / HUMANIZE honour the selection. Audio clips gain `stretchMode: 'pitch' \| 'time'` — 'time' builds a Tone.GrainPlayer so pitch is preserved across tempo changes. |
 | `2caf4db` | **Curve modes + tempo ramps + arrange-view automation overlay** | AutomationPoint.curve dispatches setValueAtTime / linear / exponential / hold/step ramps. TempoEvent.curve adds 'ramp' (linear BPM glides via Transport.bpm.linearRampToValueAtTime). Each track in Arrange gets an "A" toggle that opens an inline lane with the same click/drag/dbl-click semantics as the AUTOMATION tab. |
 | `3f144ba` | **Automation lanes** | Per-track AutomationLane[] for volume / pan / cutoff / reverb / delay; engine chains `linearRampToValueAtTime` between points so the curve survives tempo changes. AUTOMATION tab: SVG sparkline (click-add, drag, dbl-click delete) + numeric points table. |
@@ -160,7 +160,7 @@ highest-leverage to lowest:
 
 Offline bounce, wavetable + sampler engines, tempo map (+ ramps), full
 automation lanes (curve modes, FX-rack targets, arrange overlay),
-per-note humanise/quantise, audio time-stretch, MAGI ticker telemetry,
+per-note humanise/quantise, audio time-stretch, status ticker telemetry,
 PWA install, tempo curve preview, orphaned-sample GC, global + per-track
 swing, multi-zone sampler with velocity layers, MIDI punch-in with
 pre-roll, Web MIDI note output, MIDI clock in + out, sidechain
@@ -207,7 +207,7 @@ src/
 
 ```bash
 npm install            # one-time
-npm run dev            # Vite dev server (binds 0.0.0.0:5173 for Tailscale)
+npm run dev            # Vite dev server (binds 0.0.0.0:5273 for Tailscale)
 npx tsc --noEmit       # type-check
 npm run build          # production build
 ```

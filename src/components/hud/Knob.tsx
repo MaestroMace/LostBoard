@@ -7,6 +7,8 @@ type Props = {
   step?: number;
   size?: number;
   label?: string;
+  /** Full-word name for the hover tooltip (e.g. "Attack" for a knob labelled "A"). */
+  title?: string;
   unit?: string;
   display?: (v: number) => string;
   onChange: (v: number) => void;
@@ -20,11 +22,13 @@ export function Knob({
   step = 0.01,
   size = 48,
   label,
+  title,
   unit,
   display,
   onChange,
   log = false,
 }: Props) {
+  const startX = useRef(0);
   const startY = useRef(0);
   const startV = useRef(0);
   const dragging = useRef(false);
@@ -49,14 +53,18 @@ export function Knob({
   function onPointerDown(e: React.PointerEvent) {
     (e.target as Element).setPointerCapture?.(e.pointerId);
     dragging.current = true;
+    startX.current = e.clientX;
     startY.current = e.clientY;
     startV.current = norm;
   }
   function onPointerMove(e: React.PointerEvent) {
     if (!dragging.current) return;
-    const dy = startY.current - e.clientY;
-    const sens = e.shiftKey ? 600 : 200;
-    setFromNorm(startV.current + dy / sens);
+    // respond to up-OR-right drag (whichever the user reaches for) instead of
+    // vertical only — a knob that ignores horizontal motion feels stuck.
+    // ~150px is a full sweep; Shift drags ~3.5× finer for precision.
+    const delta = startY.current - e.clientY + (e.clientX - startX.current);
+    const sens = e.shiftKey ? 520 : 150;
+    setFromNorm(startV.current + delta / sens);
   }
   function onPointerUp(e: React.PointerEvent) {
     dragging.current = false;
@@ -67,9 +75,16 @@ export function Knob({
   }
 
   const shown = display ? display(value) : `${value.toFixed(2)}${unit ?? ''}`;
+  // Hover/long-press help: full-word name when given, plus the live value and
+  // range, and a hint that double-click resets and Shift drags finely.
+  const name = title ?? label;
+  const tip = `${name ? name + ' — ' : ''}${shown}  ·  range ${display ? display(min) + '…' + display(max) : `${min}…${max}`}  ·  double-click to centre, Shift-drag for fine`;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size + 8 }}>
+    <div
+      title={tip}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size + 8 }}
+    >
       <div
         className="knob"
         style={{ width: size, height: size }}

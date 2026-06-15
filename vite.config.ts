@@ -5,12 +5,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
-    strictPort: false,
+    // moved off Vite's default 5173 to avoid colliding with another local app
+    port: 5273,
+    // fail loudly if 5273 is taken rather than silently hopping to another port
+    strictPort: true,
   },
   preview: {
     host: '0.0.0.0',
-    port: 4173,
+    port: 4273,
   },
   build: {
     target: 'es2020',

@@ -22,7 +22,7 @@ import {
   type TrackKind,
 } from '../audio/types';
 
-const NERV_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
+const HUD_COLORS = ['#ff6a00', '#00ff88', '#66ccff', '#b266ff', '#ffaa00', '#ff2266', '#88ff22'];
 
 export const newId = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -96,9 +96,9 @@ function defaultMelody(lengthBeats: number): Note[] {
 function makeProject(): Project {
   const drumTrack: Track = {
     id: newId('trk'),
-    name: 'MAGI-01 // BALTHASAR',
+    name: 'DRUMS // VEGA',
     kind: 'drum',
-    color: NERV_COLORS[0],
+    color: HUD_COLORS[0],
     volume: -6,
     pan: 0,
     mute: false,
@@ -109,10 +109,10 @@ function makeProject(): Project {
   };
   const bassTrack: Track = {
     id: newId('trk'),
-    name: 'MAGI-02 // CASPER',
+    name: 'BASS // ALTAIR',
     kind: 'synth',
     synthEngine: 'subtractive',
-    color: NERV_COLORS[1],
+    color: HUD_COLORS[1],
     volume: -10,
     pan: -0.15,
     mute: false,
@@ -124,10 +124,10 @@ function makeProject(): Project {
   };
   const leadTrack: Track = {
     id: newId('trk'),
-    name: 'MAGI-03 // MELCHIOR',
+    name: 'LEAD // DENEB',
     kind: 'synth',
     synthEngine: 'subtractive',
-    color: NERV_COLORS[2],
+    color: HUD_COLORS[2],
     volume: -12,
     pan: 0.15,
     mute: false,
@@ -184,7 +184,7 @@ function makeProject(): Project {
 
   return {
     id: newId('proj'),
-    name: 'OPERATION YASHIMA',
+    name: 'OPERATION DOWNBEAT',
     bpm: 124,
     numerator: 4,
     denominator: 4,
@@ -391,11 +391,15 @@ export const useStore = create<Store>()(
     moveClipsBy: (ids, deltaBeats) => {
       if (ids.length === 0 || deltaBeats === 0) return;
       const idSet = new Set(ids);
+      // clamp the delta once for the whole group — clamping each clip
+      // independently at beat 0 would collapse their relative spacing
+      const moving = get().project.tracks.flatMap((t) => t.clips.filter((c) => idSet.has(c.id)));
+      if (moving.length === 0) return;
+      const d = Math.max(deltaBeats, -Math.min(...moving.map((c) => c.start)));
+      if (d === 0) return;
       const tracks = get().project.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map((c) =>
-          idSet.has(c.id) ? { ...c, start: Math.max(0, c.start + deltaBeats) } : c,
-        ),
+        clips: t.clips.map((c) => (idSet.has(c.id) ? { ...c, start: c.start + d } : c)),
       }));
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
@@ -479,7 +483,14 @@ export const useStore = create<Store>()(
       const p = { ...get().project, bpm, updatedAt: Date.now() };
       set({ project: p });
     },
-    setTimeSig: (n, d) => set({ project: { ...get().project, numerator: n, denominator: d, updatedAt: Date.now() } }),
+    setTimeSig: (n, d) => {
+      // a cleared number input parses to NaN — storing it poisons every
+      // bar/beat computation in the app (ruler, playhead, automation SVGs)
+      if (!Number.isFinite(n) || !Number.isFinite(d)) return;
+      const numerator = Math.max(1, Math.min(32, Math.round(n)));
+      const denominator = Math.max(1, Math.min(32, Math.round(d)));
+      set({ project: { ...get().project, numerator, denominator, updatedAt: Date.now() } });
+    },
     addTempoEvent: (beat, bpm) => {
       const ev: TempoEvent = { id: newId('tmp'), beat: Math.max(0, beat), bpm: Math.max(20, Math.min(400, bpm)) };
       const map = [...(get().project.tempoMap ?? []), ev].sort((a, b) => a.beat - b.beat);
@@ -611,7 +622,7 @@ export const useStore = create<Store>()(
 
     addTrack: (kind) => {
       const tracks = get().project.tracks;
-      const color = NERV_COLORS[tracks.length % NERV_COLORS.length];
+      const color = HUD_COLORS[tracks.length % HUD_COLORS.length];
       const name = `TRK ${String(tracks.length + 1).padStart(2, '0')} // ${kind.toUpperCase()}`;
       const t: Track = {
         id: newId('trk'),
@@ -837,6 +848,9 @@ export const useStore = create<Store>()(
     },
 
     removeClip: (clipId) => {
+      // bail when the id doesn't match anything — an unconditional commit
+      // would push a do-nothing snapshot onto the undo stack
+      if (!get().project.tracks.some((t) => t.clips.some((c) => c.id === clipId))) return;
       const tracks = get().project.tracks.map((t) => ({
         ...t,
         clips: t.clips.filter((c) => c.id !== clipId),
@@ -845,17 +859,25 @@ export const useStore = create<Store>()(
     },
 
     moveClip: (clipId, newStart) => {
+      const start = Math.max(0, newStart);
+      const cur = get().project.tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+      // a plain click on a clip ends in a zero-distance "move" — don't let
+      // it burn an undo-history slot
+      if (!cur || cur.start === start) return;
       const tracks = get().project.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map((c) => (c.id === clipId ? { ...c, start: Math.max(0, newStart) } : c)),
+        clips: t.clips.map((c) => (c.id === clipId ? { ...c, start } : c)),
       }));
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
 
     resizeClip: (clipId, newLength) => {
+      const length = Math.max(0.25, newLength);
+      const cur = get().project.tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+      if (!cur || cur.length === length) return;
       const tracks = get().project.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map((c) => (c.id === clipId ? { ...c, length: Math.max(0.25, newLength) } : c)),
+        clips: t.clips.map((c) => (c.id === clipId ? { ...c, length } : c)),
       }));
       commit({ ...get().project, tracks, updatedAt: Date.now() });
     },
@@ -995,11 +1017,14 @@ export const useStore = create<Store>()(
                   ? c
                   : {
                       ...c,
-                      notes: c.notes.map((n) =>
-                        idSet && !idSet.has(n.id)
-                          ? n
-                          : { ...n, start: Math.max(0, Math.round(n.start / gridBeats) * gridBeats) },
-                      ),
+                      notes: c.notes.map((n) => {
+                        if (idSet && !idSet.has(n.id)) return n;
+                        let start = Math.max(0, Math.round(n.start / gridBeats) * gridBeats);
+                        // a note near the clip edge can round to start === length,
+                        // landing outside the clip — snap it to the last grid line inside
+                        if (start >= c.length) start = Math.max(0, c.length - gridBeats);
+                        return { ...n, start };
+                      }),
                     },
               ),
             },
@@ -1102,6 +1127,18 @@ export const useStore = create<Store>()(
       if (noteIds.length === 0) return;
       if (deltaStart === 0 && deltaPitch === 0) return;
       const idSet = new Set(noteIds);
+      // clamp the deltas once for the whole selection — per-note clamping
+      // at the edges would collapse chord voicings / rhythmic spacing
+      const clip = get()
+        .project.tracks.find((t) => t.id === trackId)
+        ?.clips.find((c) => c.id === clipId);
+      if (!clip || clip.kind !== 'midi') return;
+      const moving = clip.notes.filter((n) => idSet.has(n.id));
+      if (moving.length === 0) return;
+      const dStart = Math.max(deltaStart, -Math.min(...moving.map((n) => n.start)));
+      let dPitch = Math.max(deltaPitch, -Math.min(...moving.map((n) => n.pitch)));
+      dPitch = Math.min(dPitch, 127 - Math.max(...moving.map((n) => n.pitch)));
+      if (dStart === 0 && dPitch === 0) return;
       const tracks = get().project.tracks.map((t) =>
         t.id !== trackId
           ? t
@@ -1114,11 +1151,7 @@ export const useStore = create<Store>()(
                       ...c,
                       notes: c.notes.map((n) =>
                         idSet.has(n.id)
-                          ? {
-                              ...n,
-                              start: Math.max(0, n.start + deltaStart),
-                              pitch: Math.max(0, Math.min(127, n.pitch + deltaPitch)),
-                            }
+                          ? { ...n, start: n.start + dStart, pitch: n.pitch + dPitch }
                           : n,
                       ),
                     },
@@ -1173,18 +1206,41 @@ export const useStore = create<Store>()(
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
     },
 
-    loadProject: (p) => set({ project: p, selectedClipIds: [], selectedTrackId: null, past: [], future: [] }),
+    loadProject: (p) =>
+      set({
+        project: p,
+        selectedClipIds: [],
+        selectedTrackId: null,
+        selectedNoteIds: [],
+        sessionPlaying: {},
+        past: [],
+        future: [],
+      }),
 
     newProject: () =>
-      set({ project: makeProject(), selectedClipIds: [], selectedTrackId: null, past: [], future: [] }),
+      set({
+        project: makeProject(),
+        selectedClipIds: [],
+        selectedTrackId: null,
+        selectedNoteIds: [],
+        sessionPlaying: {},
+        past: [],
+        future: [],
+      }),
 
     exportProject: () => JSON.stringify(get().project, null, 2),
     importProject: (json) => {
       try {
         const p = JSON.parse(json) as Project;
-        set({ project: p, past: [], future: [] });
+        // a wrong file picked in the import dialog is still valid JSON —
+        // without a shape check it white-screens the first tracks selector
+        if (!p || !Array.isArray(p.tracks) || typeof p.bpm !== 'number') {
+          throw new Error('not a LostBoard project (missing tracks/bpm)');
+        }
+        get().loadProject(p);
       } catch (e) {
         console.error('Failed to import project', e);
+        if (typeof alert !== 'undefined') alert('Import failed: not a valid LostBoard project file.');
       }
     },
     };
@@ -1193,9 +1249,17 @@ export const useStore = create<Store>()(
 
 export const PROJECT_STORAGE_KEY = 'lostboard.project.v1';
 
-export function saveProjectToStorage() {
-  const p = useStore.getState().project;
-  localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(p));
+export function saveProjectToStorage(): boolean {
+  try {
+    const p = useStore.getState().project;
+    localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(p));
+    return true;
+  } catch (e) {
+    // quota exceeded or storage unavailable (private browsing) — autosave
+    // runs on a 20s timer, so this must never become an uncaught throw
+    console.warn('Project save to localStorage failed', e);
+    return false;
+  }
 }
 
 export function loadProjectFromStorage(): boolean {

@@ -230,8 +230,10 @@ class MidiInput {
       );
     }
     if (!clip) {
-      // create a fresh 4-beat clip on the bar so subsequent notes land in it
-      const created = st.addClip(trackId, Math.floor(startBeat / 4) * 4, 4);
+      // create a fresh one-bar clip on the bar line so subsequent notes land
+      // in it — bar length follows the project time signature, not a fixed 4
+      const barBeats = st.project.numerator || 4;
+      const created = st.addClip(trackId, Math.floor(startBeat / barBeats) * barBeats, barBeats);
       if (!created || created.kind !== 'midi') return;
       clip = created;
     }

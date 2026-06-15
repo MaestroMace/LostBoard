@@ -22,16 +22,16 @@ import { rehydrateSamples } from './state/samples';
 import { midiInput } from './audio/midiInput';
 import { midiOutput } from './audio/midiOutput';
 
-const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string }[] = [
-  { id: 'arrange', label: 'ARRANGE' },
-  { id: 'session', label: 'SESSION' },
-  { id: 'sequencer', label: 'SEQUENCER' },
-  { id: 'pianoroll', label: 'PIANO ROLL' },
-  { id: 'instrument', label: 'INSTRUMENT' },
-  { id: 'fx', label: 'FX RACK' },
-  { id: 'automation', label: 'AUTOMATION' },
-  { id: 'mixer', label: 'MIXER' },
-  { id: 'project', label: 'PROJECT' },
+const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string; hint: string }[] = [
+  { id: 'arrange', label: 'ARRANGE', hint: 'Timeline: lay clips out across tracks and time' },
+  { id: 'session', label: 'SESSION', hint: 'Clip launcher: trigger loops by scene, Ableton-style' },
+  { id: 'sequencer', label: 'SEQUENCER', hint: 'Drum grid: program beats step by step' },
+  { id: 'pianoroll', label: 'PIANO ROLL', hint: 'Note editor: draw and edit melodies in a MIDI clip' },
+  { id: 'instrument', label: 'INSTRUMENT', hint: "Synth editor: shape the selected track's sound" },
+  { id: 'fx', label: 'FX RACK', hint: 'Per-track effects: EQ, compressor, chorus, bit-crusher' },
+  { id: 'automation', label: 'AUTOMATION', hint: 'Draw parameter changes over time (volume, cutoff…)' },
+  { id: 'mixer', label: 'MIXER', hint: 'Channel strips: volume, pan, mute/solo, master' },
+  { id: 'project', label: 'PROJECT', hint: 'Tempo, time signature, save / load / export' },
 ];
 
 async function bootEngine() {
@@ -91,26 +91,33 @@ export default function App() {
   return (
     <div className="scanlines crt-flicker" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {!booted && <BootSequence onDone={async () => {
-        await bootEngine();
+        try {
+          await bootEngine();
+        } catch (e) {
+          // never strand the user on the boot screen — the engine re-kicks
+          // itself on the next transport action via init-on-demand
+          console.error('engine boot failed', e);
+        }
         setBooted(true);
       }} />}
 
       <StatusBar />
       <Transport />
 
-      <div className="nerv-tabs">
+      <div className="hud-tabs">
         {TABS.map((t) => (
           <button
             key={t.id}
-            className={`nerv-tab ${view === t.id ? 'is-active' : ''}`}
+            className={`hud-tab ${view === t.id ? 'is-active' : ''}`}
             onClick={() => setView(t.id)}
+            title={t.hint}
           >
             {t.label}
           </button>
         ))}
         <div style={{ flex: 1 }} />
         <button
-          className="nerv-btn nerv-btn--ghost nerv-btn--icon"
+          className="hud-btn hud-btn--ghost hud-btn--icon"
           onClick={() => setHelpOpen(true)}
           title="Help (?)"
           style={{ alignSelf: 'center', minWidth: 32 }}
@@ -172,7 +179,7 @@ const FooterBar = memo(function FooterBar() {
       <span className="hud-readout">CLIPS {String(clipCount).padStart(3, '0')}</span>
       <span className="hud-readout">{playing ? 'TRANSPORT ROLLING' : 'TRANSPORT HALTED'}</span>
       <div style={{ flex: 1 }} />
-      <span className="hud-readout--dim hud-readout">A.T. FIELD STABLE // SYNC 87% // NO PATTERN BLUE</span>
+      <span className="hud-readout--dim hud-readout">SPACE ▶ PLAY · ENTER ■ STOP · ? HELP · AUTOSAVES LOCALLY</span>
     </div>
   );
 });

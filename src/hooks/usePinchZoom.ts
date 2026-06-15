@@ -14,6 +14,13 @@ export function usePinchZoom(
   setZoom: (updater: (z: number) => number) => void,
   min = 0.25,
   max = 4,
+  /**
+   * Re-attach trigger for callers whose container element mounts later than
+   * the component (e.g. an editor branch behind an empty state). The ref is
+   * null on first run in that case, so the effect must re-run when the
+   * element appears.
+   */
+  attachKey?: unknown,
 ): void {
   useEffect(() => {
     const el = scrollRef.current;
@@ -67,5 +74,5 @@ export function usePinchZoom(
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
     };
-  }, [scrollRef, setZoom, min, max]);
+  }, [scrollRef, setZoom, min, max, attachKey]);
 }

@@ -40,13 +40,13 @@ export function FxPanel() {
         </select>
         <div style={{ flex: 1 }} />
         <button
-          className={`nerv-btn ${fx.enabled ? 'is-active' : ''}`}
+          className={`hud-btn ${fx.enabled ? 'is-active' : ''}`}
           aria-pressed={fx.enabled}
           onClick={() => patch({ enabled: !fx.enabled })}
         >
           {fx.enabled ? 'RACK ONLINE' : 'RACK BYPASSED'}
         </button>
-        <button className="nerv-btn nerv-btn--ghost" onClick={() => patch({ ...DEFAULT_FX })}>
+        <button className="hud-btn hud-btn--ghost" onClick={() => patch({ ...DEFAULT_FX })}>
           RESET
         </button>
       </div>
@@ -94,7 +94,7 @@ export function FxPanel() {
 
         <HexFrame title="COMPRESSOR" variant={fx.compOn ? 'orange' : 'soft'}>
           <button
-            className={`nerv-btn ${fx.compOn ? 'is-active' : ''}`}
+            className={`hud-btn ${fx.compOn ? 'is-active' : ''}`}
             aria-pressed={fx.compOn}
             onClick={() => patch({ compOn: !fx.compOn })}
             style={{ width: '100%', marginBottom: 8 }}
@@ -125,7 +125,7 @@ export function FxPanel() {
 
         <HexFrame title="CHORUS" variant={fx.chorusOn ? 'orange' : 'soft'}>
           <button
-            className={`nerv-btn ${fx.chorusOn ? 'is-active' : ''}`}
+            className={`hud-btn ${fx.chorusOn ? 'is-active' : ''}`}
             aria-pressed={fx.chorusOn}
             onClick={() => patch({ chorusOn: !fx.chorusOn })}
             style={{ width: '100%', marginBottom: 8 }}
@@ -147,7 +147,7 @@ export function FxPanel() {
 
         <HexFrame title="BITCRUSHER" variant={fx.bitcrushOn ? 'orange' : 'soft'}>
           <button
-            className={`nerv-btn ${fx.bitcrushOn ? 'is-active' : ''}`}
+            className={`hud-btn ${fx.bitcrushOn ? 'is-active' : ''}`}
             aria-pressed={fx.bitcrushOn}
             onClick={() => patch({ bitcrushOn: !fx.bitcrushOn })}
             style={{ width: '100%', marginBottom: 8 }}
@@ -176,7 +176,7 @@ export function FxPanel() {
           BUS
           <br />
           REVERB / DELAY SENDS TAP POST-CHANNEL. RACK STATUS:{' '}
-          <span style={{ color: fx.enabled ? 'var(--nerv-green)' : 'var(--nerv-red)' }}>
+          <span style={{ color: fx.enabled ? 'var(--hud-green)' : 'var(--hud-red)' }}>
             {fx.enabled ? 'ONLINE' : 'BYPASSED'}
           </span>
         </div>

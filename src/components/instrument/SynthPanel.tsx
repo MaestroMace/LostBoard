@@ -11,12 +11,12 @@ import { importSample } from '../../state/samples';
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
 const PRESETS: Record<string, Partial<SynthParams>> = {
-  'BERSERK BASS': { osc: 'square', cutoff: 500, resonance: 8, attack: 0.005, decay: 0.2, sustain: 0.5, release: 0.2, drive: 0.25, reverb: 0.05, delay: 0.0 },
-  'LCL PAD': { osc: 'fatsawtooth', cutoff: 2400, resonance: 1.2, attack: 0.6, decay: 1, sustain: 0.8, release: 1.5, drive: 0, reverb: 0.6, delay: 0.25 },
-  'AT-FIELD LEAD': { osc: 'sawtooth', cutoff: 3600, resonance: 4, attack: 0.005, decay: 0.15, sustain: 0.7, release: 0.4, drive: 0.15, reverb: 0.3, delay: 0.4 },
-  'TANG PLUCK': { osc: 'triangle', cutoff: 1800, resonance: 1, attack: 0.001, decay: 0.18, sustain: 0, release: 0.3, drive: 0, reverb: 0.2, delay: 0.15 },
-  'ANGEL CHOIR': { osc: 'sine', cutoff: 3200, resonance: 0.7, attack: 0.8, decay: 1.5, sustain: 0.9, release: 2.2, drive: 0, reverb: 0.7, delay: 0.2 },
-  'NERV ARP': { osc: 'square', cutoff: 2800, resonance: 5, attack: 0.001, decay: 0.05, sustain: 0.3, release: 0.1, drive: 0.1, reverb: 0.15, delay: 0.45 },
+  'REDLINE BASS': { osc: 'square', cutoff: 500, resonance: 8, attack: 0.005, decay: 0.2, sustain: 0.5, release: 0.2, drive: 0.25, reverb: 0.05, delay: 0.0 },
+  'NEBULA PAD': { osc: 'fatsawtooth', cutoff: 2400, resonance: 1.2, attack: 0.6, decay: 1, sustain: 0.8, release: 1.5, drive: 0, reverb: 0.6, delay: 0.25 },
+  'HEX-FIELD LEAD': { osc: 'sawtooth', cutoff: 3600, resonance: 4, attack: 0.005, decay: 0.15, sustain: 0.7, release: 0.4, drive: 0.15, reverb: 0.3, delay: 0.4 },
+  'VECTOR PLUCK': { osc: 'triangle', cutoff: 1800, resonance: 1, attack: 0.001, decay: 0.18, sustain: 0, release: 0.3, drive: 0, reverb: 0.2, delay: 0.15 },
+  'STELLAR CHOIR': { osc: 'sine', cutoff: 3200, resonance: 0.7, attack: 0.8, decay: 1.5, sustain: 0.9, release: 2.2, drive: 0, reverb: 0.7, delay: 0.2 },
+  'TRIAD ARP': { osc: 'square', cutoff: 2800, resonance: 5, attack: 0.001, decay: 0.05, sustain: 0.3, release: 0.1, drive: 0.1, reverb: 0.15, delay: 0.45 },
 };
 
 export function SynthPanel() {
@@ -49,7 +49,7 @@ export function SynthPanel() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span className="hud-label">INSTRUMENT // M.A.G.I. CASPER</span>
+        <span className="hud-label">INSTRUMENT // TRIAD ALTAIR</span>
         <select
           className="display"
           value={active.id}
@@ -63,7 +63,7 @@ export function SynthPanel() {
         {(['subtractive', 'fm', 'wavetable', 'sampler'] as SynthEngine[]).map((e) => (
           <button
             key={e}
-            className={`nerv-btn ${engine === e ? 'is-active' : ''}`}
+            className={`hud-btn ${engine === e ? 'is-active' : ''}`}
             onClick={() => setSynthEngine(active.id, e)}
           >
             {e === 'subtractive' ? 'SUBTRACTIVE' : e === 'fm' ? 'FM' : e === 'wavetable' ? 'WAVETABLE' : 'SAMPLER'}
@@ -72,9 +72,9 @@ export function SynthPanel() {
         <div style={{ flex: 1 }} />
         <span className="hud-readout">PRESET:</span>
         {Object.keys(PRESETS).map((k) => (
-          <button key={k} className="nerv-btn" onClick={() => patch(PRESETS[k])}>{k}</button>
+          <button key={k} className="hud-btn" onClick={() => patch(PRESETS[k])}>{k}</button>
         ))}
-        <button className="nerv-btn nerv-btn--ghost" onClick={() => patch(DEFAULT_SYNTH)}>RESET</button>
+        <button className="hud-btn hud-btn--ghost" onClick={() => patch(DEFAULT_SYNTH)}>RESET</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
@@ -124,12 +124,12 @@ export function SynthPanel() {
         ) : engine === 'sampler' ? (
           <SamplerSource trackId={active.id} />
         ) : (
-        <HexFrame title="OSC">
+        <HexFrame title="OSCILLATOR">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {OSCS.map((o) => (
               <button
                 key={o}
-                className={`nerv-btn ${s.osc === o ? 'is-active' : ''}`}
+                className={`hud-btn ${s.osc === o ? 'is-active' : ''}`}
                 onClick={() => patch({ osc: o })}
                 style={{ flex: '1 1 auto' }}
               >
@@ -147,18 +147,18 @@ export function SynthPanel() {
 
         <HexFrame title="FILTER">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="CUTOFF" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
-            <Knob label="RES" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
-            <Knob label="DRIVE" value={s.drive} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ drive: v })} />
+            <Knob label="CUTOFF" title="Filter cutoff frequency" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
+            <Knob label="RES" title="Resonance (filter Q)" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
+            <Knob label="DRIVE" title="Drive / distortion" value={s.drive} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ drive: v })} />
           </div>
         </HexFrame>
 
-        <HexFrame title="ENVELOPE">
+        <HexFrame title="ENVELOPE (ADSR)">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="A" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
-            <Knob label="D" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
-            <Knob label="S" value={s.sustain} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ sustain: v })} />
-            <Knob label="R" value={s.release} min={0.001} max={5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ release: v })} log />
+            <Knob label="A" title="Attack — fade-in time" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
+            <Knob label="D" title="Decay — drop to sustain" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
+            <Knob label="S" title="Sustain — held level" value={s.sustain} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ sustain: v })} />
+            <Knob label="R" title="Release — fade-out time" value={s.release} min={0.001} max={5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ release: v })} log />
           </div>
         </HexFrame>
 
@@ -188,9 +188,9 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <button className="nerv-btn nerv-btn--icon" onClick={() => setOctave((o) => Math.max(1, o - 1))}>OCT -</button>
+        <button className="hud-btn hud-btn--icon" onClick={() => setOctave((o) => Math.max(1, o - 1))}>OCT -</button>
         <div className="display">OCT {octave}</div>
-        <button className="nerv-btn nerv-btn--icon" onClick={() => setOctave((o) => Math.min(8, o + 1))}>OCT +</button>
+        <button className="hud-btn hud-btn--icon" onClick={() => setOctave((o) => Math.min(8, o + 1))}>OCT +</button>
       </div>
       <div style={{ display: 'flex', position: 'relative', height: 120, userSelect: 'none' }}>
         {Array.from({ length: 14 }).map((_, i) => {
@@ -204,7 +204,7 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
                 flex: 1,
                 background: 'linear-gradient(180deg, #1a0a05, #0a0502)',
                 border: '1px solid rgba(255,106,0,0.45)',
-                color: 'var(--nerv-orange-bright)',
+                color: 'var(--hud-orange-bright)',
                 fontFamily: 'var(--font-data)',
                 fontSize: 9,
                 padding: '4px 0 8px',
@@ -236,8 +236,8 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
                 width: `${100 / 14 * 0.6}%`,
                 left: `${(i + 1) * (100 / 14) - (100 / 14) * 0.3}%`,
                 background: 'linear-gradient(180deg, #060606, #1a0500)',
-                border: '1px solid var(--nerv-orange)',
-                color: 'var(--nerv-orange-bright)',
+                border: '1px solid var(--hud-orange)',
+                color: 'var(--hud-orange-bright)',
                 zIndex: 2,
               }}
             />
@@ -318,7 +318,7 @@ function WavetablePanel({
                 y={24 - h}
                 width={w * 0.7}
                 height={h}
-                fill="var(--nerv-orange-bright)"
+                fill="var(--hud-orange-bright)"
               />
             );
           })}
@@ -326,7 +326,7 @@ function WavetablePanel({
       )}
 
       <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()} disabled={busy}>
+        <button className="hud-btn hud-btn--green" onClick={() => fileRef.current?.click()} disabled={busy}>
           {busy ? '⌛ ANALYSING' : '⬆ LOAD WAVETABLE'}
         </button>
         <input
@@ -342,7 +342,7 @@ function WavetablePanel({
         />
         {partials && partials.length > 0 && (
           <button
-            className="nerv-btn nerv-btn--ghost"
+            className="hud-btn hud-btn--ghost"
             onClick={() => updateTrack(trackId, { wavetablePartials: undefined })}
           >
             ✕ CLEAR
@@ -468,7 +468,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
     <HexFrame title="SAMPLER ZONES">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button className="nerv-btn nerv-btn--green" onClick={() => fileRef.current?.click()}>
+          <button className="hud-btn hud-btn--green" onClick={() => fileRef.current?.click()}>
             ⬆ LOAD + ADD ZONE
           </button>
           <input
@@ -484,7 +484,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
           />
           {sampleIds.length > 0 && (
             <button
-              className="nerv-btn"
+              className="hud-btn"
               onClick={() => addSamplerZone(trackId, sampleIds[0], 60 + zones.length * 12)}
             >
               + ZONE
@@ -574,7 +574,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
                   />
                 </div>
                 <button
-                  className="nerv-btn nerv-btn--icon nerv-btn--rec"
+                  className="hud-btn hud-btn--icon hud-btn--rec"
                   onClick={() => removeSamplerZone(trackId, zone.id)}
                   title="Remove zone"
                 >
