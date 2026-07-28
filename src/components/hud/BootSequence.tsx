@@ -10,18 +10,42 @@ const STAGES = [
   '> CLEAR FOR LAUNCH ......................',
 ];
 
+/** Per-line delay. Seven stages at the original 220ms held the button back by
+ *  more than a second and a half on every single launch. */
+const STAGE_MS = 55;
+const SEEN_KEY = 'lostboard.booted';
+
 export function BootSequence({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState(0);
-  const [done, setDone] = useState(false);
+  // Returning users have seen the sequence; render it complete immediately
+  // rather than replaying the animation every launch.
+  const seen = (() => {
+    try {
+      return localStorage.getItem(SEEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })();
+  const [step, setStep] = useState(seen ? STAGES.length : 0);
+  const [done, setDone] = useState(seen);
   const [acknowledged, setAcknowledged] = useState(false);
 
   useEffect(() => {
     if (step < STAGES.length) {
-      const t = setTimeout(() => setStep(step + 1), 220);
+      const t = setTimeout(() => setStep(step + 1), STAGE_MS);
       return () => clearTimeout(t);
     }
     setDone(true);
   }, [step]);
+
+  const engage = () => {
+    setAcknowledged(true);
+    try {
+      localStorage.setItem(SEEN_KEY, '1');
+    } catch {
+      /* private mode — the sequence simply replays next time */
+    }
+    onDone();
+  };
 
   return (
     <div
@@ -66,19 +90,17 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
         {!done && <div className="blink">_</div>}
       </div>
 
-      {done && (
-        <button
-          className="hud-btn hud-btn--green pulse"
-          onClick={() => {
-            setAcknowledged(true);
-            onDone();
-          }}
-          disabled={acknowledged}
-          style={{ minWidth: 220 }}
-        >
-          ACKNOWLEDGE & ENGAGE
-        </button>
-      )}
+      {/* Always present. Waiting out a decorative animation before you can
+          start the app is the most expensive kind of fat — this is the only
+          thing standing between launch and playing. */}
+      <button
+        className={`hud-btn hud-btn--green ${done ? 'pulse' : ''}`}
+        onClick={engage}
+        disabled={acknowledged}
+        style={{ minWidth: 220 }}
+      >
+        ACKNOWLEDGE &amp; ENGAGE
+      </button>
       <div className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
         AUTHORIZATION: DECK COMMANDER
       </div>
