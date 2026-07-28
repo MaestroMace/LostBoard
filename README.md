@@ -93,6 +93,25 @@ npm run build
 npm run preview   # serves the built bundle on 0.0.0.0:4273
 ```
 
+## Android app (APK)
+
+LostBoard also ships as a native Android APK (Capacitor-wrapped), tested
+against a GrapheneOS Pixel 9. A signed APK is built by GitHub Actions on every
+push and published to the rolling **`apk-latest`** pre-release — download
+`LostBoard.apk` on the phone and sideload it.
+
+To build it yourself:
+
+```bash
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleRelease
+# -> android/app/build/outputs/apk/release/app-release.apk
+```
+
+Full install/build/signing notes (including the GrapheneOS sideload steps) are
+in [`docs/ANDROID.md`](docs/ANDROID.md).
+
 ## File map
 
 ```
