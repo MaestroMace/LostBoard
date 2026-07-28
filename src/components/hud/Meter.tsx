@@ -15,7 +15,7 @@ export function LiveMeter({ meterKey, height = 80 }: { meterKey: string; height?
 
   return (
     <div className="meter" style={{ height }}>
-      <div ref={barRef} className="meter__bar" style={{ height: '0%' }} />
+      <div ref={barRef} className="meter__bar" />
     </div>
   );
 }
@@ -25,7 +25,7 @@ export function Meter({ db, height = 80 }: { db: number; height?: number }) {
   const fill = db <= -60 ? 0 : db >= 0 ? 1 : (db + 60) / 60;
   return (
     <div className="meter" style={{ height }}>
-      <div className="meter__bar" style={{ height: `${Math.max(0, Math.min(1, fill)) * 100}%` }} />
+      <div className="meter__bar" style={{ transform: `scaleY(${Math.max(0, Math.min(1, fill))})` }} />
     </div>
   );
 }

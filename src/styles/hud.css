@@ -298,6 +298,13 @@
 }
 .meter__bar {
   width: 100%;
+  /* Full height, scaled down by the meter bus. The gradient scales with the
+     bar exactly as it did when height was animated, so this looks identical
+     while costing no layout. */
+  height: 100%;
+  transform: scaleY(0);
+  transform-origin: bottom;
+  will-change: transform;
   background: linear-gradient(to top, var(--hud-green) 0%, var(--hud-green) 65%, var(--hud-amber) 80%, var(--hud-red) 95%);
   /* driven directly by the meter bus at 60fps — no CSS transition */
 }

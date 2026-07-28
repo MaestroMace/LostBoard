@@ -31,7 +31,10 @@ class MeterBus {
     const loop = () => {
       for (const [key, el] of this.els) {
         const db = key === 'master' ? audioEngine.getMasterLevel() : audioEngine.getTrackLevel(key);
-        el.style.height = `${(dbToFill(db) * 100).toFixed(1)}%`;
+        // scaleY, not height: height forces a layout pass for every meter on
+        // every frame (the mixer was doing ~220 layouts per 5s). A transform
+        // stays on the compositor.
+        el.style.transform = `scaleY(${dbToFill(db).toFixed(3)})`;
       }
       this.raf = requestAnimationFrame(loop);
     };
