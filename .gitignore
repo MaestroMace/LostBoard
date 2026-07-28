@@ -5,3 +5,7 @@ dist
 .env
 .env.local
 .vite
+
+# Build artifact retrieved from CI / apk-build branch; never tracked in source.
+# Distributed via the "apk-latest" release and the "apk-build" branch instead.
+*.apk

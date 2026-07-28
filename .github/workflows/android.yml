@@ -104,6 +104,6 @@ jobs:
           git rm -rf . >/dev/null 2>&1 || true
           cp /tmp/LostBoard.apk LostBoard.apk
           printf 'Auto-generated build branch. Holds the latest LostBoard.apk built by CI.\nDo not commit here by hand.\n' > README.md
-          git add LostBoard.apk README.md
+          git add -f LostBoard.apk README.md
           git commit -m "Build APK from ${GITHUB_SHA}"
           git push -f origin apk-build
