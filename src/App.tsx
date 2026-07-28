@@ -126,7 +126,7 @@ export default function App() {
           className="hud-btn hud-btn--ghost hud-btn--icon"
           onClick={() => setHelpOpen(true)}
           title="Help (?)"
-          style={{ alignSelf: 'center', minWidth: 32, flex: '0 0 auto' }}
+          style={{ alignSelf: 'center', flex: '0 0 auto' }}
         >
           ?
         </button>

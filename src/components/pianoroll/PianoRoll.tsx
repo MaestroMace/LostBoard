@@ -513,7 +513,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
-        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+        style={{ padding: '2px 6px', fontSize: 11 }}
       >
         −
       </button>
@@ -529,7 +529,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
-        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+        style={{ padding: '2px 6px', fontSize: 11 }}
       >
         ＋
       </button>

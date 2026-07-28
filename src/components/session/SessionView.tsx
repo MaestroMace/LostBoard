@@ -4,6 +4,7 @@ import { useStore, defaultScenes } from '../../state/store';
 import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { EditorTip } from '../hud/EditorTip';
+import { useIsMobile } from '../../hooks/useLayoutMode';
 
 const COL_W = 110;
 const ROW_H = 44;
@@ -152,7 +153,7 @@ const SceneHeader = memo(function SceneHeader({
           className="hud-btn hud-btn--green hud-btn--icon"
           onClick={onLaunch}
           title={`Launch ${name}`}
-          style={{ minWidth: 28, padding: '2px 6px', fontSize: 12 }}
+          style={{ padding: '2px 6px', fontSize: 12 }}
         >
           ▶
         </button>
@@ -160,7 +161,7 @@ const SceneHeader = memo(function SceneHeader({
           className="hud-btn hud-btn--icon"
           onClick={onRemove}
           title="Remove scene"
-          style={{ minWidth: 28, padding: '2px 6px', fontSize: 10 }}
+          style={{ padding: '2px 6px', fontSize: 10 }}
         >
           ✕
         </button>
@@ -170,6 +171,7 @@ const SceneHeader = memo(function SceneHeader({
 });
 
 const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; sceneCount: number }) {
+  const isMobile = useIsMobile();
   const launchSessionClip = useStore((s) => s.launchSessionClip);
   const playingClipId = useStore((s) => s.sessionPlaying[track.id] ?? null);
 
@@ -189,20 +191,35 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
           border: `1px solid ${track.color}66`,
           borderLeft: `4px solid ${track.color}`,
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          gap: 2,
+          // side by side rather than stacked: a touch-sized stop button plus a
+          // name does not fit in ROW_H when they are in a column
+          alignItems: 'center',
+          gap: 4,
         }}
       >
-        <span style={{ fontSize: 10, color: '#fff', letterSpacing: '0.1em' }}>{track.name}</span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 10,
+            color: '#fff',
+            letterSpacing: '0.1em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title={track.name}
+        >
+          {track.name}
+        </span>
         <button
           className="hud-btn hud-btn--icon"
           onClick={() => launchSessionClip(track.id, null)}
           title="Stop this track's session clip"
-          style={{ alignSelf: 'flex-start', minWidth: 30, padding: '1px 6px', fontSize: 9 }}
+          style={{ padding: '1px 6px', fontSize: 9, flex: '0 0 auto' }}
           disabled={!playingClipId}
         >
-          ■ STOP
+          {isMobile ? '■' : '■ STOP'}
         </button>
       </div>
       {Array.from({ length: sceneCount }).map((_, i) => (

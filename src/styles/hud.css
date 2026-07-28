@@ -209,6 +209,7 @@
    target, which the taller touch lane has room for. */
 .hud-btn--tight {
   min-height: 26px;
+  min-width: 28px;
   padding: 3px 6px;
 }
 
@@ -515,20 +516,9 @@ button, .hud-btn { touch-action: manipulation; }
   .hud-btn {
     padding: 7px 9px;
     letter-spacing: 0.12em;
-    min-height: 38px;
   }
   .hud-btn--icon {
     padding: 6px 7px;
-    min-width: 38px;
-  }
-  /* ROW_H_TOUCH gives the lane room for a real touch target here. */
-  .hud-btn--tight {
-    min-height: 34px;
-    padding: 4px 6px;
-  }
-  .touch-target {
-    min-width: 40px;
-    min-height: 40px;
   }
   .hex-frame {
     padding: 7px 8px;
@@ -570,20 +560,17 @@ button, .hud-btn { touch-action: manipulation; }
     font-size: 12px;
   }
 
+  /* Padding and type shrink on a short viewport, but NOT the tap area — the
+     44px floor below is what makes the app operable by thumb, and trading it
+     away for a couple of pixels of height is what made this unusable before. */
   .hud-btn {
-    min-height: 32px;
-    padding: 5px 8px;
+    padding: 4px 8px;
   }
   .hud-btn--icon {
-    min-width: 32px;
     padding: 4px 6px;
   }
-  .touch-target {
-    min-width: 34px;
-    min-height: 32px;
-  }
   .hud-tab {
-    padding: 5px 9px;
+    padding: 4px 9px;
     font-size: 9px;
   }
   .hud-tabs {
@@ -607,18 +594,112 @@ button, .hud-btn { touch-action: manipulation; }
   }
 }
 
-/* Coarse-pointer (touch) tuning regardless of width */
+/* ---------------- TOUCH TARGET FLOOR ---------------- *
+ * The single most important rule for the Android build. Every interactive
+ * control gets a 44px minimum on a coarse pointer, regardless of viewport.
+ * This is deliberately NOT relaxed on short viewports: a control you cannot
+ * reliably hit is not worth the pixels it saves.
+ *
+ * Anything that genuinely cannot be 44px (grid cells, piano keys, timeline
+ * clips) opts out with .no-touch-floor and must provide its own affordance.  */
 @media (pointer: coarse) {
+  .hud-btn,
+  .hud-tab,
+  .touch-target,
+  select.display,
+  button {
+    min-height: 44px;
+  }
+  .hud-btn--icon,
+  .touch-target {
+    min-width: 44px;
+  }
+  /* Track-lane buttons live in a fixed-height row; the row grows to suit. */
+  .hud-btn--tight {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px 6px;
+  }
+
+  .no-touch-floor,
+  .no-touch-floor button,
+  .no-touch-floor select,
+  [data-overlap-ok] button,
+  .clip-affordance {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /* A timeline clip can be ~80x48, so its delete control cannot be 44px and
+     cannot borrow space from outside either — the clip clips its own overflow,
+     so an enlarged pseudo-element hit area would just be cut off. Take the
+     largest target the clip can actually hold and leave it there; selecting the
+     clip and editing it is the primary path on touch. */
+  .clip-affordance {
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+  }
+
+  /* Fat thumb, and a taller track so the thumb has something to sit on. */
+  .hud-slider {
+    height: 12px;
+  }
   .hud-slider::-webkit-slider-thumb {
-    width: 22px;
-    height: 24px;
+    width: 26px;
+    height: 30px;
   }
   .hud-slider::-moz-range-thumb {
-    width: 22px;
-    height: 24px;
+    width: 26px;
+    height: 30px;
   }
+
   /* Keyboard-only hints are noise on a touch device. */
   .desktop-only {
     display: none !important;
   }
+}
+
+/* ---------------- SHEET ---------------- *
+ * Where controls go when a row has no room for them. Continuous parameters get
+ * the full width of the screen here instead of the ~40px a track header could
+ * spare, which is the difference between 6 dB per pixel and 0.2.             */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: linear-gradient(180deg, rgba(20, 10, 4, 0.98), rgba(6, 4, 3, 0.99));
+  border-top: 1px solid var(--hud-orange);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+}
+
+.sheet__grab {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 106, 0, 0.5);
+  margin: 2px auto 10px;
+}
+
+.sheet__row {
+  margin-bottom: 14px;
+}
+
+/* Full-bleed slider: the whole point of the sheet. */
+.sheet__slider {
+  width: 100%;
+  height: 14px;
 }

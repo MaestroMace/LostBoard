@@ -7,6 +7,20 @@ import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { EditorTip } from '../hud/EditorTip';
 import { importSample } from '../../state/samples';
+import { useIsMobile } from '../../hooks/useLayoutMode';
+
+/**
+ * Step-grid geometry.
+ *
+ * On touch the cells take a fixed, finger-sized width and the grid scrolls,
+ * instead of dividing the viewport into 14px slivers nobody can hit. The grid
+ * template and the playhead cursor both read these constants, so the two can
+ * never drift apart — the cursor previously mirrored the template by hand in a
+ * calc() string.
+ */
+const LABEL_COL_W = 80;
+const GRID_GAP = 4;
+const TOUCH_CELL_W = 40;
 
 function cellBg(on: boolean, vel: number) {
   return on
@@ -15,6 +29,8 @@ function cellBg(on: boolean, vel: number) {
 }
 
 export function StepSequencer() {
+  // fixed, finger-sized cells on touch; the grid scrolls instead of shrinking
+  const touchCells = useIsMobile();
   const selectTrack = useStore((s) => s.selectTrack);
   const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
@@ -135,7 +151,9 @@ export function StepSequencer() {
               gap: 4,
               // wider patterns get a min width per step so cells stay tappable; outer container will scroll
               // 80px label column (fits the pad name + sample-swap dropdown)
-              gridTemplateColumns: `80px repeat(${length}, minmax(${length > 16 ? 22 : 0}px, 1fr))`,
+              gridTemplateColumns: `${LABEL_COL_W}px repeat(${length}, ${
+                touchCells ? `${TOUCH_CELL_W}px` : `minmax(${length > 16 ? 22 : 0}px, 1fr)`
+              })`,
             }}
           >
             <div />
@@ -156,6 +174,7 @@ export function StepSequencer() {
             ))}
           </div>
           <StepCursor
+            touchCells={touchCells}
             length={length}
             clipStart={activeClip.start}
             clipLength={activeClip.length}
@@ -177,10 +196,12 @@ const StepCursor = memo(function StepCursor({
   length,
   clipStart,
   clipLength,
+  touchCells,
 }: {
   length: number;
   clipStart: number;
   clipLength: number;
+  touchCells: boolean;
 }) {
   const positionBeats = usePlayhead();
   const localBeat = positionBeats - clipStart;
@@ -193,14 +214,18 @@ const StepCursor = memo(function StepCursor({
   // mirror the grid template: an 80px label column + `length` 1fr tracks
   // separated by 4px gaps (length gaps total, including the one after the
   // label column)
-  const colW = `((100% - 80px - ${length} * 4px) / ${length})`;
+  // Fixed-width cells make this exact; the fluid case still has to mirror the
+  // 1fr template.
+  const colW = touchCells
+    ? `${TOUCH_CELL_W}px`
+    : `((100% - ${LABEL_COL_W}px - ${length} * ${GRID_GAP}px) / ${length})`;
   return (
     <div
       style={{
         position: 'absolute',
         top: 0,
         bottom: 0,
-        left: `calc(80px + ${step + 1} * 4px + ${step} * ${colW})`,
+        left: `calc(${LABEL_COL_W}px + ${step + 1} * ${GRID_GAP}px + ${step} * ${colW})`,
         width: `calc(${colW})`,
         border: '1px solid var(--hud-green)',
         boxShadow: '0 0 8px rgba(0,255,136,0.5)',
@@ -370,6 +395,7 @@ const StepCell = memo(function StepCell({
   index: number;
   mode: 'normal' | 'prob';
 }) {
+  const touchCell = useIsMobile();
   const toggleStep = useStore((s) => s.toggleStep);
   const setStepVelocity = useStore((s) => s.setStepVelocity);
   const setStepProbability = useStore((s) => s.setStepProbability);
@@ -439,7 +465,7 @@ const StepCell = memo(function StepCell({
       onPointerUp={up}
       onPointerCancel={up}
       style={{
-        height: 38,
+        height: touchCell ? 44 : 38,
         background: cellBg(on, velocity),
         border: on
           ? '1px solid var(--hud-orange)'

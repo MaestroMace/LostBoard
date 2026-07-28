@@ -157,7 +157,7 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
             className="hud-btn hud-btn--icon"
             onClick={onClose}
             title="Close"
-            style={{ minWidth: 32 }}
+            style={{}}
           >
             ✕
           </button>

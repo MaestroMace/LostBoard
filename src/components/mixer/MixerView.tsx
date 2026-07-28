@@ -91,7 +91,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
           }}
-          style={{ fontSize: 9, minWidth: 28, padding: '2px 4px' }}
+          style={{ fontSize: 9, padding: '2px 4px' }}
         >
           M
         </button>
@@ -101,7 +101,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
           }}
-          style={{ fontSize: 9, minWidth: 28, padding: '2px 4px' }}
+          style={{ fontSize: 9, padding: '2px 4px' }}
         >
           S
         </button>

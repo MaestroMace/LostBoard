@@ -4,7 +4,8 @@ import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
 import { midiInput } from '../../audio/midiInput';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useLayoutMode';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
+import { Indicator, PositionReadout, TriadMark } from '../hud/StatusBar';
 import { putSample } from '../../state/sampleDB';
 
 export function Transport() {
@@ -161,6 +162,9 @@ export function Transport() {
 
   const [showBpmEdit, setShowBpmEdit] = useState(false);
   const isMobile = useIsMobile();
+  // Landscape drops the StatusBar entirely and carries its readouts here, so a
+  // 411px-tall viewport spends one row on chrome instead of two.
+  const mergedHeader = useLayoutMode() === 'phone-landscape';
   const lbl = (full: string) => (isMobile ? '' : ` ${full}`);
 
   return (
@@ -176,6 +180,7 @@ export function Transport() {
         contain: 'layout style',
       }}
     >
+      {mergedHeader && <TriadMark size={22} />}
       {/* Scrollable so this strip can never clip its own controls — it used to
           push UNDO / REDO / SAVE past the right edge of a phone with no way to
           reach them. On phones the rarely-used half moves into the ⋯ menu. */}
@@ -302,6 +307,15 @@ export function Transport() {
         />
       )}
 
+      {mergedHeader && (
+        <>
+          <div style={{ flex: 1, minWidth: 8 }} />
+          <Indicator label="PL" on={playing} color="green" />
+          <Indicator label="REC" on={micRecording || bouncing} color="red" />
+          <PositionReadout numerator={tparams.numerator} />
+        </>
+      )}
+
       {!isMobile && <div style={{ flex: 1 }} />}
 
       <button
@@ -338,7 +352,9 @@ export function Transport() {
       />
 
       <PreRollIndicator numerator={tparams.numerator} />
-      <PositionBar />
+      {/* The scrub bar is what tipped this row into wrapping in landscape, and
+          it duplicates the bars:beats readout that now sits beside it. */}
+      {!mergedHeader && <PositionBar />}
     </div>
   );
 }

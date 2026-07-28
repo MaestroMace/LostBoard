@@ -38,35 +38,33 @@ export function StatusBar() {
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
   const mode = useLayoutMode();
 
+  // Landscape gives up the whole bar: at 411px tall a dedicated header row is
+  // ~9% of the screen for information the transport row has space to carry.
+  if (mode === 'phone-landscape') return null;
+
+  // Portrait keeps a compact bar of its own — it has the height to spare.
   if (mode !== 'desktop') {
-    // Landscape is the working orientation but only ~411px tall, so every
-    // pixel of header height is bought out of the timeline: shrink the mark,
-    // flatten the padding, and drop the project name entirely.
-    const tight = mode === 'phone-landscape';
     return (
       <div
         style={{
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          gap: tight ? 6 : 8,
-          padding: tight ? '2px 8px' : '5px 8px',
+          gap: 8,
+          padding: '5px 8px',
           background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
           borderBottom: '1px solid rgba(255,106,0,0.5)',
           contain: 'layout style',
           flex: '0 0 auto',
         }}
       >
-        <TriadMark size={tight ? 20 : 28} />
-        {!tight && (
-          <span
-            className="hud-value"
-            style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          >
-            {name}
-          </span>
-        )}
-        {tight && <div style={{ flex: 1, minWidth: 0 }} />}
+        <TriadMark size={28} />
+        <span
+          className="hud-value"
+          style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {name}
+        </span>
         <Indicator label="PL" on={playing} color="green" />
         <Indicator label="REC" on={recording} color="red" />
         {midi.connected && <Indicator label="MIDI" on color="green" />}
@@ -138,7 +136,7 @@ export function StatusBar() {
 }
 
 /** Leaf: only this re-renders as the playhead moves. */
-const PositionReadout = memo(function PositionReadout({ numerator }: { numerator: number }) {
+export const PositionReadout = memo(function PositionReadout({ numerator }: { numerator: number }) {
   const positionBeats = usePlayhead();
   const bar = Math.floor(positionBeats / numerator) + 1;
   const beat = Math.floor(positionBeats % numerator) + 1;
@@ -168,7 +166,7 @@ function HudClock() {
   );
 }
 
-function Indicator({ label, on, color }: { label: string; on: boolean; color: 'green' | 'red' | 'amber' }) {
+export function Indicator({ label, on, color }: { label: string; on: boolean; color: 'green' | 'red' | 'amber' }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       <span className={`led ${color} ${on ? 'on' : ''}`} />
@@ -192,7 +190,7 @@ function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolea
   );
 }
 
-function TriadMark({ size = 28 }: { size?: number }) {
+export function TriadMark({ size = 28 }: { size?: number }) {
   return (
     <div style={{ width: size, height: size, position: 'relative', flex: '0 0 auto' }}>
       <svg viewBox="0 0 100 100" width={size} height={size}>
