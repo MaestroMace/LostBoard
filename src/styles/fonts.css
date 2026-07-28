@@ -1,0 +1,32 @@
+/* Self-hosted fonts.
+ *
+ * These used to come from the Google Fonts CDN, which silently falls back to
+ * system mono in a sideloaded APK with no network. Latin subset only; Orbitron
+ * and JetBrains Mono are variable fonts, so a single file covers every weight
+ * the UI asks for. Regenerate with scripts/fetch-fonts.sh. */
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/Orbitron.woff2') format('woff2');
+}
+
+/* Only ever rendered at 400 (.hud-readout and the raw-data panels), so a static
+   instance is shipped rather than the larger variable file. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ShareTechMono.woff2') format('woff2');
+}

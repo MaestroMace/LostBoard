@@ -11,7 +11,20 @@ export function MixerView() {
 
   return (
     <div
-      style={{ flex: 1, minHeight: 0, padding: 12, display: 'flex', gap: 8, overflowX: 'auto', contain: 'layout style' }}
+      // overflowY matters as much as overflowX here: a channel strip is a fixed
+      // ~320px vertical stack, so on a short landscape viewport the bottom of
+      // every fader was clipped with no way to scroll down to it.
+      style={{
+        flex: 1,
+        minHeight: 0,
+        padding: 12,
+        display: 'flex',
+        gap: 8,
+        overflowX: 'auto',
+        overflowY: 'auto',
+        alignItems: 'flex-start',
+        contain: 'layout style',
+      }}
       className="hex-grid-bg"
     >
       {tracks.map((t) => (
@@ -96,14 +109,14 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 150 }}>
         <input
           type="range"
-          className="hud-slider"
+          className="hud-slider hud-fader"
           min={-48}
           max={6}
           step={0.5}
           value={track.volume}
           onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
           onClick={(e) => e.stopPropagation()}
-          style={{ WebkitAppearance: 'slider-vertical' as any, width: 22, height: 140 }}
+          style={{ width: 22, height: 140 }}
         />
         <LiveMeter meterKey={track.id} height={140} />
       </div>
@@ -143,13 +156,13 @@ const MasterStrip = memo(function MasterStrip({
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 160 }}>
         <input
           type="range"
-          className="hud-slider"
+          className="hud-slider hud-fader"
           min={-48}
           max={6}
           step={0.5}
           value={volume}
           onChange={(e) => onVolume(parseFloat(e.target.value))}
-          style={{ WebkitAppearance: 'slider-vertical' as any, width: 22, height: 150 }}
+          style={{ width: 22, height: 150 }}
         />
         <LiveMeter meterKey="master" height={150} />
       </div>

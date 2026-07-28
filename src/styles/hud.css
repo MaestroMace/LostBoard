@@ -242,9 +242,16 @@
   box-shadow: 0 0 6px rgba(255, 106, 0, 0.8);
 }
 
+/* Vertical fader.
+ *
+ * `appearance: slider-vertical` is deprecated (dropped in Chromium 121+) and it
+ * also suppressed the custom ::-webkit-slider-thumb, which is why these
+ * rendered as default blue browser sliders in an otherwise orange HUD.
+ * writing-mode + direction is the standard way to stand a range input up, and
+ * it keeps the themed thumb from .hud-slider. */
 .hud-fader {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
+  -webkit-appearance: none;
+  appearance: none;
   writing-mode: vertical-lr;
   direction: rtl;
   width: 22px;
