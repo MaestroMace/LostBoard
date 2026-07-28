@@ -11,12 +11,12 @@ import { importSample } from '../../state/samples';
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
 const PRESETS: Record<string, Partial<SynthParams>> = {
-  'REDLINE BASS': { osc: 'square', cutoff: 500, resonance: 8, attack: 0.005, decay: 0.2, sustain: 0.5, release: 0.2, drive: 0.25, reverb: 0.05, delay: 0.0 },
-  'NEBULA PAD': { osc: 'fatsawtooth', cutoff: 2400, resonance: 1.2, attack: 0.6, decay: 1, sustain: 0.8, release: 1.5, drive: 0, reverb: 0.6, delay: 0.25 },
-  'HEX-FIELD LEAD': { osc: 'sawtooth', cutoff: 3600, resonance: 4, attack: 0.005, decay: 0.15, sustain: 0.7, release: 0.4, drive: 0.15, reverb: 0.3, delay: 0.4 },
-  'VECTOR PLUCK': { osc: 'triangle', cutoff: 1800, resonance: 1, attack: 0.001, decay: 0.18, sustain: 0, release: 0.3, drive: 0, reverb: 0.2, delay: 0.15 },
-  'STELLAR CHOIR': { osc: 'sine', cutoff: 3200, resonance: 0.7, attack: 0.8, decay: 1.5, sustain: 0.9, release: 2.2, drive: 0, reverb: 0.7, delay: 0.2 },
-  'TRIAD ARP': { osc: 'square', cutoff: 2800, resonance: 5, attack: 0.001, decay: 0.05, sustain: 0.3, release: 0.1, drive: 0.1, reverb: 0.15, delay: 0.45 },
+  'Bass': { osc: 'square', cutoff: 500, resonance: 8, attack: 0.005, decay: 0.2, sustain: 0.5, release: 0.2, drive: 0.25, reverb: 0.05, delay: 0.0 },
+  'Pad': { osc: 'fatsawtooth', cutoff: 2400, resonance: 1.2, attack: 0.6, decay: 1, sustain: 0.8, release: 1.5, drive: 0, reverb: 0.6, delay: 0.25 },
+  'Lead': { osc: 'sawtooth', cutoff: 3600, resonance: 4, attack: 0.005, decay: 0.15, sustain: 0.7, release: 0.4, drive: 0.15, reverb: 0.3, delay: 0.4 },
+  'Pluck': { osc: 'triangle', cutoff: 1800, resonance: 1, attack: 0.001, decay: 0.18, sustain: 0, release: 0.3, drive: 0, reverb: 0.2, delay: 0.15 },
+  'Choir': { osc: 'sine', cutoff: 3200, resonance: 0.7, attack: 0.8, decay: 1.5, sustain: 0.9, release: 2.2, drive: 0, reverb: 0.7, delay: 0.2 },
+  'Arp': { osc: 'square', cutoff: 2800, resonance: 5, attack: 0.001, decay: 0.05, sustain: 0.3, release: 0.1, drive: 0.1, reverb: 0.15, delay: 0.45 },
 };
 
 export function SynthPanel() {
@@ -49,7 +49,7 @@ export function SynthPanel() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span className="hud-label">INSTRUMENT // TRIAD ALTAIR</span>
+        <span className="hud-label">Instrument</span>
         <select
           className="display"
           value={active.id}
@@ -208,7 +208,7 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
                 border: '1px solid rgba(255,106,0,0.45)',
                 color: 'var(--hud-orange-bright)',
                 fontFamily: 'var(--font-data)',
-                fontSize: 9,
+                fontSize: 12,
                 padding: '4px 0 8px',
                 display: 'flex',
                 alignItems: 'flex-end',
@@ -351,7 +351,7 @@ function WavetablePanel({
           </button>
         )}
       </div>
-      <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: '6px 0 0' }}>
+      <p className="hud-readout--dim hud-readout" style={{ fontSize: 12, margin: '6px 0 0' }}>
         {partials && partials.length > 0
           ? 'POSITION morphs sine → the loaded wavetable.'
           : 'POSITION morphs sine → hollow → bright → saw. Load a sample to derive a custom wave.'}
@@ -375,13 +375,13 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
     <HexFrame title="MIDI OUT">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!midi.supported ? (
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 10 }}>
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
             Web MIDI not available in this browser.
           </p>
         ) : (
           <>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span className="hud-readout" style={{ fontSize: 10 }}>PORT</span>
+              <span className="hud-readout" style={{ fontSize: 12 }}>PORT</span>
               <select
                 className="display"
                 value={midi.selectedId}
@@ -395,7 +395,7 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
               </select>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span className="hud-readout" style={{ fontSize: 10 }}>CHANNEL</span>
+              <span className="hud-readout" style={{ fontSize: 12 }}>CHANNEL</span>
               <select
                 className="display"
                 value={channel ?? 0}
@@ -410,7 +410,7 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
                 ))}
               </select>
             </div>
-            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 9 }}>
+            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
               When a channel is set, this track's notes drive the hardware and the
               internal voice is silent.
             </p>
@@ -495,7 +495,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
         </div>
 
         {zones.length === 0 ? (
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
             No zones yet. Load a sample to start — add more zones at different root pitches
             for a cleanly multi-sampled instrument.
           </p>
@@ -514,7 +514,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
                   border: '1px solid rgba(255,106,0,0.2)',
                 }}
               >
-                <span className="hud-value" style={{ fontSize: 10 }}>ZN-{String(i + 1).padStart(2, '0')}</span>
+                <span className="hud-value" style={{ fontSize: 12 }}>ZN-{String(i + 1).padStart(2, '0')}</span>
                 <select
                   className="display"
                   value={zone.sampleId}
@@ -529,7 +529,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
                   ))}
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>ROOT</span>
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>ROOT</span>
                   <input
                     className="display"
                     type="number"
@@ -543,12 +543,12 @@ function SamplerSource({ trackId }: { trackId: string }) {
                     }
                     style={{ width: 44 }}
                   />
-                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9, minWidth: 28 }}>
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 12, minWidth: 28 }}>
                     {midiToName(zone.rootPitch)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Velocity range this zone responds to (%)">
-                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>VEL</span>
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>VEL</span>
                   <input
                     className="display"
                     type="number"
@@ -561,7 +561,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
                     }}
                     style={{ width: 38 }}
                   />
-                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>–</span>
+                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>–</span>
                   <input
                     className="display"
                     type="number"
@@ -586,7 +586,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
             ))}
           </div>
         )}
-        <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
+        <p className="hud-readout--dim hud-readout" style={{ fontSize: 12, margin: 0 }}>
           ROOT = MIDI pitch a zone's sample plays at unity rate. VEL = velocity range
           (%) the zone responds to — give zones different ranges for velocity layers.
           Zones sharing a range key-map together.

@@ -17,5 +17,19 @@ export default defineConfig({
   build: {
     target: 'es2020',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        /**
+         * Tone is ~2/3 of the bundle and nothing on the start screen needs it,
+         * so shipping it in the same chunk as the UI made first paint wait on
+         * parsing an audio library. Splitting it lets the start screen render
+         * while Tone streams in behind it.
+         */
+        manualChunks: {
+          audio: ['tone'],
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
   },
 });

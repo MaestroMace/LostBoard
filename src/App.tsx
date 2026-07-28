@@ -23,16 +23,32 @@ import { rehydrateSamples } from './state/samples';
 import { midiInput } from './audio/midiInput';
 import { midiOutput } from './audio/midiOutput';
 
-const TABS: { id: ReturnType<typeof useStore.getState>['view']; label: string; hint: string }[] = [
-  { id: 'arrange', label: 'ARRANGE', hint: 'Timeline: lay clips out across tracks and time' },
-  { id: 'session', label: 'SESSION', hint: 'Clip launcher: trigger loops by scene, Ableton-style' },
-  { id: 'sequencer', label: 'SEQUENCER', hint: 'Drum grid: program beats step by step' },
-  { id: 'pianoroll', label: 'PIANO ROLL', hint: 'Note editor: draw and edit melodies in a MIDI clip' },
-  { id: 'instrument', label: 'INSTRUMENT', hint: "Synth editor: shape the selected track's sound" },
-  { id: 'fx', label: 'FX RACK', hint: 'Per-track effects: EQ, compressor, chorus, bit-crusher' },
-  { id: 'automation', label: 'AUTOMATION', hint: 'Draw parameter changes over time (volume, cutoff…)' },
-  { id: 'mixer', label: 'MIXER', hint: 'Channel strips: volume, pan, mute/solo, master' },
-  { id: 'project', label: 'PROJECT', hint: 'Tempo, time signature, save / load / export' },
+type View = ReturnType<typeof useStore.getState>['view'];
+
+/**
+ * Navigation is two levels, not nine peers.
+ *
+ * Five of the old tabs were all "edit the selected track" — notes, sound,
+ * effects, automation — so as siblings of ARRANGE and MIXER they gave no sense
+ * of where anything lived or where to start. They now sit behind one Edit
+ * destination with its own sub-tabs, which leaves a top row short enough to
+ * read at a glance without scrolling.
+ */
+const EDITOR_VIEWS: View[] = ['sequencer', 'pianoroll', 'instrument', 'fx', 'automation'];
+
+const PRIMARY: { id: View | 'edit'; label: string; hint: string }[] = [
+  { id: 'arrange', label: 'Song', hint: 'Lay clips out across tracks and time' },
+  { id: 'session', label: 'Clips', hint: 'Launch loops by scene' },
+  { id: 'edit', label: 'Edit', hint: 'Edit the selected track' },
+  { id: 'mixer', label: 'Mix', hint: 'Levels, pan, mute and solo' },
+  { id: 'project', label: 'Project', hint: 'Tempo, saving and export' },
+];
+
+const EDITOR_TABS: { id: View | 'notes'; label: string; hint: string }[] = [
+  { id: 'notes', label: 'Notes', hint: 'Draw the notes or beats for this track' },
+  { id: 'instrument', label: 'Sound', hint: "Shape the track's instrument" },
+  { id: 'fx', label: 'Effects', hint: 'EQ, compression, chorus, bit-crush' },
+  { id: 'automation', label: 'Automation', hint: 'Change parameters over time' },
 ];
 
 async function bootEngine() {
@@ -54,6 +70,12 @@ export default function App() {
   const setView = useStore((s) => s.setView);
   const helpOpen = useStore((s) => s.helpOpen);
   const setHelpOpen = useStore((s) => s.setHelpOpen);
+  // "Notes" means a drum grid or a piano roll depending on what is selected —
+  // the user should not have to know which editor their track needs.
+  const selectedTrack = useStore((s) => s.project.tracks.find((t) => t.id === s.selectedTrackId) ?? s.project.tracks[0]);
+  const notesViewForTrack: View = selectedTrack?.kind === 'drum' ? 'sequencer' : 'pianoroll';
+  const selectedTrackName = selectedTrack?.name ?? '';
+  const inEditor = EDITOR_VIEWS.includes(view);
 
   useGlobalKeys();
   useEngineSync();
@@ -108,19 +130,22 @@ export default function App() {
       <Transport />
 
       <div className="hud-tabs">
-        {/* Scrolls on phones; the help button below stays pinned outside the
-            strip so it can never be pushed off-screen with the tabs. */}
+        {/* Five destinations fit without scrolling; the help button stays
+            pinned outside the strip regardless. */}
         <div className="hud-tabs__strip" data-scrollx>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`hud-tab ${view === t.id ? 'is-active' : ''}`}
-              onClick={() => setView(t.id)}
-              title={t.hint}
-            >
-              {t.label}
-            </button>
-          ))}
+          {PRIMARY.map((t) => {
+            const active = t.id === 'edit' ? inEditor : view === t.id;
+            return (
+              <button
+                key={t.id}
+                className={`hud-tab ${active ? 'is-active' : ''}`}
+                onClick={() => setView(t.id === 'edit' ? notesViewForTrack : (t.id as View))}
+                title={t.hint}
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
         <button
           className="hud-btn hud-btn--ghost hud-btn--icon"
@@ -137,6 +162,29 @@ export default function App() {
           VER 0.1.0
         </span>
       </div>
+
+      {inEditor && (
+        <div className="hud-tabs hud-tabs--sub">
+          <div className="hud-tabs__strip" data-scrollx>
+            {EDITOR_TABS.map((t) => {
+              const target = t.id === 'notes' ? notesViewForTrack : (t.id as View);
+              return (
+                <button
+                  key={t.id}
+                  className={`hud-tab ${view === target ? 'is-active' : ''}`}
+                  onClick={() => setView(target)}
+                  title={t.hint}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+            {selectedTrackName}
+          </span>
+        </div>
+      )}
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {view === 'arrange' && <ArrangeView />}
@@ -181,7 +229,7 @@ const FooterBar = memo(function FooterBar() {
         padding: isMobile ? '3px 8px' : '4px 12px',
         background: 'rgba(0,0,0,0.85)',
         borderTop: '1px solid rgba(255,106,0,0.4)',
-        fontSize: 9,
+        fontSize: 12,
         // one line, always: this bar used to wrap to three on a phone and
         // shove the timeline up off the screen
         whiteSpace: 'nowrap',
@@ -189,11 +237,11 @@ const FooterBar = memo(function FooterBar() {
         flex: '0 0 auto',
       }}
     >
-      <span className="hud-readout--green hud-readout">● ENGINE OK</span>
+      <span className="hud-readout--green hud-readout">● Ready</span>
       {!isMobile && <span className="hud-readout">TRK {String(trackCount).padStart(2, '0')}</span>}
       {!isMobile && <span className="hud-readout">CLP {String(clipCount).padStart(3, '0')}</span>}
       <span className="hud-readout" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {playing ? 'ROLLING' : 'HALTED'}
+        {playing ? 'Playing' : 'Stopped'}
       </span>
       <div style={{ flex: 1, minWidth: 0 }} />
       {/* Keyboard shortcuts are meaningless on a touch device — .desktop-only

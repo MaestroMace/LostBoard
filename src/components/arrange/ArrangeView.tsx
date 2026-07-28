@@ -158,33 +158,10 @@ export function ArrangeView() {
               flex: '0 0 auto',
             }}
           >
-            {!isMobile && <span className="hud-label">TRACKS</span>}
-            <div style={{ display: 'flex', gap: 3, flex: isMobile ? 1 : '0 0 auto', minWidth: 0 }}>
-              <button
-                className="hud-btn hud-btn--icon"
-                onClick={() => addTrack('synth')}
-                title="Add synth track"
-                style={{ minWidth: 0, flex: isMobile ? 1 : '0 0 auto', padding: '4px 5px', fontSize: 9 }}
-              >
-                {isMobile ? '+SYN' : '+ SYNTH'}
-              </button>
-              <button
-                className="hud-btn hud-btn--icon"
-                onClick={() => addTrack('drum')}
-                title="Add drum track"
-                style={{ minWidth: 0, flex: isMobile ? 1 : '0 0 auto', padding: '4px 5px', fontSize: 9 }}
-              >
-                {isMobile ? '+DRM' : '+ DRUMS'}
-              </button>
-              <button
-                className="hud-btn hud-btn--icon"
-                onClick={() => addTrack('audio')}
-                title="Add audio track"
-                style={{ minWidth: 0, flex: isMobile ? 1 : '0 0 auto', padding: '4px 5px', fontSize: 9 }}
-              >
-                {isMobile ? '+AUD' : '+ AUDIO'}
-              </button>
-            </div>
+            {!isMobile && <span className="hud-label">Tracks</span>}
+            {/* Three truncated abbreviations in a 128px column told nobody
+                anything. One clear button, and the choice is spelled out. */}
+            <AddTrackButton compact={isMobile} onAdd={addTrack} />
           </div>
           <div style={{ overflow: 'auto', flex: 1 }}>
             {tracks.map((t) => {
@@ -290,18 +267,18 @@ const ZoomFloater = memo(function ZoomFloater({
         value={snapMode}
         onChange={(e) => setSnapMode(e.target.value as SnapMode)}
         title="Snap grid — clip moves, resizes and new clips lock to this"
-        style={{ fontSize: 9, padding: '2px 4px' }}
+        style={{ fontSize: 12, padding: '2px 4px' }}
       >
-        <option value="bar">SNAP·BAR</option>
-        <option value="beat">SNAP·BEAT</option>
-        <option value="half">SNAP·½</option>
-        <option value="off">SNAP·OFF</option>
+        <option value="bar">Snap: Bar</option>
+        <option value="beat">Snap: Beat</option>
+        <option value="half">Snap: ½ Beat</option>
+        <option value="off">Snap: Off</option>
       </select>
       <button
         className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
-        style={{ padding: '2px 6px', fontSize: 11 }}
+        style={{ padding: '2px 6px', fontSize: 13 }}
       >
         −
       </button>
@@ -309,7 +286,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Reset zoom to 1×"
         onClick={() => setZoom(() => 1)}
-        style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
+        style={{ minWidth: 38, padding: '2px 4px', fontSize: 12 }}
       >
         {zoom.toFixed(2)}×
       </button>
@@ -317,7 +294,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
-        style={{ padding: '2px 6px', fontSize: 11 }}
+        style={{ padding: '2px 6px', fontSize: 13 }}
       >
         ＋
       </button>
@@ -362,7 +339,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
               }}
             >
               {isBar && (
-                <span className="hud-label" style={{ position: 'absolute', top: -14, left: 2, fontSize: 9 }}>
+                <span className="hud-label" style={{ position: 'absolute', top: -14, left: 2, fontSize: 12 }}>
                   {i / numerator + 1}
                 </span>
               )}
@@ -470,6 +447,87 @@ const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
   );
 });
 
+/** Add-track control: one obvious button, with the kinds spelled out on tap. */
+function AddTrackButton({
+  compact,
+  onAdd,
+}: {
+  compact: boolean;
+  onAdd: (kind: Track['kind']) => unknown;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
+  const KINDS: { kind: Track['kind']; label: string; hint: string }[] = [
+    { kind: 'synth', label: 'Synth', hint: 'Play melodies and chords' },
+    { kind: 'drum', label: 'Drums', hint: 'Program a beat' },
+    { kind: 'audio', label: 'Audio', hint: 'Record or import a sample' },
+  ];
+
+  return (
+    <div ref={wrap} style={{ position: 'relative', flex: compact ? 1 : '0 0 auto', minWidth: 0 }}>
+      <button
+        className={`hud-btn ${open ? 'is-active' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Add a track"
+        style={{ width: '100%', fontSize: 12, padding: '4px 8px' }}
+      >
+        + Track
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '106%',
+            left: 0,
+            zIndex: 40,
+            minWidth: 168,
+            background: 'rgba(6,4,3,0.98)',
+            border: '1px solid rgba(255,106,0,0.6)',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
+          }}
+        >
+          {KINDS.map((k) => (
+            <button
+              key={k.kind}
+              className="hud-btn hud-btn--ghost"
+              style={{
+                display: 'block',
+                width: '100%',
+                minHeight: 46,
+                padding: '8px 12px',
+                textAlign: 'left',
+                borderBottom: '1px solid rgba(255,106,0,0.18)',
+              }}
+              onClick={() => {
+                onAdd(k.kind);
+                setOpen(false);
+              }}
+            >
+              <div style={{ fontSize: 13 }}>{k.label}</div>
+              <div className="hud-readout--dim hud-readout" style={{ fontSize: 11, textTransform: 'none' }}>
+                {k.hint}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Memoized track header — only re-renders when ITS track object changes. */
 const TrackHeader = memo(function TrackHeader({
   track,
@@ -552,7 +610,7 @@ const TrackHeader = memo(function TrackHeader({
               style={{
                 flex: 1,
                 minWidth: 0,
-                fontSize: 12,
+                fontSize: 14,
                 color: 'var(--hud-orange-bright)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -561,7 +619,7 @@ const TrackHeader = memo(function TrackHeader({
             >
               {track.name}
             </span>
-            <span aria-hidden style={{ opacity: 0.55, fontSize: 11, flex: '0 0 auto' }}>›</span>
+            <span aria-hidden style={{ opacity: 0.55, fontSize: 13, flex: '0 0 auto' }}>›</span>
           </button>
           {inlineToggles && (
             <>
@@ -572,7 +630,7 @@ const TrackHeader = memo(function TrackHeader({
                   updateTrack(track.id, { mute: !track.mute });
                 }}
                 title={track.mute ? 'Muted' : 'Mute'}
-                style={{ fontSize: 11 }}
+                style={{ fontSize: 13 }}
               >
                 M
               </button>
@@ -583,7 +641,7 @@ const TrackHeader = memo(function TrackHeader({
                   updateTrack(track.id, { solo: !track.solo });
                 }}
                 title={track.solo ? 'Soloed' : 'Solo'}
-                style={{ fontSize: 11 }}
+                style={{ fontSize: 13 }}
               >
                 S
               </button>
@@ -594,7 +652,7 @@ const TrackHeader = memo(function TrackHeader({
           {!inlineToggles && (track.mute || track.solo) && (
             <span
               className="hud-readout"
-              style={{ fontSize: 9, flex: '0 0 auto', color: track.solo ? 'var(--hud-green)' : 'var(--hud-red)' }}
+              style={{ fontSize: 12, flex: '0 0 auto', color: track.solo ? 'var(--hud-green)' : 'var(--hud-red)' }}
             >
               {track.solo ? 'S' : 'M'}
             </span>
@@ -647,7 +705,7 @@ const TrackHeader = memo(function TrackHeader({
           title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
           style={{
             width: '100%',
-            fontSize: 11,
+            fontSize: 13,
             background: 'transparent',
             border: '1px solid transparent',
             padding: '1px 4px',
@@ -666,7 +724,7 @@ const TrackHeader = memo(function TrackHeader({
             title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
             style={{
               flex: 1,
-              fontSize: 11,
+              fontSize: 13,
               background: 'transparent',
               border: '1px solid transparent',
               padding: '2px 4px',
@@ -733,7 +791,7 @@ const TrackHeader = memo(function TrackHeader({
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
           }}
-          style={{ padding: '4px 6px', fontSize: 9 }}
+          style={{ padding: '4px 6px', fontSize: 12 }}
           title={track.mute ? 'Muted — click to unmute' : 'Mute this track'}
         >
           M
@@ -744,7 +802,7 @@ const TrackHeader = memo(function TrackHeader({
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
           }}
-          style={{ padding: '4px 6px', fontSize: 9 }}
+          style={{ padding: '4px 6px', fontSize: 12 }}
           title={track.solo ? 'Soloed — click to clear' : 'Solo — mute all other tracks'}
         >
           S
@@ -755,7 +813,7 @@ const TrackHeader = memo(function TrackHeader({
             e.stopPropagation();
             updateTrack(track.id, { arm: !track.arm });
           }}
-          style={{ padding: '4px 6px', fontSize: 9 }}
+          style={{ padding: '4px 6px', fontSize: 12 }}
           title={
             track.kind === 'synth'
               ? 'Arm — route MIDI input here and record while transport rolls'
@@ -779,7 +837,7 @@ const TrackHeader = memo(function TrackHeader({
           style={{ flex: 1, height: 6 }}
         />
         {!compact && (
-          <span className="hud-readout" style={{ fontSize: 8, width: 28, textAlign: 'right' }}>
+          <span className="hud-readout" style={{ fontSize: 11, width: 28, textAlign: 'right' }}>
             {track.volume.toFixed(0)}
           </span>
         )}
@@ -816,10 +874,10 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
   const toggle = (on: boolean): React.CSSProperties => ({
     flex: 1,
     minHeight: 46,
-    fontSize: 11,
+    fontSize: 13,
     opacity: on ? 1 : 0.85,
   });
-  const action: React.CSSProperties = { flex: 1, minHeight: 46, fontSize: 10 };
+  const action: React.CSSProperties = { flex: 1, minHeight: 46, fontSize: 12 };
 
   // Portalled to <body>. The track header column sets `contain: layout`, which
   // makes it a containing block for position:fixed descendants — rendering the
@@ -838,7 +896,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <span style={{ width: 4, alignSelf: 'stretch', background: track.color, flex: '0 0 auto' }} />
-          <span className="hud-label" style={{ fontSize: 9, flex: '0 0 auto' }}>
+          <span className="hud-label" style={{ fontSize: 12, flex: '0 0 auto' }}>
             {TRACK_KIND_LABEL[track.kind]}
           </span>
           <input
@@ -864,7 +922,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
 
         <div className="sheet__row">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span className="hud-label" style={{ fontSize: 9 }}>VOLUME</span>
+            <span className="hud-label" style={{ fontSize: 12 }}>VOLUME</span>
             <span className="hud-readout">{track.volume.toFixed(1)} dB</span>
           </div>
           <input
@@ -881,7 +939,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
 
         <div className="sheet__row">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span className="hud-label" style={{ fontSize: 9 }}>PAN</span>
+            <span className="hud-label" style={{ fontSize: 12 }}>PAN</span>
             <span className="hud-readout">
               {track.pan === 0 ? 'CENTRE' : track.pan < 0 ? `L${Math.round(-track.pan * 100)}` : `R${Math.round(track.pan * 100)}`}
             </span>
@@ -957,7 +1015,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
 
         <button
           className="hud-btn hud-btn--ghost"
-          style={{ width: '100%', minHeight: 46, fontSize: 10, color: 'var(--hud-red)', borderColor: 'rgba(255,60,60,0.5)' }}
+          style={{ width: '100%', minHeight: 46, fontSize: 12, color: 'var(--hud-red)', borderColor: 'rgba(255,60,60,0.5)' }}
           onClick={() => {
             if (confirm(`Delete track "${track.name}"?`)) {
               removeTrack(track.id);
@@ -1154,7 +1212,7 @@ function AutomationOverlayHeader({
     >
       <span
         className="hud-readout--dim hud-readout"
-        style={{ fontSize: 9, letterSpacing: 1, flex: 1, minWidth: 0 }}
+        style={{ fontSize: 12, letterSpacing: 1, flex: 1, minWidth: 0 }}
       >
         ▸ {AUTOMATION_PARAM_META[param].label}
       </span>
@@ -1167,7 +1225,7 @@ function AutomationOverlayHeader({
             setView('automation');
           }}
           title="Open AUTOMATION tab for this track"
-          style={{ minWidth: 0, padding: '2px 4px', fontSize: 9 }}
+          style={{ minWidth: 0, padding: '2px 4px', fontSize: 12 }}
         >
           ⇲
         </button>
@@ -1487,7 +1545,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
           position: 'absolute',
           top: 4,
           left: 8,
-          fontSize: 8,
+          fontSize: 11,
           letterSpacing: '0.2em',
           color: '#fff',
           textShadow: '0 0 4px #000',
@@ -1507,7 +1565,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         }}
         onPointerDown={(e) => e.stopPropagation()}
         title="Delete clip"
-        style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '1px 4px', fontSize: 9, zIndex: 3, lineHeight: 1 }}
+        style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '1px 4px', fontSize: 12, zIndex: 3, lineHeight: 1 }}
       >
         ✕
       </button>
@@ -1599,7 +1657,7 @@ function AudioWaveform({ sampleId, width }: { sampleId: string; width: number })
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 8,
+          fontSize: 11,
         }}
       >
         SAMPLE NOT LOADED
@@ -1767,7 +1825,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         onChange={(e) => updateAudioClip(found.id, { gain: parseFloat(e.target.value) })}
         style={{ width: 100 }}
       />
-      <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+      <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
         ×{(warp ? projectBpm / src : 1).toFixed(2)}
       </span>
     </div>

@@ -61,7 +61,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
       }}
     >
       <div style={{ width: '100%', height: 4, background: track.color, opacity: 0.7 }} />
-      <div className="hud-label" style={{ fontSize: 8, textAlign: 'center' }}>
+      <div className="hud-label" style={{ fontSize: 11, textAlign: 'center' }}>
         {track.name}
       </div>
       <div style={{ display: 'flex', gap: 4 }}>
@@ -91,7 +91,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
           }}
-          style={{ fontSize: 9, padding: '2px 4px' }}
+          style={{ fontSize: 12, padding: '2px 4px' }}
         >
           M
         </button>
@@ -101,7 +101,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
           }}
-          style={{ fontSize: 9, padding: '2px 4px' }}
+          style={{ fontSize: 12, padding: '2px 4px' }}
         >
           S
         </button>
@@ -120,7 +120,7 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
         />
         <LiveMeter meterKey={track.id} height={140} />
       </div>
-      <div className="display" style={{ fontSize: 10, width: '100%', justifyContent: 'center' }}>
+      <div className="display" style={{ fontSize: 12, width: '100%', justifyContent: 'center' }}>
         {track.volume.toFixed(1)} dB
       </div>
     </div>
@@ -151,8 +151,8 @@ const MasterStrip = memo(function MasterStrip({
         contain: 'layout style',
       }}
     >
-      <div className="hud-label" style={{ fontSize: 9 }}>MASTER // OUT</div>
-      <div className="hud-readout" style={{ fontSize: 9 }}>LIMITER -1.0 dB</div>
+      <div className="hud-label" style={{ fontSize: 12 }}>Master</div>
+      <div className="hud-readout" style={{ fontSize: 12 }}>Limiter −1.0 dB</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 160 }}>
         <input
           type="range"
@@ -169,7 +169,7 @@ const MasterStrip = memo(function MasterStrip({
       <div className="display display--big" style={{ width: '100%', justifyContent: 'center' }}>
         {volume.toFixed(1)}
       </div>
-      <div className="hud-readout--green hud-readout" style={{ fontSize: 9 }}>● ACTIVE</div>
+      <div className="hud-readout--green hud-readout" style={{ fontSize: 12 }}>● Active</div>
     </div>
   );
 });

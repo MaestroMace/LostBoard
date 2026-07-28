@@ -146,11 +146,11 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          <span className="hud-label" style={{ fontSize: 12 }}>
-            TRIAD HELP // KEYBOARD &amp; GESTURE REFERENCE
+          <span className="hud-label" style={{ fontSize: 14 }}>
+            Help
           </span>
           <div style={{ flex: 1 }} />
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             ESC or ? to close
           </span>
           <button
@@ -178,10 +178,10 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
                 padding: '8px 10px',
               }}
             >
-              <div className="hud-label" style={{ fontSize: 10, marginBottom: 6 }}>
+              <div className="hud-label" style={{ fontSize: 12, marginBottom: 6 }}>
                 {g.title}
               </div>
-              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                 <tbody>
                   {g.items.map(([key, desc]) => (
                     <tr key={key}>

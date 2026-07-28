@@ -91,7 +91,7 @@ export function StepSequencer() {
         className="hex-grid-bg"
       >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span className="hud-label">STEP SEQUENCER // TRIAD VEGA</span>
+        <span className="hud-label">Drum Sequencer</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {drumTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -158,7 +158,7 @@ export function StepSequencer() {
           >
             <div />
             {Array.from({ length }).map((_, i) => (
-              <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 8, opacity: 0.6 }}>
+              <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 11, opacity: 0.6 }}>
                 {i + 1}
               </div>
             ))}
@@ -339,7 +339,7 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
       <button
         onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
         className="hud-btn hud-btn--icon"
-        style={{ fontSize: 9, padding: '3px 4px', width: '100%' }}
+        style={{ fontSize: 12, padding: '3px 4px', width: '100%' }}
         title={
           sampleId
             ? 'Custom sample assigned — click to preview · drop an audio file to replace'
@@ -354,7 +354,7 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         value={sampleId}
         onChange={(e) => setPadSample(trackId, pad, e.target.value || null)}
         title="Swap this pad's voice for a sample"
-        style={{ fontSize: 8, padding: '1px 2px', width: '100%' }}
+        style={{ fontSize: 11, padding: '1px 2px', width: '100%' }}
         disabled={samples.length === 0}
       >
         <option value="">SYNTH</option>
@@ -488,7 +488,7 @@ const StepCell = memo(function StepCell({
             position: 'absolute',
             top: 2,
             right: 3,
-            fontSize: 8,
+            fontSize: 11,
             lineHeight: 1,
             color: '#fff',
             textShadow: '0 0 3px #000',

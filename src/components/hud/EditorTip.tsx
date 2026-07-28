@@ -17,7 +17,7 @@ export const EditorTip = memo(function EditorTip({ children }: { children: React
       className="hud-readout--dim hud-readout"
       style={{
         padding: '3px 10px',
-        fontSize: 9,
+        fontSize: 12,
         borderTop: '1px solid rgba(255,106,0,0.25)',
         background: 'rgba(0,0,0,0.5)',
         whiteSpace: 'nowrap',

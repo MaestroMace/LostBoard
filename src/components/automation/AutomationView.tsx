@@ -99,7 +99,7 @@ export function AutomationView() {
 
       {lanes.length === 0 ? (
         <HexFrame title="NO AUTOMATION">
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
             No automation lanes on this track yet. Use + ADD LANE above to start automating volume,
             pan, filter cutoff, or a send.
           </p>
@@ -285,7 +285,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
     <HexFrame title={`LANE // ${meta.label}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {meta.min.toFixed(meta.step >= 1 ? 0 : 2)}{meta.unit} … {meta.max.toFixed(meta.step >= 1 ? 0 : 2)}{meta.unit}
           </span>
           <div style={{ flex: 1 }} />
@@ -356,7 +356,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 180, overflow: 'auto' }}>
           {sorted.length === 0 && (
-            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 10 }}>
+            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
               Click anywhere on the lane above to drop a breakpoint.
             </p>
           )}
@@ -373,7 +373,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
                 alignItems: 'center',
               }}
             >
-              <span className="hud-value" style={{ fontSize: 10 }}>PT-{String(i + 1).padStart(2, '0')}</span>
+              <span className="hud-value" style={{ fontSize: 12 }}>PT-{String(i + 1).padStart(2, '0')}</span>
               <input
                 className="display"
                 type="number"

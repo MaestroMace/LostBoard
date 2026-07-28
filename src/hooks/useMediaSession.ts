@@ -71,8 +71,8 @@ export function useMediaSession() {
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: projectName || 'LOSTBOARD',
-        artist: 'LOSTBOARD // T.R.I.A.D.',
-        album: 'TRIAD SYSTEM',
+        artist: 'LostBoard',
+        album: 'LostBoard',
       });
     } catch {
       // some browsers throw if MediaMetadata isn't constructable

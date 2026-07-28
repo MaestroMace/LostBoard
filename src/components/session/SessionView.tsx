@@ -145,7 +145,7 @@ const SceneHeader = memo(function SceneHeader({
           border: 'none',
           textAlign: 'center',
           width: '100%',
-          fontSize: 10,
+          fontSize: 12,
         }}
       />
       <div style={{ display: 'flex', gap: 3 }}>
@@ -153,7 +153,7 @@ const SceneHeader = memo(function SceneHeader({
           className="hud-btn hud-btn--green hud-btn--icon"
           onClick={onLaunch}
           title={`Launch ${name}`}
-          style={{ padding: '2px 6px', fontSize: 12 }}
+          style={{ padding: '2px 6px', fontSize: 14 }}
         >
           ▶
         </button>
@@ -161,7 +161,7 @@ const SceneHeader = memo(function SceneHeader({
           className="hud-btn hud-btn--icon"
           onClick={onRemove}
           title="Remove scene"
-          style={{ padding: '2px 6px', fontSize: 10 }}
+          style={{ padding: '2px 6px', fontSize: 12 }}
         >
           ✕
         </button>
@@ -201,7 +201,7 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
           style={{
             flex: 1,
             minWidth: 0,
-            fontSize: 10,
+            fontSize: 12,
             color: '#fff',
             letterSpacing: '0.1em',
             whiteSpace: 'nowrap',
@@ -216,7 +216,7 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
           className="hud-btn hud-btn--icon"
           onClick={() => launchSessionClip(track.id, null)}
           title="Stop this track's session clip"
-          style={{ padding: '1px 6px', fontSize: 9, flex: '0 0 auto' }}
+          style={{ padding: '1px 6px', fontSize: 12, flex: '0 0 auto' }}
           disabled={!playingClipId}
         >
           {isMobile ? '■' : '■ STOP'}
@@ -281,7 +281,7 @@ const Slot = memo(function Slot({
     >
       <span
         style={{
-          fontSize: 10,
+          fontSize: 12,
           color: assigned ? '#fff' : 'rgba(255,106,0,0.5)',
           letterSpacing: '0.1em',
           flex: 1,
@@ -324,7 +324,7 @@ const ClipPicker = memo(function ClipPicker({
       className="display"
       title="Assign clip"
       style={{
-        fontSize: 9,
+        fontSize: 12,
         background: 'transparent',
         border: 'none',
         color: 'var(--hud-orange-bright)',

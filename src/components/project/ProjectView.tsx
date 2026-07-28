@@ -196,7 +196,7 @@ export function ProjectView() {
           rows={10}
           value={json || exportProject()}
           onChange={(e) => setJson(e.target.value)}
-          style={{ width: '100%', minHeight: 220, fontFamily: 'var(--font-data)', fontSize: 11 }}
+          style={{ width: '100%', minHeight: 220, fontFamily: 'var(--font-data)', fontSize: 13 }}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button
@@ -216,7 +216,7 @@ export function ProjectView() {
       <InstallBanner />
 
       <HexFrame title="TAILSCALE // iOS NOTE" variant="green">
-        <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6 }}>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
           The dev server binds to <span className="hud-value">0.0.0.0:5273</span>. From your iPhone connected to the
           same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5273</span> (or the
           tailnet IP). For a more app-like feel, use Safari → Share → Add to Home Screen. The manifest registers a
@@ -285,7 +285,7 @@ function InstallBanner() {
         >
           ⬇ INSTALL TO HOME
         </button>
-        <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+        <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
           Run LOSTBOARD as a standalone app, with safe-area insets honored on
           phone screens.
         </span>
@@ -297,7 +297,7 @@ function InstallBanner() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span className="hud-label" style={{ fontSize: 9 }}>{label}</span>
+      <span className="hud-label" style={{ fontSize: 12 }}>{label}</span>
       {children}
     </div>
   );
@@ -392,12 +392,12 @@ function SlotLibrary() {
           >
             ⌫ GC SAMPLES
           </button>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {slots.length} slot{slots.length === 1 ? '' : 's'} · stored in browser IndexedDB
           </span>
         </div>
         {slots.length === 0 ? (
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
             No saved slots yet. Save the current project to create one.
           </p>
         ) : (
@@ -415,13 +415,13 @@ function SlotLibrary() {
                   flexWrap: 'wrap',
                 }}
               >
-                <span className="hud-value" style={{ minWidth: 160, fontSize: 11 }}>
+                <span className="hud-value" style={{ minWidth: 160, fontSize: 13 }}>
                   {slot.name}
                 </span>
-                <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+                <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
                   {new Date(slot.savedAt).toLocaleString()}
                 </span>
-                <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+                <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
                   {slot.project.tracks.length}t · {slot.project.bpm.toFixed(0)} bpm
                 </span>
                 <div style={{ flex: 1 }} />
@@ -493,7 +493,7 @@ function MidiSyncPanel() {
           >
             ⧖ CLOCK OUT {midiClockOut ? 'ON' : 'OFF'}
           </button>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {!midi.supported
               ? 'Web MIDI unavailable in this browser.'
               : midiClockOut
@@ -514,7 +514,7 @@ function MidiSyncPanel() {
           >
             ⧗ CLOCK IN {midiClockIn ? 'ON' : 'OFF'}
           </button>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {midiClockIn
               ? 'Transport follows an incoming external clock — it owns the tempo.'
               : 'Lock the transport to an external MIDI clock.'}
@@ -586,13 +586,13 @@ function TempoCurve({
       </svg>
       <span
         className="hud-readout--dim hud-readout"
-        style={{ position: 'absolute', top: 2, left: 4, fontSize: 8 }}
+        style={{ position: 'absolute', top: 2, left: 4, fontSize: 11 }}
       >
         {hi.toFixed(0)} BPM
       </span>
       <span
         className="hud-readout--dim hud-readout"
-        style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 8 }}
+        style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 11 }}
       >
         {lo.toFixed(0)} BPM
       </span>
@@ -632,7 +632,7 @@ function TempoMapEditor() {
               ✕ CLEAR MAP
             </button>
           )}
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {events.length === 0
               ? `flat — using ${project.bpm.toFixed(1)} BPM throughout`
               : `${events.length} event${events.length === 1 ? '' : 's'}`}
@@ -647,7 +647,7 @@ function TempoMapEditor() {
                 gridTemplateColumns: '70px 1fr 1fr 100px 60px',
                 gap: 6,
                 padding: '4px 8px',
-                fontSize: 9,
+                fontSize: 12,
               }}
               className="hud-readout--dim hud-readout"
             >
@@ -670,7 +670,7 @@ function TempoMapEditor() {
                   alignItems: 'center',
                 }}
               >
-                <span className="hud-value" style={{ fontSize: 11 }}>EV-{String(i + 1).padStart(2, '0')}</span>
+                <span className="hud-value" style={{ fontSize: 13 }}>EV-{String(i + 1).padStart(2, '0')}</span>
                 <input
                   className="display"
                   type="number"
@@ -712,7 +712,7 @@ function TempoMapEditor() {
             ))}
           </div>
         )}
-        <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
+        <p className="hud-readout--dim hud-readout" style={{ fontSize: 12, margin: 0 }}>
           Events fire on their beat. An event at beat 0 overrides the project
           BPM as the starting tempo. Affects offline bounce duration too.
         </p>

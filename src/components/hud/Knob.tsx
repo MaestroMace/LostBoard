@@ -100,8 +100,8 @@ export function Knob({
           style={{ transform: `translateX(-50%) rotate(${angle}deg)` }}
         />
       </div>
-      {label && <div className="hud-label" style={{ fontSize: 8 }}>{label}</div>}
-      <div className="hud-value" style={{ fontSize: 9 }}>{shown}</div>
+      {label && <div className="hud-label" style={{ fontSize: 11 }}>{label}</div>}
+      <div className="hud-value" style={{ fontSize: 12 }}>{shown}</div>
     </div>
   );
 }

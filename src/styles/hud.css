@@ -71,7 +71,7 @@
   left: 12px;
   font-family: var(--font-display);
   font-size: 9px;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.06em;
   padding: 0 8px;
   background: var(--hud-ink);
   color: var(--hud-orange);
@@ -97,10 +97,9 @@
 /* HUD ticker / readout */
 .hud-readout {
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--hud-orange-bright);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .hud-readout--green { color: var(--hud-green); }
@@ -111,16 +110,16 @@
   font-family: var(--font-display);
   /* 9 -> 10px and tighter tracking: wide letter-spacing on tiny uppercase
      text was a big part of why labels read as decoration, not words */
-  font-size: 10px;
-  letter-spacing: 0.22em;
+  font-size: 12px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: rgba(255, 106, 0, 0.9);
+  color: rgba(255, 170, 90, 0.95);
 }
 
 .hud-value {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.02em;
   color: var(--hud-orange-bright);
 }
 
@@ -136,8 +135,8 @@
 .hud-btn {
   position: relative;
   font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.25em;
+  font-size: 12px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--hud-orange);
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.1), rgba(255, 106, 0, 0.02));
@@ -349,6 +348,20 @@
   min-width: 0;
 }
 
+/* Sub-navigation inside Edit: quieter than the primary row so the hierarchy
+   reads at a glance rather than looking like ten equal choices. */
+.hud-tabs--sub {
+  background: rgba(255, 106, 0, 0.02);
+  border-bottom: 1px solid rgba(255, 106, 0, 0.22);
+}
+.hud-tabs--sub .hud-tab {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.hud-tabs--sub .hud-tab.is-active {
+  opacity: 1;
+}
+
 /* The tabs themselves live in their own strip so they can scroll independently
    while the help button stays pinned and reachable. */
 .hud-tabs__strip {
@@ -361,8 +374,8 @@
 
 .hud-tab {
   font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 6px 12px;
   color: rgba(255, 106, 0, 0.6);
@@ -414,7 +427,7 @@
   border: 1px solid rgba(255, 106, 0, 0.5);
   padding: 4px 8px;
   font-family: var(--font-display);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.04em;
   color: var(--hud-orange-bright);
   text-shadow: 0 0 6px rgba(255, 106, 0, 0.5);
   display: inline-flex;
@@ -497,7 +510,7 @@ button, .hud-btn { touch-action: manipulation; }
  * Matches useLayoutMode.ts PHONE_QUERY — keep the two in sync.               */
 @media (max-width: 720px), (max-height: 560px) {
   html {
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .hud-tabs {
@@ -522,7 +535,7 @@ button, .hud-btn { touch-action: manipulation; }
 
   .hud-btn {
     padding: 7px 9px;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.02em;
   }
   .hud-btn--icon {
     padding: 6px 7px;
@@ -532,7 +545,7 @@ button, .hud-btn { touch-action: manipulation; }
   }
   .hex-frame__title {
     font-size: 8px;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.04em;
   }
   .display--big {
     font-size: 18px;
@@ -564,7 +577,7 @@ button, .hud-btn { touch-action: manipulation; }
  * of chrome is bought out of the timeline. Compress aggressively.            */
 @media (max-height: 560px) {
   html {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   /* Padding and type shrink on a short viewport, but NOT the tap area — the

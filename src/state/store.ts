@@ -96,7 +96,7 @@ function defaultMelody(lengthBeats: number): Note[] {
 function makeProject(): Project {
   const drumTrack: Track = {
     id: newId('trk'),
-    name: 'DRUMS // VEGA',
+    name: 'Drums',
     kind: 'drum',
     color: HUD_COLORS[0],
     volume: -6,
@@ -109,7 +109,7 @@ function makeProject(): Project {
   };
   const bassTrack: Track = {
     id: newId('trk'),
-    name: 'BASS // ALTAIR',
+    name: 'Bass',
     kind: 'synth',
     synthEngine: 'subtractive',
     color: HUD_COLORS[1],
@@ -124,7 +124,7 @@ function makeProject(): Project {
   };
   const leadTrack: Track = {
     id: newId('trk'),
-    name: 'LEAD // DENEB',
+    name: 'Lead',
     kind: 'synth',
     synthEngine: 'subtractive',
     color: HUD_COLORS[2],
@@ -146,7 +146,7 @@ function makeProject(): Project {
     length: 4,
     pattern: defaultDrumPattern(),
     color: drumTrack.color,
-    name: 'PTN-A',
+    name: 'Beat',
   });
 
   drumTrack.clips.push({
@@ -157,7 +157,7 @@ function makeProject(): Project {
     length: 4,
     pattern: defaultDrumPattern(),
     color: drumTrack.color,
-    name: 'PTN-A',
+    name: 'Beat',
   });
 
   bassTrack.clips.push({
@@ -168,7 +168,7 @@ function makeProject(): Project {
     length: 8,
     notes: defaultMelody(8).map((n) => ({ ...n, pitch: n.pitch - 12 })),
     color: bassTrack.color,
-    name: 'BASS-1',
+    name: 'Bass 1',
   });
 
   leadTrack.clips.push({
@@ -179,12 +179,12 @@ function makeProject(): Project {
     length: 4,
     notes: defaultMelody(4),
     color: leadTrack.color,
-    name: 'LEAD-1',
+    name: 'Lead 1',
   });
 
   return {
     id: newId('proj'),
-    name: 'OPERATION DOWNBEAT',
+    name: 'Untitled Song',
     bpm: 124,
     numerator: 4,
     denominator: 4,

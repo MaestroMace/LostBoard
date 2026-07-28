@@ -99,7 +99,7 @@ export function FxPanel() {
             onClick={() => patch({ compOn: !fx.compOn })}
             style={{ width: '100%', marginBottom: 8 }}
           >
-            {fx.compOn ? 'ENGAGED' : 'OFF'}
+            {fx.compOn ? 'ON' : 'OFF'}
           </button>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob
@@ -130,7 +130,7 @@ export function FxPanel() {
             onClick={() => patch({ chorusOn: !fx.chorusOn })}
             style={{ width: '100%', marginBottom: 8 }}
           >
-            {fx.chorusOn ? 'ENGAGED' : 'OFF'}
+            {fx.chorusOn ? 'ON' : 'OFF'}
           </button>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob
@@ -152,7 +152,7 @@ export function FxPanel() {
             onClick={() => patch({ bitcrushOn: !fx.bitcrushOn })}
             style={{ width: '100%', marginBottom: 8 }}
           >
-            {fx.bitcrushOn ? 'ENGAGED' : 'OFF'}
+            {fx.bitcrushOn ? 'ON' : 'OFF'}
           </button>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob
@@ -171,7 +171,7 @@ export function FxPanel() {
       </div>
 
       <HexFrame title="SIGNAL PATH" variant="green">
-        <div className="hud-readout" style={{ fontSize: 10, lineHeight: 1.8 }}>
+        <div className="hud-readout" style={{ fontSize: 12, lineHeight: 1.8 }}>
           INSTRUMENT &rarr; EQ-3 &rarr; COMP &rarr; CHORUS &rarr; CRUSH &rarr; SIDECHAIN &rarr; CHANNEL &rarr; MASTER
           BUS
           <br />
@@ -209,12 +209,12 @@ function SidechainPanel({
   return (
     <HexFrame title="SIDECHAIN" variant={active ? 'orange' : 'soft'}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        <span className="hud-readout" style={{ fontSize: 9 }}>SOURCE</span>
+        <span className="hud-readout" style={{ fontSize: 12 }}>SOURCE</span>
         <select
           className="display"
           value={fx.sidechainSourceId ?? ''}
           onChange={(e) => onPatch({ sidechainSourceId: e.target.value || undefined })}
-          style={{ flex: 1, fontSize: 10 }}
+          style={{ flex: 1, fontSize: 12 }}
           title="Track whose envelope ducks this one"
         >
           <option value="">OFF</option>

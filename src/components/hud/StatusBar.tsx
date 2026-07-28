@@ -14,11 +14,10 @@ import { audioEngine } from '../../audio/engine';
  * for flavor.
  */
 const FLAVOR = [
-  'TIP — DOUBLE-CLICK A TIMELINE LANE TO ADD A CLIP',
-  'TIP — PRESS ? FOR THE FULL KEYBOARD / GESTURE LIST',
-  'TIP — ARM A SYNTH TRACK (●) TO RECORD MIDI',
-  'TIP — DOUBLE-CLICK A CLIP TO OPEN ITS EDITOR',
-  'HEX FIELD STABLE — ALL DECKS READY',
+  'Tip: drag on an empty lane to draw a clip',
+  'Tip: tap a track name to open its settings',
+  'Tip: arm a track to record MIDI into it',
+  'Tip: double-tap a clip to edit its notes',
 ];
 
 export function StatusBar() {
@@ -58,18 +57,18 @@ export function StatusBar() {
           flex: '0 0 auto',
         }}
       >
-        <TriadMark size={28} />
+        <AppMark size={28} />
         <span
           className="hud-value"
-          style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          style={{ fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
         >
           {name}
         </span>
-        <Indicator label="PL" on={playing} color="green" />
+        <Indicator label="Play" on={playing} color="green" />
         <Indicator label="REC" on={recording} color="red" />
         {midi.connected && <Indicator label="MIDI" on color="green" />}
         <PositionReadout numerator={numerator} />
-        <div className="display" style={{ fontSize: 10 }}>
+        <div className="display" style={{ fontSize: 12 }}>
           <span style={{ color: 'var(--hud-orange-bright)' }}>{bpm.toFixed(0)}</span>
         </div>
       </div>
@@ -91,14 +90,14 @@ export function StatusBar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flexShrink: 1 }}>
-        <TriadMark />
+        <AppMark />
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, minWidth: 0 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>T.R.I.A.D. SYSTEM</span>
+          
           {/* one line + ellipsis — long project names used to wrap to 3 lines
               and shove the bar taller at medium widths */}
           <span
             className="hud-value"
-            style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}
+            style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}
             title={`LOSTBOARD // ${name}`}
           >
             LOSTBOARD // {name}
@@ -111,12 +110,12 @@ export function StatusBar() {
         <Indicator label="REC" on={recording} color="red" />
         <MidiIndicator midi={midi} />
         <PositionReadout numerator={numerator} />
-        <div className="display" style={{ fontSize: 11 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>BPM</span>
+        <div className="display" style={{ fontSize: 13 }}>
+          <span className="hud-label" style={{ fontSize: 11 }}>BPM</span>
           <span style={{ color: 'var(--hud-orange-bright)' }}>{bpm.toFixed(1)}</span>
         </div>
-        <div className="display" style={{ fontSize: 11 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>SIG</span>
+        <div className="display" style={{ fontSize: 13 }}>
+          <span className="hud-label" style={{ fontSize: 11 }}>SIG</span>
           <span>
             {numerator}/{denominator}
           </span>
@@ -170,7 +169,7 @@ export function Indicator({ label, on, color }: { label: string; on: boolean; co
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       <span className={`led ${color} ${on ? 'on' : ''}`} />
-      <span className="hud-label" style={{ fontSize: 7 }}>{label}</span>
+      <span className="hud-label" style={{ fontSize: 11 }}>{label}</span>
     </div>
   );
 }
@@ -183,14 +182,14 @@ function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolea
       title={midi.connected ? `MIDI: ${midi.device}` : 'No MIDI device connected'}
     >
       <span className={`led ${midi.connected ? 'green' : 'amber'} ${midi.connected ? 'on' : ''}`} />
-      <span className="hud-label" style={{ fontSize: 7 }}>
+      <span className="hud-label" style={{ fontSize: 11 }}>
         {midi.connected ? (midi.device.slice(0, 10).toUpperCase() || 'MIDI') : 'MIDI'}
       </span>
     </div>
   );
 }
 
-export function TriadMark({ size = 28 }: { size?: number }) {
+export function AppMark({ size = 28 }: { size?: number }) {
   return (
     <div style={{ width: size, height: size, position: 'relative', flex: '0 0 auto' }}>
       <svg viewBox="0 0 100 100" width={size} height={size}>
@@ -227,7 +226,7 @@ function Ticker() {
   const midiClockIn = useStore((s) => s.midiClockIn);
   const bpm = useStore((s) => s.project.bpm);
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
-  const [msg, setMsg] = useState('TRIAD SYSTEM ONLINE');
+  const [msg, setMsg] = useState('Ready');
 
   useEffect(() => {
     const sample = () => {
@@ -239,7 +238,7 @@ function Ticker() {
       } else {
         lines.push('ENGINE WARMING UP');
       }
-      lines.push(`TRANSPORT ${playing ? 'ROLLING' : 'HALTED'} @ ${bpm.toFixed(1)} BPM`);
+      lines.push(`${playing ? 'Playing' : 'Stopped'} at ${bpm.toFixed(1)} BPM`);
       lines.push(`MODE ${sessionMode ? 'SESSION' : 'ARRANGEMENT'}`);
       lines.push(`TRACKS ${String(trackCount).padStart(2, '0')} / CLIPS ${String(clipCount).padStart(3, '0')}`);
       if (automationLanes > 0) lines.push(`AUTO LANES ${automationLanes}`);

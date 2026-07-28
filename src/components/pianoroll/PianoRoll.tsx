@@ -261,7 +261,7 @@ export function PianoRoll() {
           borderBottom: '1px solid rgba(255,106,0,0.4)',
         }}
       >
-        <span className="hud-label">PIANO ROLL // TRIAD DENEB</span>
+        <span className="hud-label">Piano Roll</span>
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {synthTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -513,7 +513,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
-        style={{ padding: '2px 6px', fontSize: 11 }}
+        style={{ padding: '2px 6px', fontSize: 13 }}
       >
         −
       </button>
@@ -521,7 +521,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Reset zoom to 1×"
         onClick={() => setZoom(() => 1)}
-        style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
+        style={{ minWidth: 38, padding: '2px 4px', fontSize: 12 }}
       >
         {zoom.toFixed(2)}×
       </button>
@@ -529,7 +529,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
-        style={{ padding: '2px 6px', fontSize: 11 }}
+        style={{ padding: '2px 6px', fontSize: 13 }}
       >
         ＋
       </button>
@@ -573,7 +573,7 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
               alignItems: 'center',
               justifyContent: 'flex-end',
               paddingRight: 5,
-              fontSize: 9,
+              fontSize: 12,
               fontWeight: isC ? 700 : 400,
               // label every white key, not just C — far easier to orient
               color: isC ? 'var(--hud-amber)' : isBlack ? 'transparent' : 'rgba(255,179,71,0.8)',
@@ -962,7 +962,7 @@ const VelocityLane = memo(function VelocityLane({
           zIndex: 6,
         }}
       >
-        <span className="hud-label" style={{ fontSize: 8 }}>VEL</span>
+        <span className="hud-label" style={{ fontSize: 11 }}>VEL</span>
       </div>
       <div
         data-velocity-lane

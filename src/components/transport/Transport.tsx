@@ -5,7 +5,7 @@ import { audioEngine } from '../../audio/engine';
 import { midiInput } from '../../audio/midiInput';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
 import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
-import { Indicator, PositionReadout, TriadMark } from '../hud/StatusBar';
+import { Indicator, PositionReadout, AppMark } from '../hud/StatusBar';
 import { putSample } from '../../state/sampleDB';
 
 export function Transport() {
@@ -112,7 +112,7 @@ export function Transport() {
         putSample(result.id, result.blob).catch((e) => console.warn('persist failed', e));
         const trackId = recTrackId.current;
         if (trackId) {
-          addAudioClip(trackId, recStartBeat.current, result.id, result.duration, 'MIC TAKE');
+          addAudioClip(trackId, recStartBeat.current, result.id, result.duration, 'Mic take');
         }
       }
     } else {
@@ -165,7 +165,10 @@ export function Transport() {
   // Landscape drops the StatusBar entirely and carries its readouts here, so a
   // 411px-tall viewport spends one row on chrome instead of two.
   const mergedHeader = useLayoutMode() === 'phone-landscape';
-  const lbl = (full: string) => (isMobile ? '' : ` ${full}`);
+  // Portrait has room for the four controls you reach for constantly; the
+  // rest move into ⋯ rather than shrinking back into unlabelled symbols.
+  const compactStrip = useLayoutMode() === 'phone-portrait';
+  const lbl = (full: string) => ` ${full}`;
 
   return (
     <div
@@ -180,7 +183,7 @@ export function Transport() {
         contain: 'layout style',
       }}
     >
-      {mergedHeader && <TriadMark size={22} />}
+      {mergedHeader && <AppMark size={22} />}
       {/* Scrollable so this strip can never clip its own controls — it used to
           push UNDO / REDO / SAVE past the right edge of a phone with no way to
           reach them. On phones the rarely-used half moves into the ⋯ menu. */}
@@ -211,6 +214,7 @@ export function Transport() {
         >
           ●{lbl(micRecording ? 'STOP REC' : 'MIC REC')}
         </button>
+        {!compactStrip && (
         <button
           className={`hud-btn hud-btn--rec touch-target ${playing ? 'is-active' : ''}`}
           onClick={punchRecord}
@@ -222,6 +226,7 @@ export function Transport() {
         >
           ⏺{lbl('PUNCH')}
         </button>
+        )}
         {!isMobile && (
           <select
             className="display touch-target"
@@ -247,22 +252,26 @@ export function Transport() {
             ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
           </button>
         )}
-        <button
-          className={`hud-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
-          onClick={() => setLoop(!loopEnabled)}
-          aria-pressed={loopEnabled}
-          title="Loop"
-        >
-          ↻{lbl('LOOP')}
-        </button>
-        <button
-          className={`hud-btn touch-target ${metronome ? 'is-active' : ''}`}
-          onClick={() => setMetronome(!metronome)}
-          aria-pressed={metronome}
-          title="Metronome"
-        >
-          ⛬{lbl('CLICK')}
-        </button>
+        {!compactStrip && (
+          <>
+            <button
+              className={`hud-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
+              onClick={() => setLoop(!loopEnabled)}
+              aria-pressed={loopEnabled}
+              title="Loop"
+            >
+              ↻{lbl('LOOP')}
+            </button>
+            <button
+              className={`hud-btn touch-target ${metronome ? 'is-active' : ''}`}
+              onClick={() => setMetronome(!metronome)}
+              aria-pressed={metronome}
+              title="Metronome"
+            >
+              ⛬{lbl('CLICK')}
+            </button>
+          </>
+        )}
         {!isMobile && (
           <>
             <button
@@ -296,6 +305,12 @@ export function Transport() {
 
       {isMobile && (
         <TransportOverflow
+          compactStrip={compactStrip}
+          loopEnabled={loopEnabled}
+          setLoop={setLoop}
+          metronome={metronome}
+          setMetronome={setMetronome}
+          punchRecord={punchRecord}
           bpm={bpm}
           setBpm={setBpm}
           bouncing={bouncing}
@@ -312,7 +327,7 @@ export function Transport() {
       {mergedHeader && (
         <>
           <div style={{ flex: 1, minWidth: 8 }} />
-          <Indicator label="PL" on={playing} color="green" />
+          <Indicator label="Play" on={playing} color="green" />
           <Indicator label="REC" on={micRecording || bouncing} color="red" />
           <PositionReadout numerator={tparams.numerator} />
         </>
@@ -374,6 +389,12 @@ export function Transport() {
  * and all three used to sit off the right edge of the screen entirely.
  */
 function TransportOverflow({
+  compactStrip,
+  loopEnabled,
+  setLoop,
+  metronome,
+  setMetronome,
+  punchRecord,
   bpm,
   setBpm,
   bouncing,
@@ -385,6 +406,12 @@ function TransportOverflow({
   canUndo,
   canRedo,
 }: {
+  compactStrip: boolean;
+  loopEnabled: boolean;
+  setLoop: (on: boolean) => void;
+  metronome: boolean;
+  setMetronome: (on: boolean) => void;
+  punchRecord: () => void;
   bpm: number;
   setBpm: (n: number) => void;
   bouncing: boolean;
@@ -454,9 +481,34 @@ function TransportOverflow({
             boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
           }}
         >
+          {compactStrip && (
+            <>
+              <button
+                className={`hud-btn ${loopEnabled ? 'is-active' : ''}`}
+                style={item}
+                onClick={() => { setLoop(!loopEnabled); setOpen(false); }}
+              >
+                ↻ LOOP {loopEnabled ? 'ON' : 'OFF'}
+              </button>
+              <button
+                className={`hud-btn ${metronome ? 'is-active' : ''}`}
+                style={item}
+                onClick={() => { setMetronome(!metronome); setOpen(false); }}
+              >
+                ⛬ METRONOME {metronome ? 'ON' : 'OFF'}
+              </button>
+              <button
+                className="hud-btn hud-btn--rec"
+                style={item}
+                onClick={() => { punchRecord(); setOpen(false); }}
+              >
+                ⏺ PUNCH RECORD
+              </button>
+            </>
+          )}
           <div style={{ ...item, display: 'block' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span className="hud-label" style={{ fontSize: 9 }}>TEMPO</span>
+              <span className="hud-label" style={{ fontSize: 12 }}>TEMPO</span>
               <span className="hud-readout">{bpm.toFixed(1)} BPM</span>
             </div>
             <input
@@ -514,7 +566,7 @@ function TransportOverflow({
             ⭳ {bouncing ? 'STOP BOUNCE' : 'BOUNCE TO FILE'}
           </button>
           <label style={{ ...item, borderBottom: 'none' }}>
-            <span className="hud-label" style={{ fontSize: 9, flex: 1 }}>
+            <span className="hud-label" style={{ fontSize: 12, flex: 1 }}>
               COUNT-IN
             </span>
             <select
@@ -552,7 +604,7 @@ const PreRollIndicator = memo(function PreRollIndicator({ numerator }: { numerat
     <div
       className="hud-readout blink"
       style={{
-        fontSize: 10,
+        fontSize: 12,
         padding: '2px 8px',
         color: '#ff5a5a',
         border: '1px solid rgba(255,60,60,0.6)',
@@ -612,7 +664,7 @@ const PositionBar = memo(function PositionBar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 9,
+          fontSize: 12,
         }}
       >
         {positionBeats.toFixed(2)} / {totalBeats}
