@@ -190,8 +190,8 @@ const FooterBar = memo(function FooterBar() {
       }}
     >
       <span className="hud-readout--green hud-readout">● ENGINE OK</span>
-      <span className="hud-readout">TRK {String(trackCount).padStart(2, '0')}</span>
-      <span className="hud-readout">CLP {String(clipCount).padStart(3, '0')}</span>
+      {!isMobile && <span className="hud-readout">TRK {String(trackCount).padStart(2, '0')}</span>}
+      {!isMobile && <span className="hud-readout">CLP {String(clipCount).padStart(3, '0')}</span>}
       <span className="hud-readout" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {playing ? 'ROLLING' : 'HALTED'}
       </span>

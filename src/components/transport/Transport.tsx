@@ -296,6 +296,8 @@ export function Transport() {
 
       {isMobile && (
         <TransportOverflow
+          bpm={bpm}
+          setBpm={setBpm}
           bouncing={bouncing}
           toggleBounce={toggleBounce}
           countInBars={countInBars}
@@ -318,16 +320,20 @@ export function Transport() {
 
       {!isMobile && <div style={{ flex: 1 }} />}
 
-      <button
-        className="hud-btn touch-target"
-        onClick={() => setShowBpmEdit((v) => !v)}
-        style={{ minWidth: isMobile ? 64 : 100 }}
-        title="Tempo"
-      >
-        {isMobile ? bpm.toFixed(0) : `TEMPO ${bpm.toFixed(1)}`}
-      </button>
-      <TapTempoButton compact={isMobile} setBpm={setBpm} />
-      {showBpmEdit && (
+      {/* Redundant on phones — tempo lives in the ⋯ menu with room to drag,
+          and this button was the one element forcing the row to wrap. */}
+      {!isMobile && (
+        <button
+          className="hud-btn touch-target"
+          onClick={() => setShowBpmEdit((v) => !v)}
+          style={{ minWidth: 100 }}
+          title="Tempo"
+        >
+          TEMPO {bpm.toFixed(1)}
+        </button>
+      )}
+      {!isMobile && <TapTempoButton compact={false} setBpm={setBpm} />}
+      {!isMobile && showBpmEdit && (
         <input
           type="number"
           className="display"
@@ -340,21 +346,23 @@ export function Transport() {
         />
       )}
 
-      <input
-        className="hud-slider"
-        type="range"
-        min={60}
-        max={200}
-        step={0.5}
-        value={bpm}
-        onChange={(e) => setBpm(parseFloat(e.target.value))}
-        style={{ width: isMobile ? 100 : 160, flex: isMobile ? 1 : undefined }}
-      />
+      {!isMobile && (
+        <input
+          className="hud-slider"
+          type="range"
+          min={60}
+          max={200}
+          step={0.5}
+          value={bpm}
+          onChange={(e) => setBpm(parseFloat(e.target.value))}
+          style={{ width: 160 }}
+        />
+      )}
 
       <PreRollIndicator numerator={tparams.numerator} />
-      {/* The scrub bar is what tipped this row into wrapping in landscape, and
-          it duplicates the bars:beats readout that now sits beside it. */}
-      {!mergedHeader && <PositionBar />}
+      {/* Duplicates the bars:beats readout and is what tipped the row into
+          wrapping on a phone. */}
+      {!isMobile && <PositionBar />}
     </div>
   );
 }
@@ -366,6 +374,8 @@ export function Transport() {
  * and all three used to sit off the right edge of the screen entirely.
  */
 function TransportOverflow({
+  bpm,
+  setBpm,
   bouncing,
   toggleBounce,
   countInBars,
@@ -375,6 +385,8 @@ function TransportOverflow({
   canUndo,
   canRedo,
 }: {
+  bpm: number;
+  setBpm: (n: number) => void;
   bouncing: boolean;
   toggleBounce: () => void;
   countInBars: number;
@@ -442,6 +454,23 @@ function TransportOverflow({
             boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
           }}
         >
+          <div style={{ ...item, display: 'block' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span className="hud-label" style={{ fontSize: 9 }}>TEMPO</span>
+              <span className="hud-readout">{bpm.toFixed(1)} BPM</span>
+            </div>
+            <input
+              type="range"
+              className="hud-slider"
+              min={40}
+              max={220}
+              step={0.5}
+              value={bpm}
+              aria-label="Tempo"
+              onChange={(e) => setBpm(parseFloat(e.target.value))}
+              style={{ width: '100%', height: 14 }}
+            />
+          </div>
           <button
             className="hud-btn hud-btn--ghost"
             style={{ ...item, opacity: canUndo ? 1 : 0.35 }}

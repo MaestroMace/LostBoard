@@ -83,7 +83,7 @@ export function ArrangeView() {
   const isMobile = mode !== 'desktop';
   // Landscape has 923px to play with, so the header can afford a readable name
   // beside two 44px toggles. Portrait cannot, and takes the narrower cut.
-  const headW = mode === 'phone-landscape' ? 240 : mode === 'phone-portrait' ? 160 : 196;
+  const headW = mode === 'phone-landscape' ? 240 : mode === 'phone-portrait' ? 128 : 196;
   const rowH = isMobile ? ROW_H_TOUCH : ROW_H;
 
   const [zoom, setZoom] = useState(1);
@@ -191,7 +191,7 @@ export function ArrangeView() {
               const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
               return (
                 <div key={t.id}>
-                  <TrackHeader track={t} compact={isMobile} />
+                  <TrackHeader track={t} compact={isMobile} inlineToggles={mode !== 'phone-portrait'} />
                   {lanes.map((lane) => (
                     <AutomationOverlayHeader
                       key={lane.param}
@@ -471,7 +471,15 @@ const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
 });
 
 /** Memoized track header — only re-renders when ITS track object changes. */
-const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track; compact: boolean }) {
+const TrackHeader = memo(function TrackHeader({
+  track,
+  compact,
+  inlineToggles = true,
+}: {
+  track: Track;
+  compact: boolean;
+  inlineToggles?: boolean;
+}) {
   const rowH = useRowHeight();
   const selected = useStore((s) => s.selectedTrackId === track.id);
   const selectTrack = useStore((s) => s.selectTrack);
@@ -555,28 +563,42 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
             </span>
             <span aria-hidden style={{ opacity: 0.55, fontSize: 11, flex: '0 0 auto' }}>›</span>
           </button>
-          <button
-            className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              updateTrack(track.id, { mute: !track.mute });
-            }}
-            title={track.mute ? 'Muted' : 'Mute'}
-            style={{ fontSize: 11 }}
-          >
-            M
-          </button>
-          <button
-            className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              updateTrack(track.id, { solo: !track.solo });
-            }}
-            title={track.solo ? 'Soloed' : 'Solo'}
-            style={{ fontSize: 11 }}
-          >
-            S
-          </button>
+          {inlineToggles && (
+            <>
+              <button
+                className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateTrack(track.id, { mute: !track.mute });
+                }}
+                title={track.mute ? 'Muted' : 'Mute'}
+                style={{ fontSize: 11 }}
+              >
+                M
+              </button>
+              <button
+                className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateTrack(track.id, { solo: !track.solo });
+                }}
+                title={track.solo ? 'Soloed' : 'Solo'}
+                style={{ fontSize: 11 }}
+              >
+                S
+              </button>
+            </>
+          )}
+          {/* Portrait has no width for the toggles; the dots keep their state
+              visible and the sheet is one tap away. */}
+          {!inlineToggles && (track.mute || track.solo) && (
+            <span
+              className="hud-readout"
+              style={{ fontSize: 9, flex: '0 0 auto', color: track.solo ? 'var(--hud-green)' : 'var(--hud-red)' }}
+            >
+              {track.solo ? 'S' : 'M'}
+            </span>
+          )}
         </div>
         {sheetOpen && <TrackSheet track={track} onClose={() => setSheetOpen(false)} />}
       </>
