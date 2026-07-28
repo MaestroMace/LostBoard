@@ -203,6 +203,15 @@
   min-width: 36px;
 }
 
+/* Buttons stacked two rows deep inside a fixed-height track lane. The standard
+   36px floor makes those two rows overflow a 64px lane and overlap each other,
+   so they get a shorter floor; the phone rules below restore a touch-sized
+   target, which the taller touch lane has room for. */
+.hud-btn--tight {
+  min-height: 26px;
+  padding: 3px 6px;
+}
+
 /* Sliders / knobs */
 .hud-slider {
   -webkit-appearance: none;
@@ -317,11 +326,22 @@
 /* Tabs */
 .hud-tabs {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   padding: 4px 8px;
   border-bottom: 1px solid rgba(255, 106, 0, 0.4);
   background: rgba(255, 106, 0, 0.04);
+  min-width: 0;
+}
+
+/* The tabs themselves live in their own strip so they can scroll independently
+   while the help button stays pinned and reachable. */
+.hud-tabs__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .hud-tab {
@@ -423,21 +443,60 @@
 button, .hud-btn { touch-action: manipulation; }
 .touch-target { min-width: 44px; min-height: 44px; }
 
-/* ---------------- MOBILE / PHONE LAYOUT ---------------- */
-@media (max-width: 720px) {
+/* ---------------- SCROLL AFFORDANCE ---------------- *
+ * Any strip that can run wider than its container. Keeping the overflow on a
+ * shared utility means a row can never silently clip content off-screen — the
+ * failure mode that hid UNDO/REDO/SAVE on a phone.                            */
+.hud-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.hud-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.hud-scroll-x > * {
+  flex: 0 0 auto;
+}
+
+/* Fades the right edge so a scrollable strip reads as "there is more". */
+.hud-scroll-fade {
+  position: relative;
+  min-width: 0;
+}
+.hud-scroll-fade::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(2, 2, 2, 0.92));
+}
+
+/* ---------------- PHONE LAYOUT (EITHER ORIENTATION) ---------------- *
+ * Matches useLayoutMode.ts PHONE_QUERY — keep the two in sync.               */
+@media (max-width: 720px), (max-height: 560px) {
   html {
     font-size: 13px;
   }
 
-  /* Tabs become a single swipeable row instead of wrapping */
   .hud-tabs {
+    padding: 4px 6px;
+  }
+  /* Single swipeable row instead of wrapping — every tab stays reachable. */
+  .hud-tabs__strip {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 4px 6px;
+    overscroll-behavior-x: contain;
   }
-  .hud-tabs::-webkit-scrollbar {
+  .hud-tabs__strip::-webkit-scrollbar {
     display: none;
   }
   .hud-tab {
@@ -446,7 +505,6 @@ button, .hud-btn { touch-action: manipulation; }
     font-size: 9px;
   }
 
-  /* Tighter chrome */
   .hud-btn {
     padding: 7px 9px;
     letter-spacing: 0.12em;
@@ -455,6 +513,11 @@ button, .hud-btn { touch-action: manipulation; }
   .hud-btn--icon {
     padding: 6px 7px;
     min-width: 38px;
+  }
+  /* ROW_H_TOUCH gives the lane room for a real touch target here. */
+  .hud-btn--tight {
+    min-height: 34px;
+    padding: 4px 6px;
   }
   .touch-target {
     min-width: 40px;
@@ -486,10 +549,54 @@ button, .hud-btn { touch-action: manipulation; }
     display: none;
   }
 
-  /* Slightly thicker scrollbars so panels can still be grabbed */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
+  }
+}
+
+/* ---------------- SHORT VIEWPORT (PHONE LANDSCAPE) ---------------- *
+ * ~411px of height total, so vertical space is the scarce resource: every row
+ * of chrome is bought out of the timeline. Compress aggressively.            */
+@media (max-height: 560px) {
+  html {
+    font-size: 12px;
+  }
+
+  .hud-btn {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+  .hud-btn--icon {
+    min-width: 32px;
+    padding: 4px 6px;
+  }
+  .touch-target {
+    min-width: 34px;
+    min-height: 32px;
+  }
+  .hud-tab {
+    padding: 5px 9px;
+    font-size: 9px;
+  }
+  .hud-tabs {
+    padding: 2px 6px;
+  }
+  .hex-frame {
+    padding: 5px 7px;
+  }
+  .display--big {
+    font-size: 15px;
+    min-height: 26px;
+  }
+  /* Decorative chrome is the first thing to go when height is scarce. */
+  .scanlines::before,
+  .crt-flicker::after {
+    display: none;
+  }
+  .knob {
+    width: 44px !important;
+    height: 44px !important;
   }
 }
 
@@ -502,5 +609,9 @@ button, .hud-btn { touch-action: manipulation; }
   .hud-slider::-moz-range-thumb {
     width: 22px;
     height: 24px;
+  }
+  /* Keyboard-only hints are noise on a touch device. */
+  .desktop-only {
+    display: none !important;
   }
 }

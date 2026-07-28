@@ -4,7 +4,7 @@ import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
 import { midiInput } from '../../audio/midiInput';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useIsMobile';
+import { useIsMobile } from '../../hooks/useLayoutMode';
 import { putSample } from '../../state/sampleDB';
 
 export function Transport() {
@@ -176,7 +176,14 @@ export function Transport() {
         contain: 'layout style',
       }}
     >
-      <div style={{ display: 'flex', gap: 4 }}>
+      {/* Scrollable so this strip can never clip its own controls — it used to
+          push UNDO / REDO / SAVE past the right edge of a phone with no way to
+          reach them. On phones the rarely-used half moves into the ⋯ menu. */}
+      <div
+        className="hud-scroll-x"
+        data-scrollx
+        style={{ display: 'flex', gap: 4, minWidth: 0, flex: isMobile ? '1 1 auto' : '0 0 auto' }}
+      >
         <button className="hud-btn touch-target" onClick={() => seek(0)} title="Return to start">
           ⏮
         </button>
@@ -210,27 +217,31 @@ export function Transport() {
         >
           ⏺{lbl('PUNCH')}
         </button>
-        <select
-          className="display touch-target"
-          value={countInBars}
-          onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
-          title="Count-in bars before a punch-in record"
-          style={{ minWidth: isMobile ? 44 : 64 }}
-        >
-          {[0, 1, 2, 4].map((n) => (
-            <option key={n} value={n}>
-              {isMobile ? `${n}` : `CI ${n}`}
-            </option>
-          ))}
-        </select>
-        <button
-          className={`hud-btn hud-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
-          onClick={toggleBounce}
-          aria-pressed={bouncing}
-          title="Bounce the master output to an audio file"
-        >
-          ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
-        </button>
+        {!isMobile && (
+          <select
+            className="display touch-target"
+            value={countInBars}
+            onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
+            title="Count-in bars before a punch-in record"
+            style={{ minWidth: 64 }}
+          >
+            {[0, 1, 2, 4].map((n) => (
+              <option key={n} value={n}>
+                CI {n}
+              </option>
+            ))}
+          </select>
+        )}
+        {!isMobile && (
+          <button
+            className={`hud-btn hud-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
+            onClick={toggleBounce}
+            aria-pressed={bouncing}
+            title="Bounce the master output to an audio file"
+          >
+            ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
+          </button>
+        )}
         <button
           className={`hud-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
           onClick={() => setLoop(!loopEnabled)}
@@ -247,32 +258,49 @@ export function Transport() {
         >
           ⛬{lbl('CLICK')}
         </button>
-        <button
-          className="hud-btn hud-btn--ghost touch-target"
-          onClick={undo}
-          disabled={!canUndo}
-          title="Undo"
-          style={{ opacity: canUndo ? 1 : 0.35 }}
-        >
-          ↶{lbl('UNDO')}
-        </button>
-        <button
-          className="hud-btn hud-btn--ghost touch-target"
-          onClick={redo}
-          disabled={!canRedo}
-          title="Redo"
-          style={{ opacity: canRedo ? 1 : 0.35 }}
-        >
-          ↷{lbl('REDO')}
-        </button>
-        <button
-          className="hud-btn hud-btn--ghost touch-target"
-          onClick={() => saveProjectToStorage()}
-          title="Save current project to local storage"
-        >
-          💾{lbl('SAVE')}
-        </button>
+        {!isMobile && (
+          <>
+            <button
+              className="hud-btn hud-btn--ghost touch-target"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo"
+              style={{ opacity: canUndo ? 1 : 0.35 }}
+            >
+              ↶{lbl('UNDO')}
+            </button>
+            <button
+              className="hud-btn hud-btn--ghost touch-target"
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo"
+              style={{ opacity: canRedo ? 1 : 0.35 }}
+            >
+              ↷{lbl('REDO')}
+            </button>
+            <button
+              className="hud-btn hud-btn--ghost touch-target"
+              onClick={() => saveProjectToStorage()}
+              title="Save current project to local storage"
+            >
+              💾{lbl('SAVE')}
+            </button>
+          </>
+        )}
       </div>
+
+      {isMobile && (
+        <TransportOverflow
+          bouncing={bouncing}
+          toggleBounce={toggleBounce}
+          countInBars={countInBars}
+          setCountInBars={setCountInBars}
+          undo={undo}
+          redo={redo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+        />
+      )}
 
       {!isMobile && <div style={{ flex: 1 }} />}
 
@@ -311,6 +339,154 @@ export function Transport() {
 
       <PreRollIndicator numerator={tparams.numerator} />
       <PositionBar />
+    </div>
+  );
+}
+
+/**
+ * TransportOverflow — the ⋯ menu that holds the controls a phone row has no
+ * width for. Everything in here stays a real, labelled, finger-sized target
+ * rather than being dropped: on a phone SAVE and UNDO matter more than BOUNCE,
+ * and all three used to sit off the right edge of the screen entirely.
+ */
+function TransportOverflow({
+  bouncing,
+  toggleBounce,
+  countInBars,
+  setCountInBars,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+}: {
+  bouncing: boolean;
+  toggleBounce: () => void;
+  countInBars: number;
+  setCountInBars: (n: number) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const item: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '10px 12px',
+    minHeight: 42,
+    textAlign: 'left',
+    borderBottom: '1px solid rgba(255,106,0,0.18)',
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+      <button
+        className={`hud-btn touch-target ${open ? 'is-active' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="More transport controls"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '110%',
+            right: 0,
+            zIndex: 40,
+            minWidth: 190,
+            // never taller than the viewport allows in landscape
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            background: 'rgba(6,4,3,0.97)',
+            border: '1px solid rgba(255,106,0,0.6)',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
+          }}
+        >
+          <button
+            className="hud-btn hud-btn--ghost"
+            style={{ ...item, opacity: canUndo ? 1 : 0.35 }}
+            disabled={!canUndo}
+            onClick={() => {
+              undo();
+              setOpen(false);
+            }}
+          >
+            ↶ UNDO
+          </button>
+          <button
+            className="hud-btn hud-btn--ghost"
+            style={{ ...item, opacity: canRedo ? 1 : 0.35 }}
+            disabled={!canRedo}
+            onClick={() => {
+              redo();
+              setOpen(false);
+            }}
+          >
+            ↷ REDO
+          </button>
+          <button
+            className="hud-btn hud-btn--ghost"
+            style={item}
+            onClick={() => {
+              saveProjectToStorage();
+              setOpen(false);
+            }}
+          >
+            💾 SAVE PROJECT
+          </button>
+          <button
+            className={`hud-btn hud-btn--rec ${bouncing ? 'is-active' : ''}`}
+            style={item}
+            onClick={() => {
+              toggleBounce();
+              setOpen(false);
+            }}
+          >
+            ⭳ {bouncing ? 'STOP BOUNCE' : 'BOUNCE TO FILE'}
+          </button>
+          <label style={{ ...item, borderBottom: 'none' }}>
+            <span className="hud-label" style={{ fontSize: 9, flex: 1 }}>
+              COUNT-IN
+            </span>
+            <select
+              className="display"
+              value={countInBars}
+              onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
+              style={{ minWidth: 66, minHeight: 34 }}
+            >
+              {[0, 1, 2, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n} BAR{n === 1 ? '' : 'S'}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 }

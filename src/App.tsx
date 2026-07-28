@@ -16,6 +16,7 @@ import { ProjectView } from './components/project/ProjectView';
 import { FxPanel } from './components/fx/FxPanel';
 import { AutomationView } from './components/automation/AutomationView';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
+import { useIsMobile, useLayoutModeAttribute } from './hooks/useLayoutMode';
 import { useEngineSync } from './hooks/useEngineSync';
 import { useMediaSession } from './hooks/useMediaSession';
 import { rehydrateSamples } from './state/samples';
@@ -57,6 +58,8 @@ export default function App() {
   useGlobalKeys();
   useEngineSync();
   useMediaSession();
+  // publishes <html data-layout="desktop | phone-landscape | phone-portrait">
+  useLayoutModeAttribute();
 
   useEffect(() => {
     loadProjectFromStorage();
@@ -105,26 +108,32 @@ export default function App() {
       <Transport />
 
       <div className="hud-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`hud-tab ${view === t.id ? 'is-active' : ''}`}
-            onClick={() => setView(t.id)}
-            title={t.hint}
-          >
-            {t.label}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
+        {/* Scrolls on phones; the help button below stays pinned outside the
+            strip so it can never be pushed off-screen with the tabs. */}
+        <div className="hud-tabs__strip" data-scrollx>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`hud-tab ${view === t.id ? 'is-active' : ''}`}
+              onClick={() => setView(t.id)}
+              title={t.hint}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <button
           className="hud-btn hud-btn--ghost hud-btn--icon"
           onClick={() => setHelpOpen(true)}
           title="Help (?)"
-          style={{ alignSelf: 'center', minWidth: 32 }}
+          style={{ alignSelf: 'center', minWidth: 32, flex: '0 0 auto' }}
         >
           ?
         </button>
-        <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}>
+        <span
+          className="hud-readout--dim hud-readout desktop-only"
+          style={{ alignSelf: 'center', whiteSpace: 'nowrap', flex: '0 0 auto' }}
+        >
           VER 0.1.0
         </span>
       </div>
@@ -162,24 +171,36 @@ const FooterBar = memo(function FooterBar() {
     shallow,
   );
   const playing = useStore((s) => s.isPlaying);
+  const isMobile = useIsMobile();
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
-        padding: '4px 12px',
+        gap: isMobile ? 8 : 12,
+        padding: isMobile ? '3px 8px' : '4px 12px',
         background: 'rgba(0,0,0,0.85)',
         borderTop: '1px solid rgba(255,106,0,0.4)',
         fontSize: 9,
+        // one line, always: this bar used to wrap to three on a phone and
+        // shove the timeline up off the screen
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        flex: '0 0 auto',
       }}
     >
       <span className="hud-readout--green hud-readout">● ENGINE OK</span>
-      <span className="hud-readout">TRACKS {String(trackCount).padStart(2, '0')}</span>
-      <span className="hud-readout">CLIPS {String(clipCount).padStart(3, '0')}</span>
-      <span className="hud-readout">{playing ? 'TRANSPORT ROLLING' : 'TRANSPORT HALTED'}</span>
-      <div style={{ flex: 1 }} />
-      <span className="hud-readout--dim hud-readout">SPACE ▶ PLAY · ENTER ■ STOP · ? HELP · AUTOSAVES LOCALLY</span>
+      <span className="hud-readout">TRK {String(trackCount).padStart(2, '0')}</span>
+      <span className="hud-readout">CLP {String(clipCount).padStart(3, '0')}</span>
+      <span className="hud-readout" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {playing ? 'ROLLING' : 'HALTED'}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }} />
+      {/* Keyboard shortcuts are meaningless on a touch device — .desktop-only
+          drops them under (pointer: coarse). */}
+      <span className="hud-readout--dim hud-readout desktop-only">
+        SPACE ▶ PLAY · ENTER ■ STOP · ? HELP · AUTOSAVES LOCALLY
+      </span>
     </div>
   );
 });

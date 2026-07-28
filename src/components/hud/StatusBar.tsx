@@ -2,7 +2,7 @@ import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { shallow } from 'zustand/shallow';
 import { useStore } from '../../state/store';
 import { usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useIsMobile';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 import { Scope } from './Scope';
 import { getMidiSnapshot, subscribeMidi } from '../../audio/midiInput';
 import { audioEngine } from '../../audio/engine';
@@ -36,29 +36,37 @@ export function StatusBar() {
   const bouncing = useStore((s) => s.bouncing);
   const recording = micRecording || bouncing;
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
-  const isMobile = useIsMobile();
+  const mode = useLayoutMode();
 
-  if (isMobile) {
+  if (mode !== 'desktop') {
+    // Landscape is the working orientation but only ~411px tall, so every
+    // pixel of header height is bought out of the timeline: shrink the mark,
+    // flatten the padding, and drop the project name entirely.
+    const tight = mode === 'phone-landscape';
     return (
       <div
         style={{
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '5px 8px',
+          gap: tight ? 6 : 8,
+          padding: tight ? '2px 8px' : '5px 8px',
           background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
           borderBottom: '1px solid rgba(255,106,0,0.5)',
           contain: 'layout style',
+          flex: '0 0 auto',
         }}
       >
-        <TriadMark />
-        <span
-          className="hud-value"
-          style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {name}
-        </span>
+        <TriadMark size={tight ? 20 : 28} />
+        {!tight && (
+          <span
+            className="hud-value"
+            style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {name}
+          </span>
+        )}
+        {tight && <div style={{ flex: 1, minWidth: 0 }} />}
         <Indicator label="PL" on={playing} color="green" />
         <Indicator label="REC" on={recording} color="red" />
         {midi.connected && <Indicator label="MIDI" on color="green" />}
@@ -184,10 +192,10 @@ function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolea
   );
 }
 
-function TriadMark() {
+function TriadMark({ size = 28 }: { size?: number }) {
   return (
-    <div style={{ width: 28, height: 28, position: 'relative' }}>
-      <svg viewBox="0 0 100 100" width="28" height="28">
+    <div style={{ width: size, height: size, position: 'relative', flex: '0 0 auto' }}>
+      <svg viewBox="0 0 100 100" width={size} height={size}>
         <polygon
           points="50,4 92,28 92,72 50,96 8,72 8,28"
           fill="none"

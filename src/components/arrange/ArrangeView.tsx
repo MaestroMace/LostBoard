@@ -10,12 +10,21 @@ import {
 } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useIsMobile';
+import { useIsMobile } from '../../hooks/useLayoutMode';
 import { usePinchZoom } from '../../hooks/usePinchZoom';
 import { importSample } from '../../state/samples';
 import { EditorTip } from '../hud/EditorTip';
 
 const ROW_H = 64;
+/**
+ * Touch builds enlarge every button to a 38-40px minimum, and a track header
+ * stacks two rows of them. At the 64px desktop height those two rows overlap
+ * each other, so phones get a taller lane. Read through RowHeightContext so the
+ * header and the timeline lanes can never disagree about it.
+ */
+const ROW_H_TOUCH = 92;
+const RowHeightContext = createContext(ROW_H);
+const useRowHeight = () => useContext(RowHeightContext);
 const AUTO_LANE_H = 56;
 /** Plain-language name for a track kind, shown as a badge so the codename isn't the only label. */
 const TRACK_KIND_LABEL: Record<Track['kind'], string> = {
@@ -70,6 +79,7 @@ export function ArrangeView() {
   const addTrack = useStore((s) => s.addTrack);
   const isMobile = useIsMobile();
   const headW = isMobile ? 144 : 196;
+  const rowH = isMobile ? ROW_H_TOUCH : ROW_H;
 
   const [zoom, setZoom] = useState(1);
   const numerator = useStore((s) => s.project.numerator || 4);
@@ -112,6 +122,7 @@ export function ArrangeView() {
 
   return (
     <BeatWidthContext.Provider value={beatW}>
+    <RowHeightContext.Provider value={rowH}>
     <SnapContext.Provider value={snapBeats}>
     <AutomationOverlayContext.Provider value={overlayCtx}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -217,7 +228,7 @@ export function ArrangeView() {
               height={
                 tracks.reduce(
                   (s, t) =>
-                    s + ROW_H + (overlayVisible[t.id] ? (t.automation?.length ?? 0) * AUTO_LANE_H : 0),
+                    s + rowH + (overlayVisible[t.id] ? (t.automation?.length ?? 0) * AUTO_LANE_H : 0),
                   0,
                 ) + 34
               }
@@ -235,6 +246,7 @@ export function ArrangeView() {
     </div>
     </AutomationOverlayContext.Provider>
     </SnapContext.Provider>
+    </RowHeightContext.Provider>
     </BeatWidthContext.Provider>
   );
 }
@@ -453,6 +465,7 @@ const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
 
 /** Memoized track header — only re-renders when ITS track object changes. */
 const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track; compact: boolean }) {
+  const rowH = useRowHeight();
   const selected = useStore((s) => s.selectedTrackId === track.id);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateTrack = useStore((s) => s.updateTrack);
@@ -466,7 +479,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
     <div
       onClick={() => selectTrack(track.id)}
       style={{
-        height: ROW_H,
+        height: rowH,
         padding: '4px 6px',
         borderBottom: '1px solid rgba(255,106,0,0.25)',
         // the selected track lights up in its OWN colour — a consistent
@@ -492,19 +505,22 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           boxShadow: selected ? `0 0 8px ${track.color}` : 'none',
         }}
       />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {/* The narrow header column can't fit a type badge AND the name, and the
-            name (now function-first: "DRUMS // VEGA", "BASS // …") is the better
-            plain label — so the kind lives in the tooltip instead. */}
+      {/* The narrow header column can't fit a type badge AND the name, and the
+          name (now function-first: "DRUMS // VEGA", "BASS // …") is the better
+          plain label — so the kind lives in the tooltip instead.
+          On touch the icon buttons are wide enough that sharing a row with the
+          name starved it down to a single letter, so compact mode gives the
+          name a row of its own. */}
+      {compact && (
         <input
           className="hud-value"
           title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
           style={{
-            flex: 1,
+            width: '100%',
             fontSize: 11,
             background: 'transparent',
             border: '1px solid transparent',
-            padding: '2px 4px',
+            padding: '1px 4px',
             color: 'var(--hud-orange-bright)',
             minWidth: 0,
           }}
@@ -512,11 +528,32 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           onChange={(e) => updateTrack(track.id, { name: e.target.value })}
           onClick={(e) => e.stopPropagation()}
         />
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 3 : 6 }}>
+        {!compact && (
+          <input
+            className="hud-value"
+            title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
+            style={{
+              flex: 1,
+              fontSize: 11,
+              background: 'transparent',
+              border: '1px solid transparent',
+              padding: '2px 4px',
+              color: 'var(--hud-orange-bright)',
+              minWidth: 0,
+            }}
+            value={track.name}
+            onChange={(e) => updateTrack(track.id, { name: e.target.value })}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+        {compact && <div style={{ flex: 1, minWidth: 0 }} />}
         {track.kind === 'audio' ? (
           <AudioImportButton trackId={track.id} />
         ) : (
           <button
-            className="hud-btn hud-btn--icon"
+            className="hud-btn hud-btn--icon hud-btn--tight"
             onClick={(e) => {
               e.stopPropagation();
               selectTrack(track.id);
@@ -528,7 +565,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           </button>
         )}
         <button
-          className={`hud-btn hud-btn--icon ${overlayActive ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon hud-btn--tight ${overlayActive ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             if (laneCount === 0) {
@@ -549,7 +586,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           A
         </button>
         <button
-          className="hud-btn hud-btn--icon"
+          className="hud-btn hud-btn--icon hud-btn--tight"
           onClick={(e) => {
             e.stopPropagation();
             if (confirm(`Delete track "${track.name}"?`)) removeTrack(track.id);
@@ -561,7 +598,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto' }}>
         <button
-          className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon hud-btn--tight ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
@@ -572,7 +609,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           M
         </button>
         <button
-          className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--green hud-btn--icon hud-btn--tight ${track.solo ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
@@ -583,7 +620,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           S
         </button>
         <button
-          className={`hud-btn hud-btn--rec hud-btn--icon ${track.arm ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec hud-btn--icon hud-btn--tight ${track.arm ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { arm: !track.arm });
@@ -635,6 +672,7 @@ const TrackLane = memo(function TrackLane({
   color: string;
 }) {
   const BEAT_W = useBeatWidth();
+  const rowH = useRowHeight();
   const snap = useSnap();
   const addClip = useStore((s) => s.addClip);
   const selectTrack = useStore((s) => s.selectTrack);
@@ -728,7 +766,7 @@ const TrackLane = memo(function TrackLane({
       ref={laneRef}
       style={{
         position: 'relative',
-        height: ROW_H,
+        height: rowH,
         borderBottom: '1px solid rgba(255,106,0,0.18)',
         background: `linear-gradient(180deg, ${color}10, transparent)`,
         contain: 'layout style',
@@ -754,7 +792,7 @@ const TrackLane = memo(function TrackLane({
           style={{
             position: 'absolute',
             top: 4,
-            height: ROW_H - 8,
+            height: rowH - 8,
             left: draftLo * BEAT_W,
             width: draftW * BEAT_W,
             background: `${color}33`,
@@ -967,6 +1005,7 @@ function AutomationOverlayLane({
 
 /** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
 const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {
+  const rowH = useRowHeight();
   const BEAT_W = useBeatWidth();
   const snap = useSnap();
   const selected = useStore((s) => s.selectedClipIds.includes(clip.id));
@@ -1115,7 +1154,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         top: 4,
         left: clip.start * BEAT_W,
         width: clip.length * BEAT_W - 2,
-        height: ROW_H - 8,
+        height: rowH - 8,
         background: `linear-gradient(180deg, ${color}66, ${color}22)`,
         border: `1px solid ${selected ? '#fff' : color}`,
         clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
@@ -1178,6 +1217,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
 });
 
 const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
+  const rowH = useRowHeight();
   const BEAT_W = useBeatWidth();
   if (clip.kind === 'midi') {
     if (clip.notes.length === 0) return null;
@@ -1188,12 +1228,12 @@ const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
       <svg
         width="100%"
         height="100%"
-        viewBox={`0 0 ${clip.length * BEAT_W} ${ROW_H - 8}`}
+        viewBox={`0 0 ${clip.length * BEAT_W} ${rowH - 8}`}
         preserveAspectRatio="none"
         style={{ position: 'absolute', inset: 0, opacity: 0.85 }}
       >
         {clip.notes.map((n) => {
-          const y = ((hi - n.pitch) / range) * (ROW_H - 18) + 14;
+          const y = ((hi - n.pitch) / range) * (rowH - 18) + 14;
           return (
             <rect
               key={n.id}

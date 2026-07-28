@@ -192,7 +192,9 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
         <div className="display">OCT {octave}</div>
         <button className="hud-btn hud-btn--icon" onClick={() => setOctave((o) => Math.min(8, o + 1))}>OCT +</button>
       </div>
-      <div style={{ display: 'flex', position: 'relative', height: 120, userSelect: 'none' }}>
+      {/* data-overlap-ok: black keys deliberately sit on top of the white keys —
+          this is a piano, not a broken layout. */}
+      <div data-overlap-ok style={{ display: 'flex', position: 'relative', height: 120, userSelect: 'none' }}>
         {Array.from({ length: 14 }).map((_, i) => {
           const base = octave * 12 + 12;
           const midi = base + whiteOffsets[i % 7] + Math.floor(i / 7) * 12;

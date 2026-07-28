@@ -390,6 +390,10 @@ export function PianoRoll() {
           style={{
             position: 'relative',
             width: beats * BEAT_W,
+            // Without this the flex row shrinks the grid below its true width,
+            // so notes past the fold spill out with overflow:visible and the
+            // scroll container never grows to reach them.
+            flexShrink: 0,
             height: ROWS * ROW_H,
             background: '#050505',
             backgroundImage: `
@@ -538,6 +542,7 @@ const Keys = memo(function Keys({ trackId }: { trackId: string }) {
     <div
       style={{
         width: KEYS_W,
+        flexShrink: 0,
         position: 'sticky',
         left: 0,
         background: 'rgba(0,0,0,0.85)',
