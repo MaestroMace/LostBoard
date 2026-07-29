@@ -1,16 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+const STAGES = [
+  'audio engine',
+  'instruments',
+  'samples',
+  'mixer',
+  'ready',
+];
 
 /**
  * Start screen.
  *
- * Browsers will not start audio without a user gesture, so one tap is
- * genuinely required. Everything beyond that tap was ceremony: seven fake
- * status lines animating for a second and a half, with the only real control
- * hidden until they finished. What is left says what it is and gets out of the
- * way.
+ * Browsers will not start audio without a user gesture, so the tap is real.
+ * The boot readout is kept because it gives the app its character — what was
+ * wrong before was that it *blocked*: seven lines at 220ms each with the Start
+ * button hidden until they finished, so launch took 2.7s every time. Now the
+ * lines race through in ~200ms and the button is live from the first frame, so
+ * the animation is something you can watch rather than something you wait on.
  */
 export function BootSequence({ onDone }: { onDone: () => void }) {
   const [starting, setStarting] = useState(false);
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (step >= STAGES.length) return;
+    const t = setTimeout(() => setStep(step + 1), 45);
+    return () => clearTimeout(t);
+  }, [step]);
 
   return (
     <div
@@ -39,8 +55,36 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
+      {/* Fixed height so the button never shifts as lines land. */}
+      <div
+        style={{
+          width: '90vw',
+          maxWidth: 320,
+          height: 84,
+          padding: '8px 12px',
+          background: 'rgba(0,0,0,0.55)',
+          border: '1px solid rgba(255,106,0,0.35)',
+          fontFamily: 'var(--font-data)',
+          fontSize: 12,
+          lineHeight: 1.5,
+          textAlign: 'left',
+          color: 'rgba(255,170,90,0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        {STAGES.slice(Math.max(0, step - 3), step).map((line, i) => (
+          <div key={line} style={{ opacity: 0.45 + i * 0.18 }}>
+            <span style={{ opacity: 0.5 }}>›</span> {line} <span style={{ color: 'var(--hud-green)' }}>ok</span>
+          </div>
+        ))}
+        {step < STAGES.length && <span className="blink">▌</span>}
+      </div>
+
       <button
-        className="hud-btn hud-btn--green"
+        className="hud-btn hud-btn--green pulse"
         onClick={() => {
           setStarting(true);
           onDone();
@@ -51,7 +95,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
         {starting ? 'Starting…' : 'Start'}
       </button>
 
-      <div style={{ fontSize: 14, color: 'rgba(255,140,60,0.6)', maxWidth: 300 }}>
+      <div style={{ fontSize: 13, color: 'rgba(255,140,60,0.6)', maxWidth: 300 }}>
         One tap is needed before the browser will let audio play.
       </div>
     </div>

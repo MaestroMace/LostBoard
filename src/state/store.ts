@@ -1237,7 +1237,7 @@ export const useStore = create<Store>()(
         if (!p || !Array.isArray(p.tracks) || typeof p.bpm !== 'number') {
           throw new Error('not a LostBoard project (missing tracks/bpm)');
         }
-        get().loadProject(p);
+        get().loadProject(migrateNames(p));
       } catch (e) {
         console.error('Failed to import project', e);
         if (typeof alert !== 'undefined') alert('Import failed: not a valid LostBoard project file.');
@@ -1262,12 +1262,47 @@ export function saveProjectToStorage(): boolean {
   }
 }
 
+/**
+ * Legacy codenames, mapped to what things are actually called.
+ *
+ * Renaming the defaults only affects projects created afterwards — anyone who
+ * already opened the app has these strings saved in their project and would
+ * keep seeing them forever. Matching exact legacy strings means a track the
+ * user renamed themselves is never touched.
+ */
+const LEGACY_NAMES: Record<string, string> = {
+  'OPERATION DOWNBEAT': 'Untitled Song',
+  'DRUMS // VEGA': 'Drums',
+  'BASS // ALTAIR': 'Bass',
+  'LEAD // DENEB': 'Lead',
+  'PTN-A': 'Beat',
+  'BASS-1': 'Bass 1',
+  'LEAD-1': 'Lead 1',
+  'MIC TAKE': 'Mic take',
+};
+
+function renameLegacy<T extends { name?: string }>(item: T): T {
+  const next = item.name ? LEGACY_NAMES[item.name] : undefined;
+  return next ? { ...item, name: next } : item;
+}
+
+/** Rewrite a loaded project's legacy codenames in place. */
+export function migrateNames(p: Project): Project {
+  return {
+    ...renameLegacy(p),
+    tracks: p.tracks.map((t) => ({
+      ...renameLegacy(t),
+      clips: t.clips.map((c) => renameLegacy(c)),
+    })),
+  };
+}
+
 export function loadProjectFromStorage(): boolean {
   const raw = localStorage.getItem(PROJECT_STORAGE_KEY);
   if (!raw) return false;
   try {
     const p = JSON.parse(raw) as Project;
-    useStore.getState().loadProject(p);
+    useStore.getState().loadProject(migrateNames(p));
     return true;
   } catch {
     return false;

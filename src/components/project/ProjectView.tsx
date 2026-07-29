@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { useStore, saveProjectToStorage, loadProjectFromStorage, PROJECT_STORAGE_KEY } from '../../state/store';
+import { useStore, saveProjectToStorage, loadProjectFromStorage, migrateNames, PROJECT_STORAGE_KEY } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import {
   deleteSlot,
@@ -345,7 +345,7 @@ function SlotLibrary() {
 
   async function load(slot: ProjectSlot) {
     if (!confirm(`Load "${slot.name}"? Unsaved changes to the current project will be lost.`)) return;
-    loadProject(slot.project);
+    loadProject(migrateNames(slot.project));
     // re-decode persisted audio after a load, since samples may have been
     // added in another slot's session
     rehydrateSamples().then((n) => {
