@@ -65,7 +65,7 @@ export function StatusBar() {
           {name}
         </span>
         <Indicator label="Play" on={playing} color="green" />
-        <Indicator label="REC" on={recording} color="red" />
+        <Indicator label="Rec" on={recording} color="red" />
         {midi.connected && <Indicator label="MIDI" on color="green" />}
         <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 12 }}>
@@ -106,8 +106,8 @@ export function StatusBar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Indicator label="PLAY" on={playing} color="green" />
-        <Indicator label="REC" on={recording} color="red" />
+        <Indicator label="Play" on={playing} color="green" />
+        <Indicator label="Rec" on={recording} color="red" />
         <MidiIndicator midi={midi} />
         <PositionReadout numerator={numerator} />
         <div className="display" style={{ fontSize: 13 }}>
@@ -183,7 +183,7 @@ function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolea
     >
       <span className={`led ${midi.connected ? 'green' : 'amber'} ${midi.connected ? 'on' : ''}`} />
       <span className="hud-label" style={{ fontSize: 11 }}>
-        {midi.connected ? (midi.device.slice(0, 10).toUpperCase() || 'MIDI') : 'MIDI'}
+        {midi.connected ? midi.device.slice(0, 10) || 'MIDI' : 'MIDI'}
       </span>
     </div>
   );

@@ -348,7 +348,7 @@ function WavetablePanel({
   }
 
   return (
-    <HexFrame title="WAVETABLE">
+    <HexFrame title="Wave">
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
         <Knob
           label="Position"
@@ -433,16 +433,16 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
   const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
 
   return (
-    <HexFrame title="MIDI OUT">
+    <HexFrame title="MIDI out">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!midi.supported ? (
           <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
-            Web MIDI not available in this browser.
+            This device can’t send notes to other gear.
           </p>
         ) : (
           <>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span className="hud-readout" style={{ fontSize: 12 }}>PORT</span>
+              <span className="hud-label">Device</span>
               <select
                 className="display"
                 value={midi.selectedId}
@@ -456,7 +456,7 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
               </select>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span className="hud-readout" style={{ fontSize: 12 }}>CHANNEL</span>
+              <span className="hud-label">Channel</span>
               <select
                 className="display"
                 value={channel ?? 0}
@@ -465,9 +465,9 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
                   updateTrack(trackId, { midiOutChannel: ch === 0 ? undefined : ch });
                 }}
               >
-                <option value={0}>OFF (internal)</option>
+                <option value={0}>Use the built-in sound</option>
                 {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
-                  <option key={ch} value={ch}>CH {ch}</option>
+                  <option key={ch} value={ch}>Channel {ch}</option>
                 ))}
               </select>
             </div>
@@ -529,11 +529,11 @@ function SamplerSource({ trackId }: { trackId: string }) {
   }
 
   return (
-    <HexFrame title="SAMPLER ZONES">
+    <HexFrame title="Your recordings">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="hud-btn hud-btn--green" onClick={() => fileRef.current?.click()}>
-            ⬆ LOAD + ADD ZONE
+            + Add a recording
           </button>
           <input
             ref={fileRef}
@@ -551,7 +551,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
               className="hud-btn"
               onClick={() => addSamplerZone(trackId, sampleIds[0], 60 + zones.length * 12)}
             >
-              + ZONE
+              + Another layer
             </button>
           )}
         </div>
@@ -591,7 +591,7 @@ function SamplerSource({ trackId }: { trackId: string }) {
                   ))}
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>ROOT</span>
+                  <span className="hud-label" style={{ fontSize: 12 }} title="The key this recording plays back at its original pitch">Root</span>
                   <input
                     className="display"
                     type="number"
@@ -609,8 +609,8 @@ function SamplerSource({ trackId }: { trackId: string }) {
                     {midiToName(zone.rootPitch)}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Velocity range this zone responds to (%)">
-                  <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>VEL</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="How hard you have to play for this recording to sound (%)">
+                  <span className="hud-label" style={{ fontSize: 12 }}>Loud</span>
                   <input
                     className="display"
                     type="number"
