@@ -506,7 +506,7 @@ function AddTrackButton({
             left: 0,
             zIndex: 40,
             minWidth: 168,
-            background: 'rgba(6,4,3,0.98)',
+            background: '#0a0705',
             border: '1px solid rgba(255,106,0,0.6)',
             boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
           }}
@@ -983,14 +983,14 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
             style={toggle(track.mute)}
             onClick={() => updateTrack(track.id, { mute: !track.mute })}
           >
-            MUTE
+            Mute
           </button>
           <button
             className={`hud-btn hud-btn--green ${track.solo ? 'is-active' : ''}`}
             style={toggle(track.solo)}
             onClick={() => updateTrack(track.id, { solo: !track.solo })}
           >
-            SOLO
+            Solo
           </button>
           <button
             className={`hud-btn hud-btn--rec ${track.arm ? 'is-active' : ''}`}
@@ -998,7 +998,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
             onClick={() => updateTrack(track.id, { arm: !track.arm })}
             title={track.kind === 'audio' ? 'Arm for mic recording' : 'Arm for MIDI recording'}
           >
-            ARM
+            Arm
           </button>
         </div>
 
@@ -1013,7 +1013,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
                 onClose();
               }}
             >
-              {track.kind === 'drum' ? '✎ EDIT PATTERN' : '✎ EDIT NOTES'}
+              {track.kind === 'drum' ? '✎ Edit the beat' : '✎ Edit the notes'}
             </button>
           )}
           <button
@@ -1044,7 +1044,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
             }
           }}
         >
-          ✕ DELETE TRACK
+          ✕ Delete this track
         </button>
       </div>
     </div>,

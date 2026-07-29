@@ -173,7 +173,7 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
             display: 'flex',
             flexDirection: 'column',
             gap: 4,
-            background: 'rgba(0,0,0,0.95)',
+            background: '#0a0705',
             border: '1px solid rgba(255,106,0,0.5)',
             padding: 6,
             zIndex: 10,

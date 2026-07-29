@@ -181,6 +181,13 @@ export function Transport() {
         borderBottom: '1px solid rgba(255,106,0,0.4)',
         flexWrap: 'wrap',
         contain: 'layout style',
+        // `contain: layout` makes this row a stacking context, which trapped
+        // the ⋯ menu inside it: the menu asked for z-index 40 but the whole row
+        // still painted below the view area that follows it in the DOM, so the
+        // timeline showed straight through the menu and the two sets of text
+        // sat on top of each other. Lifting the row lifts the menu with it.
+        position: 'relative',
+        zIndex: 30,
       }}
     >
       {mergedHeader && <AppMark size={22} />}
@@ -477,7 +484,9 @@ function TransportOverflow({
             // never taller than the viewport allows in landscape
             maxHeight: '60vh',
             overflowY: 'auto',
-            background: 'rgba(6,4,3,0.97)',
+            // opaque, not 0.97: at 3% the bright clip colours behind a
+            // pop-up still read as ghost text through the panel
+            background: '#0a0705',
             border: '1px solid rgba(255,106,0,0.6)',
             boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
           }}
@@ -489,27 +498,27 @@ function TransportOverflow({
                 style={item}
                 onClick={() => { setLoop(!loopEnabled); setOpen(false); }}
               >
-                ↻ LOOP {loopEnabled ? 'ON' : 'OFF'}
+                ↻ Loop {loopEnabled ? 'on' : 'off'}
               </button>
               <button
                 className={`hud-btn ${metronome ? 'is-active' : ''}`}
                 style={item}
                 onClick={() => { setMetronome(!metronome); setOpen(false); }}
               >
-                ⛬ METRONOME {metronome ? 'ON' : 'OFF'}
+                ⛬ Click {metronome ? 'on' : 'off'}
               </button>
               <button
                 className="hud-btn hud-btn--rec"
                 style={item}
                 onClick={() => { punchRecord(); setOpen(false); }}
               >
-                ⏺ PUNCH RECORD
+                ⏺ Punch in
               </button>
             </>
           )}
           <div style={{ ...item, display: 'block' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span className="hud-label" style={{ fontSize: 12 }}>TEMPO</span>
+              <span className="hud-label" style={{ fontSize: 12 }}>Tempo</span>
               <span className="hud-readout">{bpm.toFixed(1)} BPM</span>
             </div>
             <input
@@ -533,7 +542,7 @@ function TransportOverflow({
               setOpen(false);
             }}
           >
-            ↶ UNDO
+            ↶ Undo
           </button>
           <button
             className="hud-btn hud-btn--ghost"
@@ -544,7 +553,7 @@ function TransportOverflow({
               setOpen(false);
             }}
           >
-            ↷ REDO
+            ↷ Redo
           </button>
           <button
             className="hud-btn hud-btn--ghost"
@@ -554,7 +563,7 @@ function TransportOverflow({
               setOpen(false);
             }}
           >
-            💾 SAVE PROJECT
+            💾 Save
           </button>
           <button
             className={`hud-btn hud-btn--rec ${bouncing ? 'is-active' : ''}`}
@@ -564,11 +573,11 @@ function TransportOverflow({
               setOpen(false);
             }}
           >
-            ⭳ {bouncing ? 'STOP BOUNCE' : 'BOUNCE TO FILE'}
+            ⭳ {bouncing ? 'Stop bouncing' : 'Bounce to a file'}
           </button>
           <label style={{ ...item, borderBottom: 'none' }}>
             <span className="hud-label" style={{ fontSize: 12, flex: 1 }}>
-              COUNT-IN
+              Count-in
             </span>
             <select
               className="display"
@@ -578,7 +587,7 @@ function TransportOverflow({
             >
               {[0, 1, 2, 4].map((n) => (
                 <option key={n} value={n}>
-                  {n} BAR{n === 1 ? '' : 'S'}
+                  {n === 0 ? 'None' : `${n} bar${n === 1 ? '' : 's'}`}
                 </option>
               ))}
             </select>
