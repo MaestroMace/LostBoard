@@ -8,21 +8,26 @@ import { meterBus } from '../../state/meterBus';
 export function LiveMeter({
   meterKey,
   height = 80,
+  width,
+  axis = 'y',
 }: {
   meterKey: string;
   /** Number of pixels, or any CSS length — '100%' lets it stretch with a flex parent. */
   height?: number | string;
+  width?: number | string;
+  /** 'x' for a meter that runs along a row rather than up a strip. */
+  axis?: 'x' | 'y';
 }) {
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!barRef.current) return;
     return meterBus.register(meterKey, barRef.current);
-  }, [meterKey]);
+  }, [meterKey, axis]);
 
   return (
-    <div className="meter" style={{ height }}>
-      <div ref={barRef} className="meter__bar" />
+    <div className={`meter${axis === 'x' ? ' meter--h' : ''}`} style={{ height, width }}>
+      <div ref={barRef} className="meter__bar" data-axis={axis} />
     </div>
   );
 }

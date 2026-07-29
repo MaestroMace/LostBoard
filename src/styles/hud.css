@@ -71,6 +71,15 @@
  * but .hex-frame carries a clip-path, and clip-path clips children, so the top
  * of every section heading in the app was sliced off. At 9px they were barely
  * legible even unclipped. */
+/* clip-path on .hex-frame clips its DESCENDANTS, not just its own border.
+   That one fact was the root cause of two defects filed as unrelated: the drum
+   sequencer amputating every step past the frame edge, and the effects panel
+   slicing the outer knobs. Consumers that need to overflow opt out here rather
+   than each inventing a workaround. */
+.hex-frame--noclip {
+  clip-path: none;
+}
+
 .hex-frame__title {
   display: flex;
   align-items: center;
@@ -372,6 +381,16 @@
   opacity: 1;
 }
 
+/* Divider between the two nav levels when landscape folds them onto one row,
+   so nine tabs still read as "five destinations, then what's inside Edit". */
+.hud-tabs__divider {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 6px;
+  background: rgba(255, 106, 0, 0.45);
+}
+
 /* The tabs themselves live in their own strip so they can scroll independently
    while the help button stays pinned and reachable. */
 .hud-tabs__strip {
@@ -428,6 +447,16 @@
   border-radius: 50%;
   border: 1px dashed rgba(255, 106, 0, 0.25);
   pointer-events: none;
+}
+
+/* Horizontal meter, for the landscape mixer rows. */
+.meter--h {
+  flex-direction: row;
+  width: auto;
+  height: 5px;
+}
+.meter--h .meter__bar {
+  transform-origin: left center;
 }
 
 /* Display window (7-seg-ish) */
@@ -608,6 +637,12 @@ button, .hud-btn { touch-action: manipulation; }
   .hex-frame {
     padding: 5px 7px;
   }
+  /* 8px x ~20 framed panels across Effects, Sound, Automation, Project and the
+     mixer. Highest-leverage single rule in the short-viewport block. */
+  .hex-frame__title {
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+  }
   .display--big {
     font-size: 15px;
     min-height: 26px;
@@ -620,6 +655,28 @@ button, .hud-btn { touch-action: manipulation; }
   .knob {
     width: 44px !important;
     height: 44px !important;
+  }
+}
+
+/* A horizontal slider in a row: 44px of hit box, 12px of visible track.
+   Deliberately scoped — applying this to every .hud-slider would add 32px to
+   each slider in Sound, Effects, Automation and the track sheet, and the
+   vertical mixer faders inherit .hud-slider too. */
+@media (pointer: coarse) {
+  .hud-slider--row {
+    height: 44px;
+    background: transparent;
+    border: 0;
+  }
+  .hud-slider--row::-webkit-slider-runnable-track {
+    height: 12px;
+    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
+    border: 1px solid rgba(255, 106, 0, 0.5);
+  }
+  .hud-slider--row::-moz-range-track {
+    height: 12px;
+    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
+    border: 1px solid rgba(255, 106, 0, 0.5);
   }
 }
 

@@ -17,7 +17,7 @@ import { ProjectView } from './components/project/ProjectView';
 import { FxPanel } from './components/fx/FxPanel';
 import { AutomationView } from './components/automation/AutomationView';
 import { useGlobalKeys } from './hooks/useGlobalKeys';
-import { useIsMobile, useLayoutModeAttribute } from './hooks/useLayoutMode';
+import { useIsMobile, useLayoutMode, useLayoutModeAttribute } from './hooks/useLayoutMode';
 import { useEngineSync } from './hooks/useEngineSync';
 import { useMediaSession } from './hooks/useMediaSession';
 import { rehydrateSamples } from './state/samples';
@@ -77,6 +77,14 @@ export default function App() {
   const notesViewForTrack: View = selectedTrack?.kind === 'drum' ? 'sequencer' : 'pianoroll';
   const selectedTrackName = selectedTrack?.name ?? '';
   const inEditor = EDITOR_VIEWS.includes(view);
+  /**
+   * A phone in landscape has ~336 CSS px of usable height once Android's
+   * status and gesture bars take their share. Two stacked tab rows plus a
+   * transport plus a footer spent 155 of it before the view began, and on the
+   * piano roll that left 47px of grid for 844px of notes. Landscape therefore
+   * carries both levels of navigation on one row and drops the footer.
+   */
+  const oneRowNav = useLayoutMode() === 'phone-landscape';
 
   useGlobalKeys();
   useEngineSync();
@@ -139,6 +147,7 @@ export default function App() {
             return (
               <button
                 key={t.id}
+                data-tab="primary"
                 className={`hud-tab ${active ? 'is-active' : ''}`}
                 onClick={() => setView(t.id === 'edit' ? notesViewForTrack : (t.id as View))}
                 title={t.hint}
@@ -147,6 +156,31 @@ export default function App() {
               </button>
             );
           })}
+          {/* Landscape folds the second level in here rather than spending
+              another 38px row on it. The divider keeps the two levels legible
+              as levels — nine peers in a line would read as one flat list. */}
+          {oneRowNav && inEditor && (
+            <>
+              <span className="hud-tabs__divider" aria-hidden />
+              {EDITOR_TABS.map((t) => {
+                const target = t.id === 'notes' ? notesViewForTrack : (t.id as View);
+                return (
+                  <button
+                    key={t.id}
+                    data-tab="editor"
+                    className={`hud-tab ${view === target ? 'is-active' : ''}`}
+                    onClick={() => setView(target)}
+                    title={t.hint}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+              <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap', flex: '0 0 auto', paddingLeft: 6 }}>
+                {selectedTrackName}
+              </span>
+            </>
+          )}
         </div>
         <button
           className="hud-btn hud-btn--ghost hud-btn--icon"
@@ -165,7 +199,7 @@ export default function App() {
         </span>
       </div>
 
-      {inEditor && (
+      {inEditor && !oneRowNav && (
         <div className="hud-tabs hud-tabs--sub">
           <div className="hud-tabs__strip" data-scrollx>
             {EDITOR_TABS.map((t) => {
@@ -173,6 +207,7 @@ export default function App() {
               return (
                 <button
                   key={t.id}
+                  data-tab="editor"
                   className={`hud-tab ${view === target ? 'is-active' : ''}`}
                   onClick={() => setView(target)}
                   title={t.hint}
@@ -202,7 +237,9 @@ export default function App() {
 
       {booted && <FirstRunHint />}
 
-      <FooterBar />
+      {/* "● Ready  Stopped" is 23px of a 336px landscape screen restating what
+          the transport already shows. Portrait and desktop keep it. */}
+      {!oneRowNav && <FooterBar />}
 
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
 

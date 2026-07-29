@@ -435,7 +435,12 @@ export function PianoRoll() {
             `,
             backgroundSize: `100% ${ROW_H}px, ${BEAT_W}px 100%, ${BEAT_W / 4}px 100%`,
             contain: 'layout style',
-            touchAction: 'none',
+            // pan-y, not none: with `none` a vertical drag on the grid created a
+            // note instead of scrolling, and 45 of the 49 pitch rows are
+            // off-screen — so the content was unreachable AND every attempt to
+            // reach it wrote junk into the clip. Marquee select still needs the
+            // browser to keep its hands off, hence the tool check.
+            touchAction: tool === 'select' ? 'none' : 'pan-y',
           }}
         >
           <BlackKeyShading />

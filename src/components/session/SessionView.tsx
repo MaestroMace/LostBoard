@@ -9,6 +9,8 @@ import { useIsMobile } from '../../hooks/useLayoutMode';
 // 168, not 110: the header is one row now, and two 44px touch targets plus
 // padding left the name box 16px wide -- the column names had vanished.
 const COL_W = 168;
+/** Fallback label for a clip that was never named. */
+const CLIP_KIND: Record<Clip['kind'], string> = { midi: 'Notes', pattern: 'Beat', audio: 'Audio' };
 const ROW_H = 44;
 const HEAD_COL_W = 132;
 
@@ -186,6 +188,13 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
   const isMobile = useIsMobile();
   const launchSessionClip = useStore((s) => s.launchSessionClip);
   const playingClipId = useStore((s) => s.sessionPlaying[track.id] ?? null);
+  // Which COLUMN is playing, resolved once per row. sessionPlaying stores a
+  // clip id, and the same clip legitimately appears in several columns.
+  const playingSlot = useMemo(() => {
+    if (!playingClipId) return null;
+    const i = (track.sessionSlots ?? []).indexOf(playingClipId);
+    return i >= 0 ? i : null;
+  }, [playingClipId, track.sessionSlots]);
 
   // every track kind can be session-launched — midi / pattern / audio clips
   // all fire from a session cell
@@ -236,7 +245,7 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
         </button>
       </div>
       {Array.from({ length: sceneCount }).map((_, i) => (
-        <Slot key={i} track={track} sceneIndex={i} playingClipId={playingClipId} canLaunch={canLaunch} />
+        <Slot key={i} track={track} sceneIndex={i} playingSlot={playingSlot} canLaunch={canLaunch} />
       ))}
     </div>
   );
@@ -245,12 +254,12 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
 const Slot = memo(function Slot({
   track,
   sceneIndex,
-  playingClipId,
+  playingSlot,
   canLaunch,
 }: {
   track: Track;
   sceneIndex: number;
-  playingClipId: string | null;
+  playingSlot: number | null;
   canLaunch: boolean;
 }) {
   const setSessionSlot = useStore((s) => s.setSessionSlot);
@@ -261,7 +270,10 @@ const Slot = memo(function Slot({
     () => track.clips.find((c) => c.id === assignedId),
     [assignedId, track.clips],
   );
-  const isPlaying = assigned && playingClipId === assigned.id;
+  // Compare the SLOT, not the clip id. Assigning one clip to several columns
+  // is the normal way to build an arrangement, and by-id every copy lit up as
+  // playing at once.
+  const isPlaying = playingSlot === sceneIndex && !!assigned;
   const launchable = !!(canLaunch && assigned);
 
   return (
@@ -273,10 +285,16 @@ const Slot = memo(function Slot({
         background: assigned ? `${track.color}22` : 'rgba(0,0,0,0.45)',
         border: isPlaying ? `1px solid #fff` : `1px solid ${assigned ? `${track.color}99` : 'rgba(255,106,0,0.25)'}`,
         boxShadow: isPlaying ? `0 0 10px ${track.color}` : 'none',
+        // A row, not a column. As a column the <select> below the name took
+        // the coarse-pointer 44px floor inside a 44px slot, so it covered the
+        // cell and swallowed every tap: hit-testing at 25/50/75/90% of the
+        // cell height all returned the SELECT. Tapping a slot to launch its
+        // loop — the entire purpose of this view — did nothing at all.
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        alignItems: 'center',
         position: 'relative',
-        padding: 4,
+        padding: '0 4px',
         cursor: launchable ? 'pointer' : 'default',
         opacity: !canLaunch ? 0.5 : 1,
       }}
@@ -289,21 +307,27 @@ const Slot = memo(function Slot({
           ? 'Audio tracks can\'t be session-launched yet'
           : assigned
             ? `${assigned.name ?? assigned.kind} — tap to ${isPlaying ? 'stop' : 'launch'}`
-            : 'Empty slot — click ✎ to assign a clip'
+            : 'Empty — tap the pencil to choose a clip for this slot'
       }
     >
+      {/* Owns the whole cell minus the 44px picker, so the tap target for
+          "launch this loop" is the thing you are looking at. */}
       <span
         style={{
           fontSize: 12,
           color: assigned ? '#fff' : 'rgba(255,106,0,0.5)',
-          letterSpacing: '0.1em',
+          letterSpacing: '0.02em',
           flex: 1,
+          minWidth: 0,
+          alignSelf: 'stretch',
+          display: 'flex',
+          alignItems: 'center',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}
       >
-        {assigned?.name ?? assigned?.kind?.toUpperCase() ?? '—'}
+        {assigned?.name ?? (assigned ? CLIP_KIND[assigned.kind] : '—')}
       </span>
       <ClipPicker
         track={track}
@@ -330,22 +354,31 @@ const ClipPicker = memo(function ClipPicker({
   const candidates = track.clips;
   if (candidates.length === 0) return null;
   return (
+    <span style={{ position: 'relative', width: 44, height: 44, flex: '0 0 auto', display: 'grid', placeItems: 'center' }}>
+      {/* The glyph is what you see; the select sits invisibly on top of it so
+          the native picker still opens, but it can no longer claim the rest of
+          the cell. */}
+      <span aria-hidden style={{ fontSize: 14, color: 'var(--hud-orange-bright)', pointerEvents: 'none' }}>
+        ✎
+      </span>
     <select
       value={currentId ?? ''}
       onChange={(e) => onAssign(e.target.value || null)}
       onClick={(e) => e.stopPropagation()}
       className="display"
-      title="Assign clip"
+      title="Choose which clip this slot holds"
       style={{
-        fontSize: 12,
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        opacity: 0.01,
         background: 'transparent',
         border: 'none',
-        color: 'var(--hud-orange-bright)',
         cursor: 'pointer',
         padding: 0,
-        marginTop: 2,
       }}
-      aria-label={`Scene ${sceneIndex + 1} slot for ${track.name}`}
+      aria-label={`Choose the clip in column ${sceneIndex + 1} for ${track.name}`}
     >
       <option value="">Pick a clip…</option>
       {candidates.map((c) => (
@@ -354,5 +387,6 @@ const ClipPicker = memo(function ClipPicker({
         </option>
       ))}
     </select>
+    </span>
   );
 });

@@ -103,6 +103,11 @@ export function ArrangeView() {
   const beatW = BASE_BEAT_W * zoom;
   const timelineW = totalBeats * beatW;
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Track-header column scroll, slaved to the timeline's. */
+  const headRef = useRef<HTMLDivElement>(null);
+  // grows on touch so the add-track control can meet the 44px floor; the ruler
+  // matches it so lane 0 starts at the same y in both columns
+  const rulerH = isMobile ? 48 : 34;
 
   const [overlayVisible, setOverlayVisible] = useState<Record<string, boolean>>({});
   const overlayCtx: AutomationOverlayState = useMemo(
@@ -157,8 +162,12 @@ export function ArrangeView() {
         >
           <div
             style={{
-              // grows on touch so the add-track buttons can meet the 44px floor
-              height: isMobile ? 48 : 32,
+              // Exactly the ruler's height. These are two separate scrollers
+              // sitting side by side, so any difference between the header
+              // column's first row and the timeline's ruler offsets EVERY lane
+              // by that difference: at 48 vs 34 the name "Bass" was drawn
+              // across 73% of the Bass lane and 27% of the Drums lane above it.
+              height: rulerH,
               padding: '4px 6px',
               display: 'flex',
               alignItems: 'center',
@@ -173,7 +182,12 @@ export function ArrangeView() {
                 anything. One clear button, and the choice is spelled out. */}
             <AddTrackButton compact={isMobile} onAdd={addTrack} />
           </div>
-          <div style={{ overflow: 'auto', flex: 1 }}>
+          {/* overflowY hidden, not auto: this column is slaved to the timeline
+              below. As two independent scrollers, one 250px swipe left the
+              timeline at 250 and the headers at 0 — after which every mute,
+              solo and clip edit landed on a different track than the one you
+              were looking at. */}
+          <div ref={headRef} data-head-scroll style={{ overflowX: 'hidden', overflowY: 'hidden', flex: 1 }}>
             {tracks.map((t) => {
               const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
               return (
@@ -196,10 +210,15 @@ export function ArrangeView() {
         {/* Timeline */}
         <div
           ref={scrollRef}
+          data-timeline-scroll
+          onScroll={(e) => {
+            const h = headRef.current;
+            if (h) h.scrollTop = e.currentTarget.scrollTop;
+          }}
           style={{ flex: 1, overflow: 'auto', position: 'relative', contain: 'layout style' }}
           className="hex-grid-bg"
         >
-          <Ruler beats={totalBeats} />
+          <Ruler beats={totalBeats} h={rulerH} />
           <div style={{ position: 'relative', width: timelineW, minWidth: '100%' }}>
             {tracks.map((t) => {
               const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
@@ -224,7 +243,7 @@ export function ArrangeView() {
                   (s, t) =>
                     s + rowH + (overlayVisible[t.id] ? (t.automation?.length ?? 0) * AUTO_LANE_H : 0),
                   0,
-                ) + 34
+                )
               }
             />
           </div>
@@ -314,7 +333,7 @@ const ZoomFloater = memo(function ZoomFloater({
   );
 });
 
-const Ruler = memo(function Ruler({ beats }: { beats: number }) {
+const Ruler = memo(function Ruler({ beats, h }: { beats: number; h: number }) {
   const BEAT_W = useBeatWidth();
   const numerator = useStore((s) => s.project.numerator || 4);
   return (
@@ -323,7 +342,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
         position: 'sticky',
         top: 0,
         zIndex: 5,
-        height: 34,
+        height: h,
         // span the full timeline, not just the viewport — otherwise the
         // flex tick cells shrink to fit and drift out of alignment with
         // the clips below, and the loop strip is undraggable when scrolled

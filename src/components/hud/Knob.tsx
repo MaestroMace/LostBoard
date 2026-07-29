@@ -83,7 +83,9 @@ export function Knob({
   return (
     <div
       title={tip}
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size + 8 }}
+      // minWidth: size, not size + 8 — the extra 8px pushed three 52px knobs
+      // past the content box of a clipped frame, which sliced the outer two.
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size }}
     >
       <div
         className="knob"

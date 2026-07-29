@@ -15,13 +15,18 @@ function dbToFill(db: number): number {
 
 class MeterBus {
   private els = new Map<Key, HTMLElement>();
+  private axis = new Map<Key, 'x' | 'y'>();
   private raf = 0;
 
   register(key: Key, el: HTMLElement): () => void {
+    // Axis is read once here, not per frame: this loop runs 60x/sec per meter
+    // and a dataset lookup inside it would be the most-executed line in the app.
+    this.axis.set(key, el.dataset.axis === 'x' ? 'x' : 'y');
     this.els.set(key, el);
     this.ensureRunning();
     return () => {
       this.els.delete(key);
+      this.axis.delete(key);
       if (this.els.size === 0) this.stop();
     };
   }
@@ -34,7 +39,8 @@ class MeterBus {
         // scaleY, not height: height forces a layout pass for every meter on
         // every frame (the mixer was doing ~220 layouts per 5s). A transform
         // stays on the compositor.
-        el.style.transform = `scaleY(${dbToFill(db).toFixed(3)})`;
+        const fill = dbToFill(db).toFixed(3);
+        el.style.transform = this.axis.get(key) === 'x' ? `scaleX(${fill})` : `scaleY(${fill})`;
       }
       this.raf = requestAnimationFrame(loop);
     };

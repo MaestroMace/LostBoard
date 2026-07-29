@@ -38,7 +38,7 @@ export function StepSequencer() {
   const setPatternLength = useStore((s) => s.setPatternLength);
 
   const { pool: drumTracks, active: activeTrack } = useActiveTrack('drum');
-  const [mode, setMode] = useState<'normal' | 'prob'>('normal');
+  const [mode, setMode] = useState<'normal' | 'vel' | 'prob'>('normal');
 
   const patternClips = useMemo(
     () => (activeTrack ? activeTrack.clips.filter((c) => c.kind === 'pattern') : []),
@@ -131,9 +131,17 @@ export function StepSequencer() {
           className={`hud-btn hud-btn--tight ${mode === 'normal' ? 'is-active' : ''}`}
           onClick={() => setMode('normal')}
           aria-pressed={mode === 'normal'}
-          title="Tap a square to turn a hit on or off; drag up and down to make it louder or softer"
+          title="Tap a square to turn a hit on or off"
         >
           Hits
+        </button>
+        <button
+          className={`hud-btn hud-btn--tight ${mode === 'vel' ? 'is-active' : ''}`}
+          onClick={() => setMode('vel')}
+          aria-pressed={mode === 'vel'}
+          title="Tap a square to cycle how hard it hits: full, 3/4, half, quarter"
+        >
+          Loudness
         </button>
         <button
           className={`hud-btn hud-btn--tight ${mode === 'prob' ? 'is-active' : ''}`}
@@ -145,8 +153,11 @@ export function StepSequencer() {
         </button>
       </div>
 
-      {/* The pattern's name is already in the dropdown two rows up. */}
-      <HexFrame>
+      {/* noclip: .hex-frame carries a clip-path, and clip-path clips
+          DESCENDANTS. That is why every step past the frame edge was
+          amputated — at 16 steps in portrait, scrolled right, not one cell was
+          inside the box and the screen went blank. */}
+      <HexFrame className="hex-frame--noclip">
         <div style={{ position: 'relative' }}>
           <div
             style={{
@@ -186,8 +197,8 @@ export function StepSequencer() {
       </HexFrame>
       </div>
       <EditorTip>
-        Tap a square to turn a hit on or off, and drag up or down to make it louder or softer. Switch "Tapping sets"
-        to Chance to make a hit land only some of the time. Drop an audio file onto a pad to use your own sound
+        Tap a square to turn a hit on or off. Switch &ldquo;Tapping sets&rdquo; to Loudness to set how hard a hit
+        lands, or Chance to make it play only some of the time. Drop an audio file onto a pad to use your own sound
         there &mdash; ◆ marks a pad you have changed.
       </EditorTip>
     </div>
@@ -252,7 +263,7 @@ const PadRow = memo(function PadRow({
   trackId: string;
   clipId: string;
   steps: Step[];
-  mode: 'normal' | 'prob';
+  mode: 'normal' | 'vel' | 'prob';
 }) {
   return (
     <>
@@ -375,6 +386,14 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
 });
 
 const PROB_CYCLE = [1, 0.75, 0.5, 0.25] as const;
+/** Loudness steps, cycled by tapping in 'vel' mode — the touch replacement for
+ *  a vertical drag the browser now owns. */
+const VEL_CYCLE = [1, 0.75, 0.5, 0.25];
+function nextVelocity(current: number): number {
+  const idx = VEL_CYCLE.findIndex((v) => Math.abs(v - current) < 0.01);
+  return VEL_CYCLE[(idx + 1) % VEL_CYCLE.length];
+}
+
 function nextProbability(current: number): number {
   const idx = PROB_CYCLE.findIndex((v) => Math.abs(v - current) < 0.01);
   return PROB_CYCLE[(idx + 1) % PROB_CYCLE.length];
@@ -399,7 +418,7 @@ const StepCell = memo(function StepCell({
   clipId: string;
   pad: DrumPad;
   index: number;
-  mode: 'normal' | 'prob';
+  mode: 'normal' | 'vel' | 'prob';
 }) {
   const touchCell = useIsMobile();
   const toggleStep = useStore((s) => s.toggleStep);
@@ -455,6 +474,8 @@ const StepCell = memo(function StepCell({
       // tap: prob mode cycles probability (on cells only), normal mode toggles
       if (mode === 'prob' && on) {
         setStepProbability(trackId, clipId, pad, index, nextProbability(prob));
+      } else if (mode === 'vel' && on) {
+        setStepVelocity(trackId, clipId, pad, index, nextVelocity(velocity));
       } else {
         toggleStep(trackId, clipId, pad, index);
       }
@@ -479,13 +500,20 @@ const StepCell = memo(function StepCell({
         boxShadow: on ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
         position: 'relative',
         clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
-        touchAction: 'none',
+        // Step cells are ~79% of the working area, so with touchAction 'none'
+        // every one of them was a scroll dead zone: a 90px upward swipe moved
+        // the grid 0px and changed the step's velocity from 0.9 to 1.0. On
+        // touch the browser gets the vertical axis back and loudness moves to
+        // its own tap mode; a mouse keeps drag-for-velocity.
+        touchAction: touchCell ? 'pan-y' : 'none',
       }}
       aria-pressed={on}
       title={
         mode === 'prob'
-          ? 'Tap to cycle trigger probability'
-          : 'Tap to toggle · drag up/down for velocity'
+          ? 'Tap to cycle how often this plays'
+          : mode === 'vel'
+            ? 'Tap to cycle how hard this hits'
+            : 'Tap to turn this hit on or off'
       }
     >
       {on && prob < 1 && (
