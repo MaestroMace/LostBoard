@@ -39,6 +39,9 @@ const TRACK_KIND_LABEL: Record<Track['kind'], string> = {
 const touchPrimary = () =>
   typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+/** The clip's name band. Everything else inside a clip lives below it. */
+const NAME_BAND_H = 15;
+
 /** Fallback name for a clip that has never been given one. */
 const CLIP_KIND_LABEL: Record<Clip['kind'], string> = {
   midi: 'Notes',
@@ -149,7 +152,10 @@ export function ArrangeView() {
     <SnapContext.Provider value={snapBeats}>
     <AutomationOverlayContext.Provider value={overlayCtx}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div className="warning-stripe--thin warning-stripe" />
+      {/* Decoration, and the first thing to go on a phone: 4px of diagonal
+          hazard tape directly under the tab bar, in the view with the most
+          going on. Desktop keeps it. */}
+      {!isMobile && <div className="warning-stripe--thin warning-stripe" />}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {/* Track headers */}
         <div
@@ -1600,59 +1606,92 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         contain: 'layout style paint',
       }}
     >
-      {/* right: 26 keeps the name clear of the ✕ in the corner — they used to
-          sit on top of each other and the name won. */}
+      {/* A name band across the top, with its own backdrop.
+          The note preview used to be full-bleed, so its blocks ran straight
+          through the label: "Beat" survived only on its text-shadow, and the
+          squares immediately after it read as more letters. Name band on top,
+          preview below it, nothing overlapping anything. */}
       <div
-        className="hud-label"
         style={{
           position: 'absolute',
-          top: 4,
-          left: 8,
-          right: 26,
-          fontSize: 11,
-          letterSpacing: '0.02em',
-          color: '#fff',
-          textShadow: '0 0 4px #000',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: NAME_BAND_H,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 22px 0 7px',
+          background: 'rgba(0,0,0,0.5)',
           pointerEvents: 'none',
         }}
       >
-        {clip.name ?? CLIP_KIND_LABEL[clip.kind]}
+        <span
+          className="hud-label"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 11,
+            lineHeight: 1,
+            letterSpacing: '0.02em',
+            color: '#fff',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {clip.name ?? CLIP_KIND_LABEL[clip.kind]}
+        </span>
       </div>
       <ClipPreview clip={clip} />
-      {/* clip-affordance: a clip can be ~80x48, so this cannot reach the 44px
-          touch floor and cannot spill outside either (the clip hides its own
-          overflow). It takes the biggest target the clip can hold. */}
+      {/* A bare glyph at the right end of the name band, not a bordered button
+          floating over the preview. A clip can be ~94x36, so this cannot reach
+          the 44px floor; it opts out and takes the band's full height. */}
       <button
-        className="hud-btn hud-btn--icon clip-affordance"
+        className="clip-affordance no-touch-floor"
         onClick={(e) => {
           e.stopPropagation();
           removeClip(clip.id);
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        aria-label="Delete clip"
-        title="Delete clip"
-        style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '1px 4px', fontSize: 12, zIndex: 3, lineHeight: 1 }}
+        aria-label={`Delete ${clip.name ?? CLIP_KIND_LABEL[clip.kind]}`}
+        title="Delete this clip"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: 20,
+          height: NAME_BAND_H,
+          minWidth: 0,
+          minHeight: 0,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          color: 'rgba(255,255,255,0.8)',
+          fontSize: 11,
+          lineHeight: 1,
+          zIndex: 3,
+        }}
       >
         ✕
       </button>
-      {/* Resize handle starts BELOW the ✕ so the two no longer fight for the
-          same top-right corner (you'd hit delete while trying to resize). */}
+      {/* Below the name band, not from top:20 — at rowH 44 the block is 36px
+          tall, so top:20 put the grip and the ✕ on the same pixels between
+          y=20 and y=25 and you hit delete reaching for resize. */}
       <div
         onPointerDown={(e) => down(e, 'resize')}
         title="Drag to resize"
         style={{
           position: 'absolute',
           right: 0,
-          top: 20,
+          top: NAME_BAND_H,
           bottom: 0,
-          width: 14,
+          width: 13,
           cursor: 'ew-resize',
-          // visible grip so the edge reads as draggable
+          // Two short strokes, not four bright ones. At 0.5 alpha every 4px
+          // across 14px this read as loudly as the note preview underneath it,
+          // in a block only 94px wide.
           background:
-            'linear-gradient(90deg, transparent, rgba(255,255,255,0.18)), repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,0.5) 3px 4px)',
+            'linear-gradient(90deg, transparent, rgba(255,255,255,0.10)), repeating-linear-gradient(90deg, transparent 0 4px, rgba(255,255,255,0.28) 4px 5px)',
           backgroundPosition: 'right',
           touchAction: 'none',
         }}
@@ -1661,9 +1700,27 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
   );
 });
 
+/**
+ * The clip's contents, sketched.
+ *
+ * It is a hint about what is inside, not a readable score, so it lives below
+ * the name band and at an opacity that keeps it subordinate to the label. As a
+ * full-bleed layer at 0.85/0.7 it was the same visual weight as the name and
+ * ran straight through it.
+ */
+const PREVIEW_BOX: React.CSSProperties = {
+  position: 'absolute',
+  top: NAME_BAND_H,
+  left: 0,
+  right: 0,
+  pointerEvents: 'none',
+};
+
 const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
   const rowH = useRowHeight();
   const BEAT_W = useBeatWidth();
+  /** Height the preview actually gets, once the name band has taken its cut. */
+  const boxH = Math.max(4, rowH - 8 - NAME_BAND_H);
   if (clip.kind === 'midi') {
     if (clip.notes.length === 0) return null;
     const lo = Math.min(...clip.notes.map((n) => n.pitch));
@@ -1672,22 +1729,22 @@ const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
     return (
       <svg
         width="100%"
-        height="100%"
-        viewBox={`0 0 ${clip.length * BEAT_W} ${rowH - 8}`}
+        height={boxH}
+        viewBox={`0 0 ${clip.length * BEAT_W} ${boxH}`}
         preserveAspectRatio="none"
-        style={{ position: 'absolute', inset: 0, opacity: 0.85 }}
+        style={{ ...PREVIEW_BOX, opacity: 0.5 }}
       >
         {clip.notes.map((n) => {
-          const y = ((hi - n.pitch) / range) * (rowH - 18) + 14;
+          // pitch mapped into the box, with 2px of air top and bottom
+          const y = ((hi - n.pitch) / range) * Math.max(1, boxH - 5) + 2;
           return (
             <rect
               key={n.id}
               x={n.start * BEAT_W}
               y={y}
               width={Math.max(2, n.length * BEAT_W)}
-              height={3}
+              height={2.5}
               fill="#fff"
-              opacity={0.7}
             />
           );
         })}
@@ -1695,34 +1752,33 @@ const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
     );
   }
   if (clip.kind === 'audio') {
-    return <AudioWaveform sampleId={clip.sampleId} width={clip.length * BEAT_W} />;
+    return <AudioWaveform sampleId={clip.sampleId} width={clip.length * BEAT_W} height={boxH} />;
   }
   return (
     <svg
       width="100%"
-      height="100%"
+      height={boxH}
       viewBox={`0 0 ${clip.pattern.length} 8`}
       preserveAspectRatio="none"
-      style={{ position: 'absolute', inset: 0, opacity: 0.7 }}
+      style={{ ...PREVIEW_BOX, opacity: 0.45 }}
     >
       {Object.entries(clip.pattern.steps).map(([pad, steps], ri) =>
         steps.map((s, i) =>
-          s.on ? <rect key={`${pad}${i}`} x={i + 0.05} y={ri + 0.05} width={0.9} height={0.9} fill="#fff" /> : null,
+          s.on ? <rect key={`${pad}${i}`} x={i + 0.1} y={ri + 0.1} width={0.8} height={0.8} fill="#fff" /> : null,
         ),
       )}
     </svg>
   );
 });
 
-function AudioWaveform({ sampleId, width }: { sampleId: string; width: number }) {
+function AudioWaveform({ sampleId, width, height }: { sampleId: string; width: number; height: number }) {
   const buffer = audioEngine.getSample(sampleId);
   if (!buffer) {
     return (
       <div
         className="hud-readout--dim hud-readout"
         style={{
-          position: 'absolute',
-          inset: 0,
+          ...PREVIEW_BOX,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -1748,10 +1804,10 @@ function AudioWaveform({ sampleId, width }: { sampleId: string; width: number })
   return (
     <svg
       width="100%"
-      height="100%"
+      height={height}
       viewBox={`0 0 ${cols} 100`}
       preserveAspectRatio="none"
-      style={{ position: 'absolute', inset: 0, opacity: 0.85 }}
+      style={{ ...PREVIEW_BOX, opacity: 0.5 }}
     >
       {peaks.map((p, i) => (
         <rect key={i} x={i} y={50 - p * 48} width={0.9} height={Math.max(0.5, p * 96)} fill="#fff" />
