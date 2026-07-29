@@ -77,7 +77,9 @@ export function SynthPanel() {
             value={active.id}
             onChange={(e) => selectTrack(e.target.value)}
             aria-label="Track to edit the sound of"
-            style={{ flex: '1 1 120px', minWidth: 0 }}
+            // capped: on a wide screen `flex: 1` stretched a three-item
+            // dropdown across 1500px
+            style={{ flex: '1 1 120px', minWidth: 0, maxWidth: 260 }}
           >
             {synthTracks.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
