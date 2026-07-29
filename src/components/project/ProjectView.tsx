@@ -809,7 +809,7 @@ function OfflineBounceButton() {
 
   async function bounce() {
     if (sessionMode) {
-      alert('Switch back to ARRANGEMENT mode in the SESSION tab first.');
+      alert('Switch the Clips tab back to playing the Timeline first — tracks bounce from the song timeline, not from launched loops.');
       return;
     }
     setRunning(true);
@@ -859,7 +859,7 @@ function OfflineStemsButton() {
 
   async function bounce() {
     if (sessionMode) {
-      alert('Switch back to ARRANGEMENT mode in the SESSION tab first.');
+      alert('Switch the Clips tab back to playing the Timeline first — tracks bounce from the song timeline, not from launched loops.');
       return;
     }
     if (!confirm(`Render ${project.tracks.length} offline stems? Usually faster than real-time.`)) return;

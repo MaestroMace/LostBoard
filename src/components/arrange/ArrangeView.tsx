@@ -30,10 +30,20 @@ const useRowHeight = () => useContext(RowHeightContext);
 const AUTO_LANE_H = 56;
 /** Plain-language name for a track kind, shown as a badge so the codename isn't the only label. */
 const TRACK_KIND_LABEL: Record<Track['kind'], string> = {
-  drum: 'DRUMS',
-  synth: 'SYNTH',
-  sampler: 'SAMPLER',
-  audio: 'AUDIO',
+  drum: 'Drums',
+  synth: 'Synth',
+  sampler: 'Sampler',
+  audio: 'Audio',
+};
+/** True where the primary pointer can't hover — i.e. a finger, not a mouse. */
+const touchPrimary = () =>
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/** Fallback name for a clip that has never been given one. */
+const CLIP_KIND_LABEL: Record<Clip['kind'], string> = {
+  midi: 'Notes',
+  pattern: 'Beat',
+  audio: 'Audio',
 };
 /** Default px per beat at zoom = 1×. Consumers read the current value through BeatWidthContext. */
 const BASE_BEAT_W = 24;
@@ -1497,8 +1507,14 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
     // a tap (no real drag) on the clip body: second tap within 380ms opens
     // the editor — replacing the native dblclick that pointer capture eats
     if (d.mode === 'move' && !d.moved) {
+      // On touch one tap opens it. Writing notes into a clip is the whole
+      // point of the app, and it was hidden behind a double-tap with nothing
+      // on screen to suggest it — while the only visible button on a clip
+      // deleted it. A drag still moves the clip; only a tap that went nowhere
+      // counts. Desktop keeps double-click, where single click means select
+      // and shift-click extends the selection.
       const now = performance.now();
-      if (now - lastTap.current < 380) {
+      if (touchPrimary() || now - lastTap.current < 380) {
         openEditor();
         lastTap.current = 0;
       } else {
@@ -1550,19 +1566,26 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         contain: 'layout style paint',
       }}
     >
+      {/* right: 26 keeps the name clear of the ✕ in the corner — they used to
+          sit on top of each other and the name won. */}
       <div
         className="hud-label"
         style={{
           position: 'absolute',
           top: 4,
           left: 8,
+          right: 26,
           fontSize: 11,
-          letterSpacing: '0.2em',
+          letterSpacing: '0.02em',
           color: '#fff',
           textShadow: '0 0 4px #000',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
         }}
       >
-        {clip.name ?? clip.kind.toUpperCase()}
+        {clip.name ?? CLIP_KIND_LABEL[clip.kind]}
       </div>
       <ClipPreview clip={clip} />
       {/* clip-affordance: a clip can be ~80x48, so this cannot reach the 44px

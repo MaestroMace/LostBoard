@@ -125,25 +125,28 @@ export function StepSequencer() {
           <option value={64}>64</option>
         </select>
         <div style={{ flex: 1 }} />
+        {/* Two bare words side by side gave no clue they were a mode switch. */}
+        <span className="hud-label">Tapping sets</span>
         <button
-          className={`hud-btn ${mode === 'normal' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--tight ${mode === 'normal' ? 'is-active' : ''}`}
           onClick={() => setMode('normal')}
           aria-pressed={mode === 'normal'}
-          title="Normal mode — tap toggles, drag sets velocity"
+          title="Tap a square to turn a hit on or off; drag up and down to make it louder or softer"
         >
-          Steps
+          Hits
         </button>
         <button
-          className={`hud-btn ${mode === 'prob' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--tight ${mode === 'prob' ? 'is-active' : ''}`}
           onClick={() => setMode('prob')}
           aria-pressed={mode === 'prob'}
-          title="Probability mode — tap cycles trigger chance (100/75/50/25%)"
+          title="Tap a square to set how often it actually plays: every time, 3 in 4, half, 1 in 4"
         >
           Chance
         </button>
       </div>
 
-      <HexFrame title={`Pattern: ${activeClip.name ?? activeClip.id}`}>
+      {/* The pattern's name is already in the dropdown two rows up. */}
+      <HexFrame>
         <div style={{ position: 'relative' }}>
           <div
             style={{

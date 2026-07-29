@@ -219,11 +219,12 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
         <button
           className="hud-btn hud-btn--icon"
           onClick={() => launchSessionClip(track.id, null)}
-          title="Stop this track's session clip"
+          aria-label={`Stop the loop playing on ${track.name}`}
+          title={`Stop the loop playing on ${track.name}`}
           style={{ padding: '1px 6px', fontSize: 12, flex: '0 0 auto' }}
           disabled={!playingClipId}
         >
-          {isMobile ? '■' : '■ STOP'}
+          {isMobile ? '■' : '■ Stop'}
         </button>
       </div>
       {Array.from({ length: sceneCount }).map((_, i) => (
