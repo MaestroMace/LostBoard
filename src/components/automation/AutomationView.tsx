@@ -11,12 +11,6 @@ import {
 import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 const CURVE_MODES: AutomationCurve[] = ['linear', 'exponential', 'hold', 'step'];
-const CURVE_GLYPH: Record<AutomationCurve, string> = {
-  linear: '╱',
-  exponential: '⌒',
-  hold: '⎺',
-  step: '⌐',
-};
 /** What the shape does, not what the code calls it. Kept short — this sits in
  *  a ~96px column on a phone, and "Hold, then jump" truncated to "Hold, t…". */
 const CURVE_LABEL: Record<AutomationCurve, string> = {
@@ -560,7 +554,7 @@ function LaneEditor({ track, lane, land = false }: { track: Track; lane: Automat
               >
                 {CURVE_MODES.map((m) => (
                   <option key={m} value={m}>
-                    {CURVE_GLYPH[m]} {CURVE_LABEL[m]}
+                    {CURVE_LABEL[m]}
                   </option>
                 ))}
               </select>
