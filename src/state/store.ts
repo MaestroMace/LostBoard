@@ -1381,12 +1381,15 @@ export const useStore = create<Store>()(
       if (!track) return null;
       const bpm = get().project.bpm;
       const bps = bpm / 60;
-      const lengthBeats = Math.max(0.25, durationSec * bps);
+      // Math.max(0.25, NaN) is NaN — a decode that failed, or a stream with no
+      // reported duration, produced a clip whose length was NaN. That reaches
+      // SVG geometry as x="NaN" and the scheduler as a NaN duration.
+      const lengthBeats = Math.max(MIN_CLIP_LEN, num(durationSec, 0) * bps);
       const clip: Clip = {
         id: newId('clp'),
         kind: 'audio',
         trackId,
-        start: atBeat,
+        start: Math.max(0, num(atBeat, 0)),
         length: lengthBeats,
         sampleId,
         gain: 1,
@@ -1398,7 +1401,7 @@ export const useStore = create<Store>()(
         name: name ?? `AUD-${track.clips.length + 1}`,
       };
       const tracks = get().project.tracks.map((t) =>
-        t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t,
+        t.id === trackId ? { ...t, clips: trimOverlaps([...t.clips, clip], clip) } : t,
       );
       commit({ ...get().project, tracks, updatedAt: Date.now() }, { selectedClipIds: [clip.id] });
       return clip;
