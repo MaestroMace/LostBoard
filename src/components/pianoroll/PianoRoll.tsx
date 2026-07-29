@@ -328,7 +328,12 @@ export function PianoRoll() {
         </div>
 
         <div style={land ? { display: 'contents' } : { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {/* Draws / Selects / Erases are self-describing verbs */}
+        {/* Imperatives — these are the thing you are about to do, not a
+            description of what the button does. "Draws" read as a status.
+            All three share one class so the filled state is the only signal
+            for which tool is armed: before, Select was green-bordered and
+            Erase red-bordered whether or not they were chosen, so the loudest
+            button on the strip was often the inactive one. */}
         {!land && <span className="hud-label" style={{ minWidth: 74 }}>Tapping</span>}
         <button
           className={`hud-btn ${tool === 'draw' ? 'is-active' : ''}`}
@@ -336,23 +341,23 @@ export function PianoRoll() {
           aria-pressed={tool === 'draw'}
           title="Tap or drag on the grid to add a note"
         >
-          Draws
+          Draw
         </button>
         <button
-          className={`hud-btn hud-btn--green ${tool === 'select' ? 'is-active' : ''}`}
+          className={`hud-btn ${tool === 'select' ? 'is-active' : ''}`}
           onClick={() => setTool('select')}
           aria-pressed={tool === 'select'}
           title="Drag a box round the notes you want to work on together"
         >
-          Selects
+          Select
         </button>
         <button
-          className={`hud-btn hud-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
+          className={`hud-btn ${tool === 'erase' ? 'is-active' : ''}`}
           onClick={() => setTool('erase')}
           aria-pressed={tool === 'erase'}
           title="Tap a note to remove it"
         >
-          Erases
+          Erase
         </button>
         {selectedNoteIds.length > 0 && (
           <button
@@ -599,8 +604,8 @@ export function PianoRoll() {
         )}
       </div>
       <EditorTip>
-        Draws: drag on empty grid and the note is as long as you drag. Selects: drag a box round several notes, then
-        move them together. Erases: tap a note to remove it. Drag a note's right edge to change its length, and drag
+        Draw: drag on empty grid and the note is as long as you drag. Select: drag a box round several notes, then
+        move them together. Erase: tap a note to remove it. Drag a note's right edge to change its length, and drag
         the bars under the grid to change how hard each note hits. ⌘ or Ctrl with the wheel zooms.
       </EditorTip>
       {/* Measured at 768-911 x 214-264 over a grid strip ending at 276 — the

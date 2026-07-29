@@ -75,7 +75,6 @@ export default function App() {
   // the user should not have to know which editor their track needs.
   const selectedTrack = useStore((s) => s.project.tracks.find((t) => t.id === s.selectedTrackId) ?? s.project.tracks[0]);
   const notesViewForTrack: View = selectedTrack?.kind === 'drum' ? 'sequencer' : 'pianoroll';
-  const selectedTrackName = selectedTrack?.name ?? '';
   const inEditor = EDITOR_VIEWS.includes(view);
   /**
    * A phone in landscape has ~336 CSS px of usable height once Android's
@@ -158,7 +157,11 @@ export default function App() {
           })}
           {/* Landscape folds the second level in here rather than spending
               another 38px row on it. The divider keeps the two levels legible
-              as levels — nine peers in a line would read as one flat list. */}
+              as levels — nine peers in a line would read as one flat list.
+              No track name here: all five editor panels carry their own
+              kind-aware track selector, so a read-only copy in the strip was a
+              sixth place showing the same thing, one row above the control that
+              can actually change it. */}
           {oneRowNav && inEditor && (
             <>
               <span className="hud-tabs__divider" aria-hidden />
@@ -176,9 +179,6 @@ export default function App() {
                   </button>
                 );
               })}
-              <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap', flex: '0 0 auto', paddingLeft: 6 }}>
-                {selectedTrackName}
-              </span>
             </>
           )}
         </div>
@@ -217,9 +217,6 @@ export default function App() {
               );
             })}
           </div>
-          <span className="hud-readout--dim hud-readout" style={{ alignSelf: 'center', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
-            {selectedTrackName}
-          </span>
         </div>
       )}
 

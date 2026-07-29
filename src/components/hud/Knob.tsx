@@ -96,7 +96,10 @@ export function Knob({
         onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
       >
-        <div className="knob__ring" />
+        <div
+          className="knob__ring"
+          style={{ '--knob-arc': `${norm * 270}deg` } as React.CSSProperties}
+        />
         <div
           className="knob__indicator"
           style={{ transform: `translateX(-50%) rotate(${angle}deg)` }}

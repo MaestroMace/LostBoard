@@ -12,7 +12,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
       ['L', 'Toggle loop'],
       ['M', 'Toggle metronome'],
       ['◉ Tap', 'Tap-tempo (4-tap rolling average)'],
-      ['⏺ Punch in', 'Record MIDI into the armed synth track after a one-bar count-in'],
+      ['Punch in', 'Record MIDI into the armed synth track after a one-bar count-in'],
     ],
   },
   {

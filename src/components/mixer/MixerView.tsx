@@ -144,7 +144,7 @@ function MuteSolo({ track }: { track: Track }) {
         Mute
       </button>
       <button
-        className={`hud-btn hud-btn--green hud-btn--tight ${track.solo ? 'is-active' : ''}`}
+        className={`hud-btn hud-btn--tight ${track.solo ? 'hud-btn--green is-active' : ''}`}
         aria-pressed={track.solo}
         onClick={(e) => {
           e.stopPropagation();

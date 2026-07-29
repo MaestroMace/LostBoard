@@ -154,10 +154,12 @@ export function ProjectView() {
               style={{ width: '100%' }}
             />
           </Field>
-          <Field label={`Swing — ${Math.round((project.swing ?? 0) * 100)}%`}>
-            {/* min-width on the whole field, so the 1/8 vs 1/16 select cannot
-                be pushed off the right edge by the slider's own floor */}
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center', minWidth: 190 }}>
+          {/* Two columns wide. A 1fr column here is ~150px, and the field's own
+              floor is 190 (120 of slider travel plus the 1/8 vs 1/16 select),
+              so as a single column it pushed 30px of the select past the right
+              edge of the viewport with only 8px of scroll to recover it. */}
+          <Field label={`Swing — ${Math.round((project.swing ?? 0) * 100)}%`} span={2}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', minWidth: 0 }}>
               <input
                 type="range"
                 className="hud-slider"
@@ -376,9 +378,9 @@ function InstallBanner() {
  * caption is the control's accessible name and tapping the caption focuses the
  * field. As a span, the song-name box had no name at all.
  */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, span }: { label: string; children: React.ReactNode; span?: number }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: span ? `span ${span}` : undefined, minWidth: 0 }}>
       <span className="hud-label" style={{ fontSize: 12 }}>{label}</span>
       {children}
     </label>

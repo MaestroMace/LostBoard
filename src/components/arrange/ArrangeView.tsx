@@ -667,7 +667,11 @@ const TrackHeader = memo(function TrackHeader({
             >
               {track.name}
             </span>
-            <span aria-hidden style={{ opacity: 0.55, fontSize: 13, flex: '0 0 auto' }}>›</span>
+            {/* The only visible sign that the track name opens a settings
+                sheet. At 13px and 0.55 alpha in orange on near-black it was
+                effectively invisible, which made volume, pan and arm feel like
+                they were missing rather than one tap away. */}
+            <span aria-hidden style={{ opacity: 0.95, fontSize: 17, lineHeight: 1, flex: '0 0 auto' }}>›</span>
           </button>
           {inlineToggles && (
             <>
@@ -686,7 +690,10 @@ const TrackHeader = memo(function TrackHeader({
                 Mute
               </button>
               <button
-                className={`hud-btn hud-btn--green hud-btn--tight ${track.solo ? 'is-active' : ''}`}
+                /* Green only when soloed. As a permanent green border it read
+                   as "solo is on" on every track at once, so three tracks all
+                   looked soloed and the state carried no information. */
+                className={`hud-btn hud-btn--tight ${track.solo ? 'hud-btn--green is-active' : ''}`}
                 aria-pressed={track.solo}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -854,7 +861,7 @@ const TrackHeader = memo(function TrackHeader({
           M
         </button>
         <button
-          className={`hud-btn hud-btn--green hud-btn--icon hud-btn--tight ${track.solo ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon hud-btn--tight ${track.solo ? 'hud-btn--green is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
@@ -1026,7 +1033,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
             Mute
           </button>
           <button
-            className={`hud-btn hud-btn--green ${track.solo ? 'is-active' : ''}`}
+            className={`hud-btn ${track.solo ? 'hud-btn--green is-active' : ''}`}
             style={toggle(track.solo)}
             onClick={() => updateTrack(track.id, { solo: !track.solo })}
           >
@@ -1620,7 +1627,9 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
           height: NAME_BAND_H,
           display: 'flex',
           alignItems: 'center',
-          padding: '0 22px 0 7px',
+          // 22px left only 2px between a truncated name and the ✕ glyph, so a
+          // long track name read as if it were touching the delete button.
+          padding: '0 26px 0 7px',
           background: 'rgba(0,0,0,0.5)',
           pointerEvents: 'none',
         }}
@@ -1690,8 +1699,14 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
           // Two short strokes, not four bright ones. At 0.5 alpha every 4px
           // across 14px this read as loudly as the note preview underneath it,
           // in a block only 94px wide.
+          //
+          // The dark fade behind the strokes is what keeps them legible as a
+          // handle: the preview runs full-bleed underneath, so without it the
+          // dashes and the note blocks tangled into one texture and neither
+          // read. Fading the preview out under the grip separates the two
+          // without shrinking the preview's time mapping.
           background:
-            'linear-gradient(90deg, transparent, rgba(255,255,255,0.10)), repeating-linear-gradient(90deg, transparent 0 4px, rgba(255,255,255,0.28) 4px 5px)',
+            'repeating-linear-gradient(90deg, transparent 0 4px, rgba(255,255,255,0.28) 4px 5px), linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.85))',
           backgroundPosition: 'right',
           touchAction: 'none',
         }}

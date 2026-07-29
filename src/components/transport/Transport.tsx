@@ -231,7 +231,10 @@ export function Transport() {
               : 'Punch-in MIDI record at the playhead onto the armed synth track'
           }
         >
-          ⏺{lbl('Punch in')}
+          {/* No glyph: this was ⏺, visually identical to Record's ● one button
+              to the left, so the icon distinguished nothing and the word did
+              all the work anyway. */}
+          Punch in
         </button>
         )}
         {!isMobile && (
@@ -275,7 +278,9 @@ export function Transport() {
               aria-pressed={metronome}
               title="Metronome"
             >
-              ⛬{lbl('Click')}
+              {/* ⛬ is a historic-site marker, not a metronome — it rendered as
+                  three floating dots and meant nothing. */}
+              Click
             </button>
           </>
         )}
@@ -335,7 +340,9 @@ export function Transport() {
         <>
           <div style={{ flex: 1, minWidth: 8 }} />
           <Indicator label="Play" on={playing} color="green" />
-          <Indicator label="REC" on={micRecording || bouncing} color="red" />
+          {/* "Rec", not "REC" — it sits beside "Play" and was the only
+              shouted string left in the header. */}
+          <Indicator label="Rec" on={micRecording || bouncing} color="red" />
           <PositionReadout numerator={tparams.numerator} />
         </>
       )}

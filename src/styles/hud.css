@@ -303,16 +303,17 @@
 .led.amber.on { background: var(--hud-amber); box-shadow: 0 0 6px var(--hud-amber); }
 
 /* Meters */
+/* A bordered black box that is empty whenever nothing is playing reads as an
+   empty input field, especially sitting beside a dB readout in a mixer row.
+   No border and a faintly lit track: at rest it is visibly a level at zero. */
 .meter {
   display: flex;
   flex-direction: column-reverse;
   width: 8px;
   height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 106, 0, 0.4);
+  background: rgba(255, 106, 0, 0.13);
   overflow: hidden;
   gap: 1px;
-  padding: 1px;
 }
 .meter__bar {
   width: 100%;
@@ -447,12 +448,28 @@
   transform-origin: 50% 20px;
   box-shadow: 0 0 4px var(--hud-orange-bright);
 }
+/* This was a dashed circle drawn identically whatever the knob was set to:
+   twelve knobs on the Sound panel meant twelve identical rings of texture and
+   not one of them told you anything. Same pixels, now they are the value —
+   a 270° sweep from the knob's 7-o'clock start, filled to where it sits. */
 .knob__ring {
   position: absolute;
-  inset: -4px;
+  inset: -3px;
   border-radius: 50%;
-  border: 1px dashed rgba(255, 106, 0, 0.25);
   pointer-events: none;
+  /* Deliberately dimmer and thinner than the pointer: the pointer is what you
+     read, the arc is context. At full brightness and 3px it turned every knob
+     into a glowing donut and three of them shouted over the panel title. */
+  background: conic-gradient(
+    from 225deg,
+    rgba(255, 106, 0, 0.75) 0deg var(--knob-arc, 0deg),
+    rgba(255, 106, 0, 0.13) var(--knob-arc, 0deg) 270deg,
+    transparent 270deg
+  );
+  /* Keep only a 2px annulus — without this the gradient fills the whole disc
+     and swallows the knob face. */
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px));
+  mask: radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px));
 }
 
 /* Horizontal meter, for the landscape mixer rows. */
@@ -571,10 +588,29 @@ button, .hud-btn { touch-action: manipulation; }
   .hud-tabs__strip::-webkit-scrollbar {
     display: none;
   }
+  /* Navigation is how you find your way around; it earns more type, not less.
+     At 9px it was smaller than the body text it organised — the scale was
+     upside down at the top. There is ~230px of slack on the widest row
+     (Edit, both tab levels), so this costs nothing. */
   .hud-tab {
     flex: 0 0 auto;
     padding: 8px 10px;
-    font-size: 9px;
+    font-size: 12px;
+  }
+  /* Second-level tabs read as subordinate by size, not just by a divider. */
+  .hud-tab[data-tab='editor'] {
+    font-size: 11px;
+    opacity: 0.88;
+  }
+  /* Landscape folds both tab levels onto one row, and both active tabs were
+     getting the same filled box and underline — two identical "you are here"
+     boxes in one strip, which answers the question twice and settles neither.
+     The primary level keeps the box; the editor level keeps only the
+     underline, so the strip reads as section then page. */
+  .hud-tab[data-tab='editor'].is-active {
+    background: transparent;
+    border-color: transparent;
+    opacity: 1;
   }
 
   .hud-btn {
@@ -587,8 +623,9 @@ button, .hud-btn { touch-action: manipulation; }
   .hex-frame {
     padding: 7px 8px;
   }
+  /* A section heading smaller than the values under it is not a heading. */
   .hex-frame__title {
-    font-size: 8px;
+    font-size: 11px;
     letter-spacing: 0.04em;
   }
   .display--big {
@@ -608,6 +645,14 @@ button, .hud-btn { touch-action: manipulation; }
   /* Crosshair corners are decorative — drop on small screens to reclaim space */
   .crosshair-corner {
     display: none;
+  }
+
+  /* A 24px orange grid painted behind nine views. On a desktop with air around
+     the panels it reads as backdrop; at 923x336 with controls edge to edge it
+     crosses every frame border and, in the arrangement, sits behind the beat
+     grid — a grid that means nothing directly underneath one that does. */
+  .hex-grid-bg {
+    background-image: none;
   }
 
   ::-webkit-scrollbar {
@@ -634,8 +679,8 @@ button, .hud-btn { touch-action: manipulation; }
     padding: 4px 6px;
   }
   .hud-tab {
-    padding: 4px 9px;
-    font-size: 9px;
+    padding: 4px 8px;
+    font-size: 12px;
   }
   .hud-tabs {
     padding: 2px 6px;
@@ -661,28 +706,6 @@ button, .hud-btn { touch-action: manipulation; }
   .knob {
     width: 44px !important;
     height: 44px !important;
-  }
-}
-
-/* A horizontal slider in a row: 44px of hit box, 12px of visible track.
-   Deliberately scoped — applying this to every .hud-slider would add 32px to
-   each slider in Sound, Effects, Automation and the track sheet, and the
-   vertical mixer faders inherit .hud-slider too. */
-@media (pointer: coarse) {
-  .hud-slider--row {
-    height: 44px;
-    background: transparent;
-    border: 0;
-  }
-  .hud-slider--row::-webkit-slider-runnable-track {
-    height: 12px;
-    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
-    border: 1px solid rgba(255, 106, 0, 0.5);
-  }
-  .hud-slider--row::-moz-range-track {
-    height: 12px;
-    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
-    border: 1px solid rgba(255, 106, 0, 0.5);
   }
 }
 
@@ -748,6 +771,35 @@ button, .hud-btn { touch-action: manipulation; }
   /* Keyboard-only hints are noise on a touch device. */
   .desktop-only {
     display: none !important;
+  }
+}
+
+/* A horizontal slider in a row: 44px of hit box, 12px of visible track.
+   Deliberately scoped — applying this to every .hud-slider would add 32px to
+   each slider in Sound, Effects, Automation and the track sheet, and the
+   vertical mixer faders inherit .hud-slider too.
+   
+   This block MUST stay after the generic `.hud-slider { height: 12px }` above.
+   Both selectors are one class, so the cascade is decided by source order, and
+   while this sat earlier in the file the mixer row slider silently collapsed
+   from a 44px hit box to 12px — a thumb-hostile control on the one screen made
+   entirely of sliders — and the 30px thumb spilled 9px past the row into its
+   neighbour. */
+@media (pointer: coarse) {
+  input.hud-slider--row {
+    height: 44px;
+    background: transparent;
+    border: 0;
+  }
+  input.hud-slider--row::-webkit-slider-runnable-track {
+    height: 12px;
+    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
+    border: 1px solid rgba(255, 106, 0, 0.5);
+  }
+  input.hud-slider--row::-moz-range-track {
+    height: 12px;
+    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
+    border: 1px solid rgba(255, 106, 0, 0.5);
   }
 }
 
