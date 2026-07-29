@@ -107,7 +107,7 @@ export function AutomationView() {
       </div>
 
       {lanes.length === 0 ? (
-        <HexFrame title="Nothing automated yet">
+        <HexFrame title="Automation">
           <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
             Automation makes a control move on its own as the song plays &mdash; a filter opening up
             over four bars, a fade at the end. Tap <b>Add</b> to pick what should move, then tap the

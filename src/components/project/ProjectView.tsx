@@ -117,13 +117,17 @@ export function ProjectView() {
                 max={16}
                 value={project.numerator}
                 onChange={(e) => setTimeSig(parseInt(e.target.value), project.denominator)}
+                aria-label="Beats per bar"
                 style={{ width: 60 }}
               />
               <span style={{ alignSelf: 'center' }}>/</span>
+              {/* The wrapping <label> names the first control only, so this one
+                  needs its own or it reads as an unnamed dropdown. */}
               <select
                 className="display"
                 value={project.denominator}
                 onChange={(e) => setTimeSig(project.numerator, parseInt(e.target.value))}
+                aria-label="Beat length"
               >
                 {[2, 4, 8, 16].map((d) => (
                   <option key={d} value={d}>{d}</option>
@@ -152,13 +156,15 @@ export function ProjectView() {
                 step={0.01}
                 value={project.swing ?? 0}
                 onChange={(e) => setSwing(parseFloat(e.target.value), project.swingSubdivision ?? '8n')}
+                aria-label="Swing amount"
                 style={{ flex: 1 }}
               />
               <select
                 className="display"
                 value={project.swingSubdivision ?? '8n'}
                 onChange={(e) => setSwing(project.swing ?? 0, e.target.value)}
-                title="Swing grid"
+                aria-label="Swing note length"
+                title="Whether swing is applied to 1/8 or 1/16 notes"
               >
                 <option value="8n">1/8</option>
                 <option value="16n">1/16</option>
@@ -351,12 +357,17 @@ function InstallBanner() {
   );
 }
 
+/**
+ * A real <label> wrapping the control, not a <span> sitting above it — so the
+ * caption is the control's accessible name and tapping the caption focuses the
+ * field. As a span, the song-name box had no name at all.
+ */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span className="hud-label" style={{ fontSize: 12 }}>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 

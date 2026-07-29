@@ -231,9 +231,23 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <button className="hud-btn hud-btn--icon" onClick={() => setOctave((o) => Math.max(1, o - 1))}>OCT -</button>
-        <div className="display">OCT {octave}</div>
-        <button className="hud-btn hud-btn--icon" onClick={() => setOctave((o) => Math.min(8, o + 1))}>OCT +</button>
+        <button
+          className="hud-btn hud-btn--icon"
+          onClick={() => setOctave((o) => Math.max(1, o - 1))}
+          aria-label="Octave down"
+          title="Move the keyboard down an octave"
+        >
+          &minus;
+        </button>
+        <div className="display">Octave {octave}</div>
+        <button
+          className="hud-btn hud-btn--icon"
+          onClick={() => setOctave((o) => Math.min(8, o + 1))}
+          aria-label="Octave up"
+          title="Move the keyboard up an octave"
+        >
+          +
+        </button>
       </div>
       {/* data-overlap-ok: black keys deliberately sit on top of the white keys —
           this is a piano, not a broken layout. */}
@@ -270,6 +284,8 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
           return (
             <button
               key={`b${i}`}
+              aria-label={midiToName(midi)}
+              title={midiToName(midi)}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onTrigger(midi);
@@ -465,6 +481,7 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+/** A black key has no text, so without a name it is a button no screen reader can announce. */
 function midiToName(m: number) {
   return `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
 }

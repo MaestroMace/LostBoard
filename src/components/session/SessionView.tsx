@@ -144,6 +144,8 @@ const SceneHeader = memo(function SceneHeader({
         value={name}
         onChange={(e) => setSceneName(index, e.target.value)}
         className="display"
+        aria-label={`Name of column ${index + 1}`}
+        title="Rename this column"
         style={{
           background: 'transparent',
           border: 'none',
