@@ -7,7 +7,7 @@ import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { EditorTip } from '../hud/EditorTip';
 import { importSample } from '../../state/samples';
-import { useIsMobile } from '../../hooks/useLayoutMode';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
 
 /**
  * Step-grid geometry.
@@ -31,6 +31,7 @@ function cellBg(on: boolean, vel: number) {
 export function StepSequencer() {
   // fixed, finger-sized cells on touch; the grid scrolls instead of shrinking
   const touchCells = useIsMobile();
+  const land = useLayoutMode() === 'phone-landscape';
   const selectTrack = useStore((s) => s.selectTrack);
   const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
@@ -83,15 +84,25 @@ export function StepSequencer() {
           flex: 1,
           minHeight: 0,
           overflow: 'auto',
-          padding: 12,
+          padding: land ? 4 : 12,
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
+          gap: land ? 4 : 12,
         }}
         className="hex-grid-bg"
       >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span className="hud-label">Drum Sequencer</span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: land ? 4 : 8,
+          flexWrap: land ? 'nowrap' : 'wrap',
+          overflowX: land ? 'auto' : undefined,
+          height: land ? 44 : undefined,
+          flex: '0 0 auto',
+        }}
+      >
+        {!land && <span className="hud-label">Drum Sequencer</span>}
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {drumTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -112,7 +123,7 @@ export function StepSequencer() {
         >
           + Pattern
         </button>
-        <span className="hud-readout" style={{ textTransform: 'none' }}>Length</span>
+        {!land && <span className="hud-readout" style={{ textTransform: 'none' }}>Length</span>}
         <select
           className="display"
           value={activeClip.pattern.length}
@@ -124,9 +135,9 @@ export function StepSequencer() {
           <option value={32}>32</option>
           <option value={64}>64</option>
         </select>
-        <div style={{ flex: 1 }} />
+        {!land && <div style={{ flex: 1 }} />}
         {/* Two bare words side by side gave no clue they were a mode switch. */}
-        <span className="hud-label">Tapping sets</span>
+        {!land && <span className="hud-label">Tapping sets</span>}
         <button
           className={`hud-btn hud-btn--tight ${mode === 'normal' ? 'is-active' : ''}`}
           onClick={() => setMode('normal')}
@@ -162,7 +173,10 @@ export function StepSequencer() {
           <div
             style={{
               display: 'grid',
-              gap: 4,
+              columnGap: GRID_GAP,
+              // 2px rows in landscape is what makes five pads land in 230px.
+              // Do not go lower and do not buy height from the 44px cells.
+              rowGap: land ? 2 : GRID_GAP,
               // wider patterns get a min width per step so cells stay tappable; outer container will scroll
               // 80px label column (fits the pad name + sample-swap dropdown)
               gridTemplateColumns: `${LABEL_COL_W}px repeat(${length}, ${
@@ -170,12 +184,13 @@ export function StepSequencer() {
               })`,
             }}
           >
-            <div />
-            {Array.from({ length }).map((_, i) => (
-              <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 11, opacity: 0.6 }}>
-                {i + 1}
-              </div>
-            ))}
+            {!land && <div />}
+            {!land &&
+              Array.from({ length }).map((_, i) => (
+                <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 11, opacity: 0.6 }}>
+                  {i + 1}
+                </div>
+              ))}
             {DRUM_PADS.map((pad) => (
               <PadRow
                 key={pad}

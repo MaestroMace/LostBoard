@@ -4,7 +4,7 @@ import { useStore, defaultScenes } from '../../state/store';
 import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { EditorTip } from '../hud/EditorTip';
-import { useIsMobile } from '../../hooks/useLayoutMode';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
 
 // 168, not 110: the header is one row now, and two 44px touch targets plus
 // padding left the name box 16px wide -- the column names had vanished.
@@ -26,6 +26,7 @@ const HEAD_COL_W = 132;
  * through the same store actions as the Arrange view.
  */
 export function SessionView() {
+  const land = useLayoutMode() === 'phone-landscape';
   const tracks = useStore((s) => s.project.tracks);
   const scenes = useStore((s) => s.project.scenes ?? defaultScenes(), shallow);
   const sessionMode = useStore((s) => s.sessionMode);
@@ -45,9 +46,14 @@ export function SessionView() {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '8px 10px',
+          // one 44px row in landscape: the controls use 470 of 923px, so the
+          // wrap that cost 17px of a 230px region bought nothing
+          padding: land ? '0 8px' : '8px 10px',
+          height: land ? 44 : undefined,
+          boxSizing: 'border-box',
           borderBottom: '1px solid rgba(255,106,0,0.4)',
-          flexWrap: 'wrap',
+          flexWrap: land ? 'nowrap' : 'wrap',
+          flex: '0 0 auto',
         }}
       >
         {/* One control that states what is playing, rather than two buttons
@@ -87,11 +93,12 @@ export function SessionView() {
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: land ? 0 : 8 }}>
         <div style={{ display: 'inline-block', minWidth: '100%' }}>
-          {/* Scene header row */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            <div style={{ width: HEAD_COL_W, flexShrink: 0 }} />
+          {/* Sticky: the column ▶ buttons used to scroll out of reach the
+              moment you looked at the third track. */}
+          <div style={{ display: 'flex', gap: land ? 2 : 4, position: 'sticky', top: 0, zIndex: 3, background: '#0b0603' }}>
+            <div style={{ width: HEAD_COL_W, flexShrink: 0, position: 'sticky', left: 0, zIndex: 4, background: '#0b0603' }} />
             {scenes.map((scene, i) => (
               <SceneHeader
                 key={i}
@@ -134,8 +141,10 @@ const SceneHeader = memo(function SceneHeader({
     <div
       style={{
         width: COL_W,
+        height: 44,
+        boxSizing: 'border-box',
         flexShrink: 0,
-        padding: 4,
+        padding: '0 4px',
         background: 'rgba(255,106,0,0.08)',
         border: '1px solid rgba(255,106,0,0.4)',
         // One row, not a name stacked over its buttons: at ~180px tall the
@@ -201,14 +210,19 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
   const canLaunch = true;
 
   return (
-    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+    <div style={{ display: 'flex', gap: 2, marginTop: 2 }}>
+      {/* Sticky: with six columns the grid is wider than the screen, and
+          scrolled right every slot looked identical with no names in sight. */}
       <div
         style={{
           width: HEAD_COL_W,
           height: ROW_H,
           flexShrink: 0,
+          position: 'sticky',
+          left: 0,
+          zIndex: 2,
           padding: '4px 8px',
-          background: 'rgba(0,0,0,0.55)',
+          background: '#0b0603',
           border: `1px solid ${track.color}66`,
           borderLeft: `4px solid ${track.color}`,
           display: 'flex',

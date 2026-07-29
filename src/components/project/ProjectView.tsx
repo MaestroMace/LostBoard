@@ -14,6 +14,7 @@ import { midiInput } from '../../audio/midiInput';
 import { subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { audioBufferToWav } from '../../audio/wav';
 import { projectDurationSec, type TempoEvent } from '../../audio/types';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 /**
  * Project used to be one unbroken scroll: tempo, a tempo map, MIDI clock,
@@ -31,6 +32,7 @@ const SECTIONS: { id: Section; label: string; hint: string }[] = [
 ];
 
 export function ProjectView() {
+  const land = useLayoutMode() === 'phone-landscape';
   const project = useStore((s) => s.project);
   const newProject = useStore((s) => s.newProject);
   const importProject = useStore((s) => s.importProject);
@@ -65,9 +67,15 @@ export function ProjectView() {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }} className="hex-grid-bg">
-      <div className="hud-tabs hud-tabs--sub">
-        <div className="hud-tabs__strip">
+    <div
+      style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: land ? 'row' : 'column' }}
+      className="hex-grid-bg"
+    >
+      <div
+        className="hud-tabs hud-tabs--sub"
+        style={land ? { flexDirection: 'column', alignItems: 'stretch', borderBottom: 'none', borderRight: '1px solid rgba(255,106,0,0.22)', flex: '0 0 auto' } : undefined}
+      >
+        <div className="hud-tabs__strip" style={land ? { flexDirection: 'column', flexWrap: 'nowrap' } : undefined}>
           {SECTIONS.map((s) => (
             <button
               key={s.id}
@@ -157,7 +165,9 @@ export function ProjectView() {
                 value={project.swing ?? 0}
                 onChange={(e) => setSwing(parseFloat(e.target.value), project.swingSubdivision ?? '8n')}
                 aria-label="Swing amount"
-                style={{ flex: 1 }}
+                // a floor, not just flex: with the section rail taking width in
+                // landscape this collapsed to 48px of travel
+                style={{ flex: 1, minWidth: 120 }}
               />
               <select
                 className="display"
@@ -262,11 +272,13 @@ export function ProjectView() {
         </p>
         <textarea
           className="display"
-          rows={10}
+          rows={3}
           value={json || exportProject()}
           onChange={(e) => setJson(e.target.value)}
           aria-label="Project data as JSON"
-          style={{ width: '100%', minHeight: 220, fontFamily: 'var(--font-data)', fontSize: 13 }}
+          // 84, not 220: at 220 the only non-textarea drag surface shrank to
+          // 2px and Apply first appeared at scrollTop 252.
+          style={{ width: '100%', minHeight: 84, overscrollBehavior: 'contain', fontFamily: 'var(--font-data)', fontSize: 13 }}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button
@@ -464,13 +476,15 @@ function SlotLibrary() {
             {slots.length} saved on this device
           </span>
         </div>
+        {/* Capped and scrollable: with four saved songs, zero rows were
+            visible and nothing on screen said any existed. */}
         {slots.length === 0 ? (
           <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
             Nothing saved yet. &ldquo;Save a copy&rdquo; keeps the song you have now under a name of its own, so you
             can try something else without losing it.
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', overscrollBehavior: 'contain' }}>
             {slots.map((slot) => (
               <div
                 key={slot.id}
@@ -722,7 +736,7 @@ function TempoMapEditor() {
         </div>
         {events.length > 0 && <TempoCurve events={events} projectBpm={project.bpm} projectBeats={projectBeats} />}
         {events.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', overscrollBehavior: 'contain' }}>
             <div
               style={{
                 display: 'grid',

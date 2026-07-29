@@ -26,20 +26,36 @@ export function MixerView() {
         style={{
           flex: 1,
           minHeight: 0,
-          padding: 8,
+          padding: 6,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'row',
           gap: 6,
           contain: 'layout style',
         }}
         className="hex-grid-bg"
       >
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* A grid, not a column: one fader per row used 27% of the width and
+            put 6 of 8 tracks off-screen. Two columns of 44px rows fit eight
+            tracks in the 230px region with room to spare. */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            overflowY: 'auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+            gridAutoRows: `${ROW_H}px`,
+            alignContent: 'start',
+            gap: 4,
+          }}
+        >
           {tracks.map((t) => (
             <ChannelRow key={t.id} track={t} />
           ))}
         </div>
-        <MasterRow volume={masterVolume} onVolume={setMasterVolume} />
+        {/* The master fader is the one you always want in reach. */}
+        <MasterStrip volume={masterVolume} onVolume={setMasterVolume} compact />
       </div>
     );
   }
@@ -59,7 +75,9 @@ export function MixerView() {
   );
 }
 
-const ROW_H = 56;
+// 44, not 56: the tallest child of a row is the Mute/Solo pair at exactly
+// 44px. Zero slack — keep alignItems:'center' and never add a wrapping label.
+const ROW_H = 44;
 
 const ChannelRow = memo(function ChannelRow({ track }: { track: Track }) {
   const selected = useStore((s) => s.selectedTrackId === track.id);
@@ -70,25 +88,27 @@ const ChannelRow = memo(function ChannelRow({ track }: { track: Track }) {
     <div
       onClick={() => selectTrack(track.id)}
       style={{
-        flex: '0 0 auto',
         height: ROW_H,
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '0 8px',
+        gap: 6,
+        padding: '0 6px',
         background: 'rgba(0,0,0,0.6)',
         border: selected ? '1px solid #fff' : `1px solid ${track.color}88`,
         contain: 'layout style',
       }}
     >
       <div style={{ width: 4, height: '70%', background: track.color, flex: '0 0 auto' }} />
-      <div className="hud-label" style={{ width: 92, flex: '0 0 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div
+        className="hud-label"
+        style={{ width: 64, fontSize: 11, flex: '0 0 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        title={track.name}
+      >
         {track.name}
       </div>
       <MuteSolo track={track} />
       <input
         type="range"
-        className="hud-slider"
         min={-48}
         max={6}
         step={0.5}
@@ -96,47 +116,13 @@ const ChannelRow = memo(function ChannelRow({ track }: { track: Track }) {
         onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
         onClick={(e) => e.stopPropagation()}
         aria-label={`${track.name} volume`}
+        className="hud-slider hud-slider--row"
         style={{ flex: 1, minWidth: 0 }}
       />
-      <div className="hud-value" style={{ width: 64, textAlign: 'right', flex: '0 0 auto', fontSize: 12 }}>
-        {track.volume.toFixed(1)} dB
+      <div className="hud-value" style={{ width: 46, textAlign: 'right', flex: '0 0 auto', fontSize: 11, whiteSpace: 'nowrap' }}>
+        {track.volume.toFixed(1)}
       </div>
-      <LiveMeter meterKey={track.id} height={ROW_H - 20} />
-    </div>
-  );
-});
-
-const MasterRow = memo(function MasterRow({ volume, onVolume }: { volume: number; onVolume: (v: number) => void }) {
-  return (
-    <div
-      style={{
-        flex: '0 0 auto',
-        height: ROW_H,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '0 8px',
-        background: 'rgba(40,10,0,0.7)',
-        border: '1px solid var(--hud-orange)',
-        contain: 'layout style',
-      }}
-    >
-      <div className="hud-label" style={{ width: 96, flex: '0 0 auto' }}>Master</div>
-      <input
-        type="range"
-        className="hud-slider"
-        min={-48}
-        max={6}
-        step={0.5}
-        value={volume}
-        onChange={(e) => onVolume(parseFloat(e.target.value))}
-        aria-label="Master volume"
-        style={{ flex: 1, minWidth: 0 }}
-      />
-      <div className="hud-value" style={{ width: 64, textAlign: 'right', flex: '0 0 auto', fontSize: 12 }}>
-        {volume.toFixed(1)} dB
-      </div>
-      <LiveMeter meterKey="master" height={ROW_H - 20} />
+      <LiveMeter meterKey={track.id} axis="x" width={28} height={5} />
     </div>
   );
 });
@@ -249,17 +235,19 @@ const ChannelStrip = memo(function ChannelStrip({ track }: { track: Track }) {
 const MasterStrip = memo(function MasterStrip({
   volume,
   onVolume,
+  compact = false,
 }: {
   volume: number;
   onVolume: (v: number) => void;
+  compact?: boolean;
 }) {
   return (
     <div
       style={{
-        width: 130,
+        width: compact ? 104 : 130,
         flexShrink: 0,
         minHeight: 0,
-        padding: 8,
+        padding: compact ? 6 : 8,
         background: 'rgba(40,10,0,0.7)',
         border: '1px solid var(--hud-orange)',
         boxShadow: 'var(--hud-glow)',

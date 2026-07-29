@@ -94,7 +94,10 @@ export function ArrangeView() {
   // Landscape has 923px to play with, so the header can afford a readable name
   // beside two 44px toggles. Portrait cannot, and takes the narrower cut.
   const headW = mode === 'phone-landscape' ? 240 : mode === 'phone-portrait' ? 128 : 196;
-  const rowH = isMobile ? ROW_H_TOUCH : ROW_H;
+  // 44 in landscape: the row's tallest child is the name/Mute/Solo group at
+  // exactly 44px, so 56 was 12px of padding per lane in the orientation with
+  // 230px to spend. Portrait keeps 56.
+  const rowH = mode === 'phone-landscape' ? 44 : isMobile ? ROW_H_TOUCH : ROW_H;
 
   const [zoom, setZoom] = useState(1);
   const numerator = useStore((s) => s.project.numerator || 4);
@@ -276,12 +279,18 @@ const ZoomFloater = memo(function ZoomFloater({
   snapMode: SnapMode;
   setSnapMode: (m: SnapMode) => void;
 }) {
+  // EditorTip renders nothing on a phone, so its clearance is desktop-only.
+  const tipVisible = !useIsMobile();
   return (
     <div
       style={{
         position: 'absolute',
         right: 12,
-        bottom: 28,
+        // 28 on desktop is clearance for the editor tip strip, which really is
+        // there; on phones the tip renders nothing, and at 28 this box covered
+        // 39% of the width of the bottom visible lane, so taps meant for the
+        // lane hit the zoom control instead.
+        bottom: tipVisible ? 28 : 4,
         display: 'flex',
         gap: 4,
         alignItems: 'center',
@@ -378,7 +387,9 @@ const Ruler = memo(function Ruler({ beats, h }: { beats: number; h: number }) {
           );
         })}
       </div>
-      <LoopLane beats={beats} />
+      {/* Loop is a labelled button in the transport; in landscape this strip
+          is 12px of a 230px region for a second way to do the same thing. */}
+      {h > 40 && <LoopLane beats={beats} />}
     </div>
   );
 });

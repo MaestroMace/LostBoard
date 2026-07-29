@@ -3,8 +3,10 @@ import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
 import { DEFAULT_FX, type FxRack, type Track } from '../../audio/types';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 export function FxPanel() {
+  const land = useLayoutMode() === 'phone-landscape';
   const selectTrack = useStore((s) => s.selectTrack);
   const updateFx = useStore((s) => s.updateFx);
 
@@ -26,10 +28,32 @@ export function FxPanel() {
 
   return (
     <div
-      style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+        padding: land ? 6 : 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: land ? 6 : 12,
+      }}
       className="hex-grid-bg"
     >
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* Sticky: when the rack is bypassed it is pointerEvents:none, so
+          scrolling away from this toggle was a dead end with no way back. */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center',
+          flexWrap: land ? 'nowrap' : 'wrap',
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
+          background: '#0a0705',
+          flex: '0 0 auto',
+        }}
+      >
         <span className="hud-label">Track</span>
         <select
           className="display"
@@ -63,16 +87,24 @@ export function FxPanel() {
 
       <div
         style={{
-          display: 'grid',
-          // 180 rather than 240: at 240 a 411px-wide phone got one card per row,
-          // so four two-knob effects became four full screens of scrolling.
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 12,
+          // Landscape lays the rack out as one scrollable strip: as a wrapping
+          // grid the fifth card (Ducking) started at y=334 in a region ending
+          // at 336, so it was a 2px hairline below an undiscoverable fold.
+          ...(land
+            ? { display: 'flex', flexWrap: 'nowrap' as const, overflowX: 'auto' as const, gap: 8 }
+            : {
+                display: 'grid',
+                // 180 rather than 240: at 240 a 411px-wide phone got one card
+                // per row, so four two-knob effects became four full screens.
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 12,
+              }),
+          alignItems: 'flex-start',
           opacity: fx.enabled ? 1 : 0.4,
           pointerEvents: fx.enabled ? 'auto' : 'none',
         }}
       >
-        <HexFrame title="Tone">
+        <HexFrame title="Tone" style={land ? { flex: '0 0 auto' } : undefined}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob
               label="Low"
@@ -106,6 +138,7 @@ export function FxPanel() {
 
         <HexFrame
           title="Compressor"
+          style={land ? { flex: '0 0 auto' } : undefined}
           variant={fx.compOn ? 'orange' : 'soft'}
           action={<SectionToggle on={fx.compOn} label="Compressor" onToggle={() => patch({ compOn: !fx.compOn })} />}
         >
@@ -133,6 +166,7 @@ export function FxPanel() {
 
         <HexFrame
           title="Chorus"
+          style={land ? { flex: '0 0 auto' } : undefined}
           variant={fx.chorusOn ? 'orange' : 'soft'}
           action={<SectionToggle on={fx.chorusOn} label="Chorus" onToggle={() => patch({ chorusOn: !fx.chorusOn })} />}
         >
@@ -151,6 +185,7 @@ export function FxPanel() {
 
         <HexFrame
           title="Bit crusher"
+          style={land ? { flex: '0 0 auto' } : undefined}
           variant={fx.bitcrushOn ? 'orange' : 'soft'}
           action={
             <SectionToggle on={fx.bitcrushOn} label="Bit crusher" onToggle={() => patch({ bitcrushOn: !fx.bitcrushOn })} />
@@ -172,10 +207,10 @@ export function FxPanel() {
         <SidechainPanel track={track} fx={fx} onPatch={patch} />
       </div>
 
-      {/* One line, in the order sound actually travels — enough to predict what
-          a change will do. The old version restated the on/off state that the
-          button two inches away already shows. */}
-      <div className="hud-readout--dim hud-readout" style={{ fontSize: 12, lineHeight: 1.6 }}>
+      {/* One line, in the order sound actually travels. Dropped in landscape,
+          where it rendered ~285px below a 336px viewport — it has never been
+          on screen there, and the tooltips carry the same information. */}
+      <div className="hud-readout--dim hud-readout" style={{ fontSize: 12, lineHeight: 1.6, display: land ? 'none' : undefined }}>
         Sound passes through these in order: tone &rarr; compressor &rarr; chorus &rarr; bit crusher &rarr; ducking
         &rarr; track volume &rarr; master. Reverb and delay sends are taken after the track volume.
       </div>

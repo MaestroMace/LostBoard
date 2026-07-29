@@ -383,6 +383,12 @@
 
 /* Divider between the two nav levels when landscape folds them onto one row,
    so nine tabs still read as "five destinations, then what's inside Edit". */
+/* Vertical rail form of the sub-nav, for Project in landscape where a
+   full-width strip wasted 722px of empty row. */
+.hud-tabs--sub .hud-tabs__strip .hud-tab {
+  white-space: nowrap;
+}
+
 .hud-tabs__divider {
   flex: 0 0 auto;
   align-self: stretch;
