@@ -1300,9 +1300,11 @@ function AutomationOverlayHeader({
             setView('automation');
           }}
           title="Open the Automation tab for this track"
-          style={{ minWidth: 0, padding: '2px 4px', fontSize: 12 }}
+          style={{ minWidth: 0, padding: '2px 6px', fontSize: 12 }}
         >
-          ⇲
+          {/* Was ⇲, which nothing in the app explains and a tooltip cannot
+              rescue. This row is desktop-only and has room for the word. */}
+          Edit
         </button>
       )}
     </div>
