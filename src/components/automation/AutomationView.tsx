@@ -324,6 +324,17 @@ function LaneEditor({ track, lane, land = false }: { track: Track; lane: Automat
   function pointUp() {
     dragging.current = null;
   }
+  /**
+   * A gesture the browser claimed for panning must leave no state behind.
+   * pointerUp was wired to pointUp alone, which cleared the drag but left
+   * tapStart set from a swipe that never ended — so the next tap measured its
+   * travel from a stale origin and either added a point in the wrong place or
+   * refused to add one at all.
+   */
+  function gestureCancel() {
+    dragging.current = null;
+    tapStart.current = null;
+  }
 
   const xFor = (beat: number) => (beat / projectBeats) * 100;
   const yFor = (value: number) => {
@@ -422,7 +433,7 @@ function LaneEditor({ track, lane, land = false }: { track: Track; lane: Automat
             pointUp();
             backgroundUp(e);
           }}
-          onPointerCancel={pointUp}
+          onPointerCancel={gestureCancel}
           style={{
             background: 'linear-gradient(180deg, rgba(255,106,0,0.04), rgba(255,106,0,0.10))',
             border: '1px solid rgba(255,106,0,0.35)',
@@ -469,7 +480,7 @@ function LaneEditor({ track, lane, land = false }: { track: Track; lane: Automat
             onPointerDown={(e) => pointDown(e, pt.id)}
             onPointerMove={pointMove}
             onPointerUp={pointUp}
-            onPointerCancel={pointUp}
+            onPointerCancel={gestureCancel}
             onDoubleClick={(e) => {
               e.stopPropagation();
               removeAutomationPoint(track.id, lane.param, pt.id);

@@ -480,6 +480,24 @@ const StepCell = memo(function StepCell({
     if (barRef.current) barRef.current.style.transform = `scaleX(${d.vel})`;
     if (btnRef.current) btnRef.current.style.background = cellBg(true, d.vel);
   }
+  /**
+   * The browser took the gesture over — a vertical pan, which `touch-action:
+   * pan-y` explicitly permits. Put the cell back the way it was and commit
+   * nothing. Wired to pointerup, this turned every swipe over a step into a
+   * toggle or a velocity change.
+   */
+  function cancel(e: React.PointerEvent) {
+    const d = drag.current;
+    drag.current = null;
+    try {
+      btnRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (!d) return;
+    if (barRef.current) barRef.current.style.transform = `scaleX(${d.startVel})`;
+    if (btnRef.current) btnRef.current.style.background = cellBg(on, d.startVel);
+  }
   function up(e: React.PointerEvent) {
     const d = drag.current;
     drag.current = null;
@@ -505,7 +523,7 @@ const StepCell = memo(function StepCell({
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
-      onPointerCancel={up}
+      onPointerCancel={cancel}
       style={{
         height: touchCell ? 44 : 38,
         background: cellBg(on, velocity),

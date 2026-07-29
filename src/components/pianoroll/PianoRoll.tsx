@@ -226,6 +226,23 @@ export function PianoRoll() {
       setMarquee({ ...marquee, x1: x, y1: y });
     }
   }
+  /**
+   * Abandon an in-progress gesture without committing it.
+   *
+   * `onPointerCancel` was wired straight to `gridUp`, so a gesture the browser
+   * took over — which is exactly what `touch-action: pan-y` asks it to do when
+   * a finger moves vertically — still ended in a note being written. A swipe to
+   * scroll the grid scrolled AND drew, every time.
+   */
+  function gridCancel(e: React.PointerEvent) {
+    setDraft(null);
+    setMarquee(null);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  }
   function gridUp(e: React.PointerEvent) {
     if (!activeTrack || !activeClip) return;
     if (draft && e.pointerId === draft.pointerId) {
@@ -502,7 +519,7 @@ export function PianoRoll() {
           onPointerDown={gridDown}
           onPointerMove={gridMove}
           onPointerUp={gridUp}
-          onPointerCancel={gridUp}
+          onPointerCancel={gridCancel}
           style={{
             position: 'relative',
             width: beats * BEAT_W,
