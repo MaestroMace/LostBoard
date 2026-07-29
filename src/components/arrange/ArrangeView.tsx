@@ -635,27 +635,31 @@ const TrackHeader = memo(function TrackHeader({
           </button>
           {inlineToggles && (
             <>
+              {/* These were already ~90px wide as bare letters, so spelling
+                  them costs no space and saves guessing. */}
               <button
-                className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
+                className={`hud-btn hud-btn--tight ${track.mute ? 'is-active' : ''}`}
+                aria-pressed={track.mute}
                 onClick={(e) => {
                   e.stopPropagation();
                   updateTrack(track.id, { mute: !track.mute });
                 }}
-                title={track.mute ? 'Muted' : 'Mute'}
-                style={{ fontSize: 13 }}
+                title={track.mute ? `Unmute ${track.name}` : `Mute ${track.name}`}
+                style={{ fontSize: 13, flex: '0 0 auto' }}
               >
-                M
+                Mute
               </button>
               <button
-                className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
+                className={`hud-btn hud-btn--green hud-btn--tight ${track.solo ? 'is-active' : ''}`}
+                aria-pressed={track.solo}
                 onClick={(e) => {
                   e.stopPropagation();
                   updateTrack(track.id, { solo: !track.solo });
                 }}
-                title={track.solo ? 'Soloed' : 'Solo'}
-                style={{ fontSize: 13 }}
+                title={track.solo ? `Stop soloing ${track.name}` : `Hear only ${track.name}`}
+                style={{ fontSize: 13, flex: '0 0 auto' }}
               >
-                S
+                Solo
               </button>
             </>
           )}
@@ -666,7 +670,7 @@ const TrackHeader = memo(function TrackHeader({
               className="hud-readout"
               style={{ fontSize: 12, flex: '0 0 auto', color: track.solo ? 'var(--hud-green)' : 'var(--hud-red)' }}
             >
-              {track.solo ? 'S' : 'M'}
+              {track.solo ? 'Solo' : 'Muted'}
             </span>
           )}
         </div>

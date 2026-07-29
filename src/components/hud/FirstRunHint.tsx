@@ -35,12 +35,12 @@ export function FirstRunHint() {
     ? [
         ['Play', 'Hit Play to hear the song that’s already loaded.'],
         ['Change a sound', 'Tap a track name — Drums, Bass, Lead — for volume, pan and its instrument.'],
-        ['Add music', 'Drag across an empty lane to draw a clip, then tap Edit to write notes.'],
+        ['Write notes', 'Tap a clip to open it. Drag across an empty lane to make a new one.'],
       ]
     : [
         ['Play', 'Press Space or hit Play to hear the loaded song.'],
         ['Change a sound', 'Click a track, then Edit for its notes, instrument and effects.'],
-        ['Add music', 'Drag across an empty lane to draw a clip; double-click it to edit.'],
+        ['Write notes', 'Double-click a clip to open it. Drag across an empty lane to make a new one.'],
       ];
 
   return (
@@ -49,11 +49,13 @@ export function FirstRunHint() {
         position: 'fixed',
         left: 12,
         right: 12,
-        bottom: 'calc(12px + env(safe-area-inset-bottom))',
+        // clear of the footer bar, which this used to sit on top of
+        bottom: 'calc(34px + env(safe-area-inset-bottom))',
         zIndex: 45,
         maxWidth: 460,
         margin: '0 auto',
-        background: 'rgba(10,6,3,0.97)',
+        // opaque: at 0.97 the clip colours behind it read as ghost text
+        background: '#0a0603',
         border: '1px solid rgba(255,106,0,0.55)',
         boxShadow: '0 8px 30px rgba(0,0,0,0.7)',
         padding: '12px 14px',
