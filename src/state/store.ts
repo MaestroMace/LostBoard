@@ -52,7 +52,7 @@ export function currentSamplerZones(track: Track): SamplerZone[] {
 
 /** Default scene list when a project doesn't carry one (old projects, fresh `makeProject`). */
 export function defaultScenes() {
-  return [{ name: 'INTRO' }, { name: 'A' }, { name: 'B' }, { name: 'DROP' }];
+  return [{ name: 'Intro' }, { name: 'A' }, { name: 'B' }, { name: 'Drop' }];
 }
 
 function emptyPattern(length = 16): DrumPattern {
@@ -1279,6 +1279,8 @@ const LEGACY_NAMES: Record<string, string> = {
   'BASS-1': 'Bass 1',
   'LEAD-1': 'Lead 1',
   'MIC TAKE': 'Mic take',
+  INTRO: 'Intro',
+  DROP: 'Drop',
 };
 
 function renameLegacy<T extends { name?: string }>(item: T): T {
@@ -1290,6 +1292,10 @@ function renameLegacy<T extends { name?: string }>(item: T): T {
 export function migrateNames(p: Project): Project {
   return {
     ...renameLegacy(p),
+    // Scenes too. Renaming only the defaults leaves every already-saved
+    // project on the old names, which is exactly the bug this function exists
+    // to fix -- the device restores from storage, it does not re-seed.
+    scenes: p.scenes?.map((sc) => renameLegacy(sc)),
     tracks: p.tracks.map((t) => ({
       ...renameLegacy(t),
       clips: t.clips.map((c) => renameLegacy(c)),

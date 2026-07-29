@@ -6,7 +6,9 @@ import { audioEngine } from '../../audio/engine';
 import { EditorTip } from '../hud/EditorTip';
 import { useIsMobile } from '../../hooks/useLayoutMode';
 
-const COL_W = 110;
+// 168, not 110: the header is one row now, and two 44px touch targets plus
+// padding left the name box 16px wide -- the column names had vanished.
+const COL_W = 168;
 const ROW_H = 44;
 const HEAD_COL_W = 132;
 
@@ -134,9 +136,10 @@ const SceneHeader = memo(function SceneHeader({
         padding: 4,
         background: 'rgba(255,106,0,0.08)',
         border: '1px solid rgba(255,106,0,0.4)',
+        // One row, not a name stacked over its buttons: at ~180px tall the
+        // header pushed the third track off the bottom of a landscape phone.
         display: 'flex',
-        flexDirection: 'column',
-        gap: 2,
+        gap: 4,
         alignItems: 'center',
       }}
     >
@@ -149,16 +152,18 @@ const SceneHeader = memo(function SceneHeader({
         style={{
           background: 'transparent',
           border: 'none',
-          textAlign: 'center',
-          width: '100%',
+          textAlign: 'left',
+          flex: 1,
+          minWidth: 0,
           fontSize: 12,
         }}
       />
-      <div style={{ display: 'flex', gap: 3 }}>
+      <div style={{ display: 'flex', gap: 3, flex: '0 0 auto' }}>
         <button
           className="hud-btn hud-btn--green hud-btn--icon"
           onClick={onLaunch}
-          title={`Launch ${name}`}
+          aria-label={`Start every loop in ${name}`}
+          title={`Start every loop in ${name}`}
           style={{ padding: '2px 6px', fontSize: 14 }}
         >
           ▶
@@ -166,7 +171,8 @@ const SceneHeader = memo(function SceneHeader({
         <button
           className="hud-btn hud-btn--icon"
           onClick={onRemove}
-          title="Remove scene"
+          aria-label={`Delete the ${name} column`}
+          title={`Delete the ${name} column`}
           style={{ padding: '2px 6px', fontSize: 12 }}
         >
           ✕
