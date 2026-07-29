@@ -7,6 +7,7 @@ import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { usePinchZoom } from '../../hooks/usePinchZoom';
 import { EditorTip } from '../hud/EditorTip';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 const BASE_BEAT_W = 56;
 const ROW_H = 16;
@@ -14,6 +15,8 @@ const LO = 36; // C2
 const HI = 84; // C6
 const ROWS = HI - LO + 1;
 const VEL_LANE_H = 60;
+/** Pixels of drag for the full velocity range, independent of lane height. */
+const VEL_DRAG_TRAVEL = 90;
 const KEYS_W = 56;
 /** White-key letter by pitch-class, for the keyboard ruler labels. */
 const WHITE_NOTE: Record<number, string> = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B' };
@@ -88,8 +91,13 @@ export function PianoRoll() {
     if (activeClip && activeClip.id !== selectedClipId) selectClip(activeClip.id);
   }, [activeClip, selectedClipId, selectClip]);
 
+  const mode = useLayoutMode();
+  /** One 44px header row and a folded-away velocity lane: landscape has 230px
+   *  of content region and this header was taking 111 of it. */
+  const land = mode === 'phone-landscape';
   const [tool, setTool] = useState<'draw' | 'select' | 'erase'>('draw');
   const [showMore, setShowMore] = useState(false);
+  const [showVel, setShowVel] = useState(false);
   const [snap, setSnap] = useState<0.25 | 0.5 | 1>(0.25);
   const [scaleRoot, setScaleRoot] = useState(0);
   const [scaleName, setScaleName] = useState<ScaleName>('chromatic');
@@ -100,6 +108,8 @@ export function PianoRoll() {
   // its creation, or switching to a synth track with no MIDI clips.
   const hasEditor = !!activeTrack && !!activeClip;
   const [zoom, setZoom] = useState(1);
+  /** Once the user pinches or taps zoom, stop re-fitting under them. */
+  const zoomTouched = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,8 +138,17 @@ export function PianoRoll() {
         ? (Math.min(...ns.map((n) => n.pitch)) + Math.max(...ns.map((n) => n.pitch))) / 2
         : 60; // middle C
     el.scrollTop = Math.max(0, (HI - center) * ROW_H - el.clientHeight / 2);
+    // Fit the clip to the width we have. The grid is sized `beats * BEAT_W`,
+    // so a 4-beat clip drew 224px of a 923px screen and left 70% of the
+    // display as dead black — landscape's one advantage over portrait, thrown
+    // away. Desktop keeps 1x, where the established behaviour is fine.
+    if (mode !== 'desktop' && !zoomTouched.current) {
+      const avail = el.clientWidth - KEYS_W;
+      const want = avail / (Math.max(4, activeClip.length) * BASE_BEAT_W);
+      if (Number.isFinite(want) && want > 0) setZoom(Math.max(0.25, Math.min(4, want)));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClip?.id]);
+  }, [activeClip?.id, mode]);
 
   /**
    * Draft note state for DRAW + drag-on-create. While the user holds down,
@@ -254,27 +273,36 @@ export function PianoRoll() {
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', contain: 'layout style', position: 'relative' }}>
       <div
         style={{
-          padding: 8,
+          padding: land ? '0 8px' : 8,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: land ? 'row' : 'column',
+          alignItems: 'center',
           gap: 6,
-          borderBottom: '1px solid rgba(255,106,0,0.4)',
+          height: land ? 44 : undefined,
+          boxSizing: 'border-box',
+          flexWrap: 'nowrap',
+          // inset shadow rather than a border: the divider costs zero layout
+          // height, which matters when the whole row is 44px
+          boxShadow: 'inset 0 -1px 0 rgba(255,106,0,0.4)',
+          overflowX: land ? 'auto' : undefined,
+          scrollbarWidth: 'none',
           flex: '0 0 auto',
         }}
       >
         {/* Row 1: what am I editing. Row 2: what does tapping do. Everything
             else folds away on a phone, where the four-row header was eating
             420px of a 923px screen before a single note was visible. */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className="hud-label">Notes</span>
-        <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)} aria-label="Track to edit">
+        <div style={land ? { display: 'contents' } : { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* the editor tab already says "Notes" */}
+        {!land && <span className="hud-label">Notes</span>}
+        <select className="display" style={{ maxWidth: 120 }} value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)} aria-label="Track to edit">
           {synthTracks.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
             </option>
           ))}
         </select>
-        <select className="display" value={activeClip.id} onChange={(e) => selectClip(e.target.value)} aria-label="Clip to edit">
+        <select className="display" style={{ maxWidth: 120 }} value={activeClip.id} onChange={(e) => selectClip(e.target.value)} aria-label="Clip to edit">
           {midiClips.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name ?? c.id}
@@ -288,7 +316,7 @@ export function PianoRoll() {
         >
           + Clip
         </button>
-        <div style={{ flex: 1 }} />
+        {!land && <div style={{ flex: 1 }} />}
         <button
           className="hud-btn hud-btn--ghost hud-btn--tight"
           onClick={() => setShowMore((v) => !v)}
@@ -299,8 +327,9 @@ export function PianoRoll() {
         </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className="hud-label" style={{ minWidth: 74 }}>Tapping</span>
+        <div style={land ? { display: 'contents' } : { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Draws / Selects / Erases are self-describing verbs */}
+        {!land && <span className="hud-label" style={{ minWidth: 74 }}>Tapping</span>}
         <button
           className={`hud-btn ${tool === 'draw' ? 'is-active' : ''}`}
           onClick={() => setTool('draw')}
@@ -334,10 +363,59 @@ export function PianoRoll() {
             Deselect ({selectedNoteIds.length})
           </button>
         )}
+        {land && (
+          <>
+          <button
+            className="hud-btn hud-btn--ghost hud-btn--tight"
+            onClick={() => { zoomTouched.current = true; setZoom((z) => Math.max(0.25, z / 1.25)); }}
+            aria-label="Zoom out"
+            title={`Zoom out (now ${zoom.toFixed(2)}x)`}
+          >
+            &minus;
+          </button>
+          <button
+            className="hud-btn hud-btn--ghost hud-btn--tight"
+            onClick={() => { zoomTouched.current = true; setZoom((z) => Math.min(4, z * 1.25)); }}
+            aria-label="Zoom in"
+            title={`Zoom in (now ${zoom.toFixed(2)}x)`}
+          >
+            +
+          </button>
+          <button
+            className={`hud-btn hud-btn--ghost hud-btn--tight ${showVel ? 'is-active' : ''}`}
+            aria-pressed={showVel}
+            onClick={() => setShowVel((v) => !v)}
+            title="Show the bars that set how hard each note hits"
+          >
+            Loud
+          </button>
+          </>
+        )}
         </div>
 
         {showMore && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          style={
+            land
+              ? {
+                  // An in-flow third row left the note grid 9px tall, so using
+                  // any of these controls destroyed the thing you were editing.
+                  position: 'absolute',
+                  top: 44,
+                  left: 0,
+                  right: 0,
+                  zIndex: 8,
+                  background: '#0a0705',
+                  border: '1px solid rgba(255,106,0,0.4)',
+                  padding: 6,
+                  display: 'flex',
+                  gap: 6,
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }
+              : { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }
+          }
+        >
         <span className="hud-label" title="New and quantized notes land on this grid">Grid</span>
         <select className="display" value={snap} onChange={(e) => setSnap(parseFloat(e.target.value) as any)} aria-label="Note grid">
           <option value={1}>1/4</option>
@@ -503,22 +581,31 @@ export function PianoRoll() {
           />
         </div>
         </div>
-        <VelocityLane
-          trackId={activeTrack.id}
-          clipId={activeClip.id}
-          notes={activeClip.notes}
-          beats={beats}
-          beatW={BEAT_W}
-          color={activeTrack.color}
-          selectedIds={selectedNoteIds}
-        />
+        {/* The lane is sticky inside the grid's own scroller, so in landscape
+            it was permanently eating 60 of the 119 visible px — more than the
+            note grid itself. Behind the "Loud" toggle it costs nothing until
+            you want it. */}
+        {(!land || showVel) && (
+          <VelocityLane
+            trackId={activeTrack.id}
+            clipId={activeClip.id}
+            notes={activeClip.notes}
+            beats={beats}
+            beatW={BEAT_W}
+            color={activeTrack.color}
+            selectedIds={selectedNoteIds}
+            laneH={land ? 44 : VEL_LANE_H}
+          />
+        )}
       </div>
       <EditorTip>
         Draws: drag on empty grid and the note is as long as you drag. Selects: drag a box round several notes, then
         move them together. Erases: tap a note to remove it. Drag a note's right edge to change its length, and drag
         the bars under the grid to change how hard each note hits. ⌘ or Ctrl with the wheel zooms.
       </EditorTip>
-      <ZoomFloater zoom={zoom} setZoom={setZoom} />
+      {/* Measured at 768-911 x 214-264 over a grid strip ending at 276 — the
+          floater covered ~80% of the visible grid height on the right. */}
+      {!land && <ZoomFloater zoom={zoom} setZoom={setZoom} />}
     </div>
     </ScaleContext.Provider>
     </BeatWidthContext.Provider>
@@ -919,6 +1006,7 @@ const VelocityLane = memo(function VelocityLane({
   beatW,
   color,
   selectedIds,
+  laneH = VEL_LANE_H,
 }: {
   trackId: string;
   clipId: string;
@@ -927,6 +1015,7 @@ const VelocityLane = memo(function VelocityLane({
   beatW: number;
   color: string;
   selectedIds: string[];
+  laneH?: number;
 }) {
   const setNoteVelocities = useStore((s) => s.setNoteVelocities);
   const ref = useRef<HTMLDivElement>(null);
@@ -955,7 +1044,9 @@ const VelocityLane = memo(function VelocityLane({
     if (!d || e.pointerId !== d.pointerId) return;
     const dy = e.clientY - d.startY;
     // lane-height of drag spans the full 0..1 range
-    const dvel = -dy / Math.max(1, VEL_LANE_H - 16);
+    // A fixed travel distance, not the rendered lane height: at laneH 44 a
+    // height-derived divisor made the full 0..1 range a 28px flick.
+    const dvel = -dy / VEL_DRAG_TRAVEL;
     if (Math.abs(dvel - d.lastDelta) < 0.005) return;
     d.lastDelta = dvel;
     // apply the SAME delta to every tracked note so a multi-note drag
@@ -978,7 +1069,7 @@ const VelocityLane = memo(function VelocityLane({
     <div
       ref={ref}
       style={{
-        height: VEL_LANE_H,
+        height: laneH,
         display: 'flex',
         borderTop: '1px solid rgba(255,106,0,0.4)',
         background: 'rgba(0,0,0,0.65)',
@@ -1019,7 +1110,7 @@ const VelocityLane = memo(function VelocityLane({
       >
         {notes.map((n) => {
           const isSel = selectedIds.includes(n.id);
-          const h = Math.max(2, n.velocity * (VEL_LANE_H - 16));
+          const h = Math.max(2, n.velocity * (laneH - 16));
           return (
             <div
               key={n.id}

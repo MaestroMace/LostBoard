@@ -7,6 +7,7 @@ import { audioEngine } from '../../audio/engine';
 import { midiOutput, subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { importSample } from '../../state/samples';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
@@ -37,6 +38,11 @@ const PRESETS: Record<string, Partial<SynthParams>> = {
 };
 
 export function SynthPanel() {
+  const mode = useLayoutMode();
+  /** Landscape gets one 44px row of dropdowns instead of three labelled rows
+   *  of chips — the header was 144px of a 230px content region, and not one
+   *  of the twelve knobs was fully visible at rest. */
+  const land = mode === 'phone-landscape';
   const selectTrack = useStore((s) => s.selectTrack);
   const updateSynth = useStore((s) => s.updateSynth);
   const setSynthEngine = useStore((s) => s.setSynthEngine);
@@ -64,8 +70,81 @@ export function SynthPanel() {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
-      {/* Three separate rows, not one wrapping row. As a single flex line the
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+        padding: land ? 6 : 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: land ? 8 : 12,
+      }}
+      className="hex-grid-bg"
+    >
+      {land ? (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', height: 44, flex: '0 0 auto', flexWrap: 'nowrap', overflowX: 'auto' }}>
+          <select
+            className="display"
+            value={active.id}
+            onChange={(e) => selectTrack(e.target.value)}
+            aria-label="Track to edit the sound of"
+            style={{ maxWidth: 120 }}
+          >
+            {synthTracks.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <select
+            className="display"
+            value={engine}
+            onChange={(e) => setSynthEngine(active.id, e.target.value as SynthEngine)}
+            aria-label="How this instrument makes sound"
+            style={{ maxWidth: 130 }}
+          >
+            {ENGINES.map((e) => (
+              <option key={e.id} value={e.id}>{e.label}</option>
+            ))}
+          </select>
+          {engine === 'subtractive' && (
+            <select
+              className="display"
+              value={s.osc}
+              onChange={(e) => patch({ osc: e.target.value as SynthParams['osc'] })}
+              aria-label="Waveform"
+              style={{ maxWidth: 120 }}
+            >
+              {OSCS.map((o) => (
+                <option key={o} value={o}>{OSC_LABEL[o]}</option>
+              ))}
+            </select>
+          )}
+          <select
+            className="display"
+            value=""
+            onChange={(e) => {
+              const k = e.target.value;
+              if (k) patch(PRESETS[k]);
+              e.target.value = '';
+            }}
+            aria-label="Load a starting point"
+            style={{ maxWidth: 130 }}
+          >
+            <option value="">Starting point…</option>
+            {Object.keys(PRESETS).map((k) => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          <button
+            className="hud-btn hud-btn--ghost hud-btn--tight"
+            onClick={() => patch(DEFAULT_SYNTH)}
+            title="Put every control on this page back to its starting value"
+          >
+            Reset
+          </button>
+        </div>
+      ) : (
+      <>{/* Three separate rows, not one wrapping row. As a single flex line the
           groups interleaved once they wrapped: "Preset" ended up stranded at
           the end of the engine buttons, with its own buttons on the line
           below, so the header read as one undifferentiated wall of chips. */}
@@ -120,8 +199,19 @@ export function SynthPanel() {
           ))}
         </div>
       </div>
+      </>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+      {/* A wrapping grid with align-items:stretch inflated every frame to the
+          tallest row and left a whole empty cell; landscape lays them in one
+          scrollable strip so each frame is only as tall as its contents. */}
+      <div
+        style={
+          land
+            ? { display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'nowrap', overflowX: 'auto', flex: '0 0 auto' }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, alignItems: 'flex-start' }
+        }
+      >
         {engine === 'fm' ? (
           <HexFrame title="FM">
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
@@ -169,14 +259,17 @@ export function SynthPanel() {
           <SamplerSource trackId={active.id} />
         ) : (
         <HexFrame title="Waveform">
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {/* The same choice is a dropdown in the landscape header; as buttons
+              it wrapped to two 44px rows and was the sole reason this frame
+              was 217px instead of 113px. */}
+          <div style={{ display: land ? 'none' : 'flex', gap: 4, flexWrap: 'wrap' }}>
             {OSCS.map((o) => (
               <button
                 key={o}
                 className={`hud-btn hud-btn--tight ${s.osc === o ? 'is-active' : ''}`}
                 aria-pressed={s.osc === o}
                 onClick={() => patch({ osc: o })}
-                style={{ flex: '1 1 auto' }}
+                style={{ flex: '0 1 auto' }}
               >
                 {OSC_LABEL[o]}
               </button>
@@ -217,14 +310,27 @@ export function SynthPanel() {
         <MidiOutPanel trackId={active.id} channel={active.midiOutChannel} />
       </div>
 
-      <HexFrame title="Keyboard">
-        <Keyboard onTrigger={preview} />
-      </HexFrame>
+      {/* No frame in landscape: 20px of title plus 8px of margin plus padding
+          for a row of piano keys that needs no label. */}
+      {land ? (
+        <div style={{ flex: '0 0 auto' }}>
+          <Keyboard onTrigger={preview} />
+        </div>
+      ) : (
+        <HexFrame title="Keyboard">
+          <Keyboard onTrigger={preview} />
+        </HexFrame>
+      )}
     </div>
   );
 }
 
 function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
+  // Landscape lays the octave controls beside the keys and shortens them: with
+  // the keyboard stacked, there was no scroll position in the whole 754px
+  // panel where a knob and a key were both visible, so you could not turn a
+  // control and hear what it did.
+  const land = useLayoutMode() === 'phone-landscape';
   const [octave, setOctave] = useState(4);
   const whites = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
   const whiteOffsets = [0, 2, 4, 5, 7, 9, 11];
@@ -253,7 +359,7 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
       </div>
       {/* data-overlap-ok: black keys deliberately sit on top of the white keys —
           this is a piano, not a broken layout. */}
-      <div data-overlap-ok style={{ display: 'flex', position: 'relative', height: 120, userSelect: 'none' }}>
+      <div data-overlap-ok style={{ display: 'flex', position: 'relative', flex: 1, minWidth: 0, height: land ? 96 : 120, userSelect: 'none' }}>
         {Array.from({ length: 14 }).map((_, i) => {
           const base = octave * 12 + 12;
           const midi = base + whiteOffsets[i % 7] + Math.floor(i / 7) * 12;
@@ -295,7 +401,9 @@ function Keyboard({ onTrigger }: { onTrigger: (midi: number) => void }) {
               style={{
                 position: 'absolute',
                 top: 0,
-                height: 70,
+                // 58% of the container, not a hard-coded 70 against a 120px
+                // box — the keyboard is shorter in landscape
+                height: '58%',
                 width: `${100 / 14 * 0.6}%`,
                 left: `${(i + 1) * (100 / 14) - (100 / 14) * 0.3}%`,
                 background: 'linear-gradient(180deg, #060606, #1a0500)',
@@ -432,14 +540,13 @@ function MidiOutPanel({ trackId, channel }: { trackId: string; channel?: number 
   const updateTrack = useStore((s) => s.updateTrack);
   const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
 
+  // The Android WebView has no Web MIDI, so this rendered a whole framed
+  // panel containing one apologetic sentence.
+  if (!midi.supported) return null;
   return (
     <HexFrame title="MIDI out">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {!midi.supported ? (
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
-            This device can’t send notes to other gear.
-          </p>
-        ) : (
+        {false ? null : (
           <>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <span className="hud-label">Device</span>
