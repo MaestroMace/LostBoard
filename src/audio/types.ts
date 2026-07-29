@@ -314,7 +314,18 @@ export type TempoEvent = {
  * events. Step segments contribute `(beats / bpm) * 60`; ramp segments
  * use `(beats / avgBpm) * 60` because a linear BPM ramp from `a` to `b`
  * across N beats lasts `N * 60 / ((a + b) / 2)` seconds.
- * `endBeat` exclusive. Empty tempo map → just uses `project.bpm`.
+ * Empty tempo map → just uses `project.bpm`.
+ *
+ * A ramp event's beat is where the glide ARRIVES, so the glide itself happens
+ * in the segment before it. Two boundary cases follow from that and both used
+ * to be wrong, because the loop bailed on `ev.beat >= endBeat`:
+ *
+ *  - A ramp sitting exactly on `endBeat` glides entirely inside the range, so
+ *    it must be counted. Dropping it measured the segment at the old flat
+ *    tempo — a project whose last bar ends on a tempo change bounced to a
+ *    length computed for music that never played.
+ *  - A ramp beyond `endBeat` is entered partway. The tempo at `endBeat` is the
+ *    interpolated value, and the segment's average runs between the two.
  */
 export function projectDurationSec(project: Project, endBeat: number): number {
   const map = (project.tempoMap ?? []).slice().sort((a, b) => a.beat - b.beat);
@@ -323,14 +334,16 @@ export function projectDurationSec(project: Project, endBeat: number): number {
   let total = 0;
   for (const ev of map) {
     if (ev.beat <= 0) continue;
-    if (ev.beat >= endBeat) break;
-    const segBeats = ev.beat - cursor;
-    if (ev.curve === 'ramp') {
-      const avg = (bpm + ev.bpm) / 2;
-      total += (segBeats / avg) * 60;
-    } else {
-      total += (segBeats / bpm) * 60;
+    if (ev.beat > endBeat) {
+      if (ev.curve === 'ramp' && ev.beat > cursor) {
+        const frac = (endBeat - cursor) / (ev.beat - cursor);
+        const bpmAtEnd = bpm + (ev.bpm - bpm) * frac;
+        return total + ((endBeat - cursor) / ((bpm + bpmAtEnd) / 2)) * 60;
+      }
+      break;
     }
+    const segBeats = ev.beat - cursor;
+    total += ev.curve === 'ramp' ? (segBeats / ((bpm + ev.bpm) / 2)) * 60 : (segBeats / bpm) * 60;
     cursor = ev.beat;
     bpm = ev.bpm;
   }

@@ -560,19 +560,40 @@ class Engine {
     if (sorted[0].beat <= 0.0001) {
       t.bpm.value = sorted[0].bpm;
     }
+    // A ramp event's beat is where the glide ARRIVES, so the ramp has to be
+    // scheduled at the START of the segment leading up to it. Asking for
+    // `linearRampToValueAtTime(bpm, time)` inside a callback that fires AT the
+    // event's beat sets the target to the current instant, which Web Audio
+    // resolves as an immediate jump: 'ramp' was audibly identical to 'step',
+    // while projectDurationSec sized the bounce for a glide that never played.
+    //
+    // Ramping needs the segment's wall-clock length, and that is the same
+    // average-tempo integral projectDurationSec uses: N beats gliding a → b
+    // last N * 60 / ((a + b) / 2) seconds.
+    let prevBeat = 0;
+    let prevBpm = sorted[0].beat <= 0.0001 ? sorted[0].bpm : project.bpm;
     for (const ev of sorted) {
-      if (ev.beat <= 0.0001) continue;
-      const id = t.schedule((time) => {
-        if (ev.curve === 'ramp') {
-          // chains from whatever was scheduled before — Web Audio ramps
-          // from the prior automation event's value, so consecutive ramp
-          // events produce piecewise-linear BPM glides
-          t.bpm.linearRampToValueAtTime(ev.bpm, time);
-        } else {
+      if (ev.beat <= 0.0001) {
+        prevBpm = ev.bpm;
+        continue;
+      }
+      if (ev.curve === 'ramp') {
+        const segBeats = ev.beat - prevBeat;
+        const segSec = segBeats > 0 ? (segBeats / ((prevBpm + ev.bpm) / 2)) * 60 : 0;
+        const target = ev.bpm;
+        const id = t.schedule((time) => {
+          t.bpm.setValueAtTime(t.bpm.value, time);
+          t.bpm.linearRampToValueAtTime(target, time + segSec);
+        }, beatsToBarsBeats(prevBeat));
+        this.scheduledIds.push(id);
+      } else {
+        const id = t.schedule((time) => {
           t.bpm.setValueAtTime(ev.bpm, time);
-        }
-      }, beatsToBarsBeats(ev.beat));
-      this.scheduledIds.push(id);
+        }, beatsToBarsBeats(ev.beat));
+        this.scheduledIds.push(id);
+      }
+      prevBeat = ev.beat;
+      prevBpm = ev.bpm;
     }
   }
 
