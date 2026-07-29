@@ -59,30 +59,30 @@ export function SynthPanel() {
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
-        <span className="hud-readout">ENGINE:</span>
+        <span className="hud-readout" style={{ textTransform: 'none' }}>Engine</span>
         {(['subtractive', 'fm', 'wavetable', 'sampler'] as SynthEngine[]).map((e) => (
           <button
             key={e}
             className={`hud-btn ${engine === e ? 'is-active' : ''}`}
             onClick={() => setSynthEngine(active.id, e)}
           >
-            {e === 'subtractive' ? 'SUBTRACTIVE' : e === 'fm' ? 'FM' : e === 'wavetable' ? 'WAVETABLE' : 'SAMPLER'}
+            {e === 'subtractive' ? 'Subtractive' : e === 'fm' ? 'FM' : e === 'wavetable' ? 'Wavetable' : 'Sampler'}
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <span className="hud-readout">PRESET:</span>
+        <span className="hud-readout" style={{ textTransform: 'none' }}>Preset</span>
         {Object.keys(PRESETS).map((k) => (
           <button key={k} className="hud-btn" onClick={() => patch(PRESETS[k])}>{k}</button>
         ))}
-        <button className="hud-btn hud-btn--ghost" onClick={() => patch(DEFAULT_SYNTH)}>RESET</button>
+        <button className="hud-btn hud-btn--ghost" onClick={() => patch(DEFAULT_SYNTH)}>Reset</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
         {engine === 'fm' ? (
-          <HexFrame title="FM CORE">
+          <HexFrame title="FM">
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
               <Knob
-                label="HARMONIC"
+                label="RATIO"
                 value={s.harmonicity}
                 min={0.25}
                 max={12}
@@ -91,7 +91,7 @@ export function SynthPanel() {
                 onChange={(v) => patch({ harmonicity: v })}
               />
               <Knob
-                label="MOD IDX"
+                label="FM AMT"
                 value={s.fmDepth}
                 min={0}
                 max={40}
@@ -124,7 +124,7 @@ export function SynthPanel() {
         ) : engine === 'sampler' ? (
           <SamplerSource trackId={active.id} />
         ) : (
-        <HexFrame title="OSCILLATOR">
+        <HexFrame title="Oscillator">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {OSCS.map((o) => (
               <button
@@ -145,7 +145,7 @@ export function SynthPanel() {
         </HexFrame>
         )}
 
-        <HexFrame title="FILTER">
+        <HexFrame title="Filter">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob label="CUTOFF" title="Filter cutoff frequency" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
             <Knob label="RES" title="Resonance (filter Q)" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
@@ -153,7 +153,7 @@ export function SynthPanel() {
           </div>
         </HexFrame>
 
-        <HexFrame title="ENVELOPE (ADSR)">
+        <HexFrame title="Envelope">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob label="A" title="Attack — fade-in time" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
             <Knob label="D" title="Decay — drop to sustain" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
@@ -162,7 +162,7 @@ export function SynthPanel() {
           </div>
         </HexFrame>
 
-        <HexFrame title="FX SENDS">
+        <HexFrame title="Sends">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob label="REVERB" value={s.reverb} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ reverb: v })} />
             <Knob label="DELAY" value={s.delay} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ delay: v })} />

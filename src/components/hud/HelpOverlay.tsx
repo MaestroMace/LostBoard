@@ -1,8 +1,9 @@
 import { memo } from 'react';
+import { useIsMobile } from '../../hooks/useLayoutMode';
 
 type ShortcutGroup = { title: string; items: [string, string][] };
 
-const GROUPS: ShortcutGroup[] = [
+const KEY_GROUPS: ShortcutGroup[] = [
   {
     title: 'TRANSPORT',
     items: [
@@ -114,7 +115,74 @@ const GROUPS: ShortcutGroup[] = [
   },
 ];
 
+
+/**
+ * Touch help.
+ *
+ * The keyboard list below is genuinely useless on a phone — 21 of its entries
+ * reference Space, ⌘, Shift or double-click. This is the same information
+ * expressed as what you tap, plus what each tab is actually for, because
+ * "where do I do X" was the harder question.
+ */
+const TOUCH_GROUPS: ShortcutGroup[] = [
+  {
+    title: 'The five tabs',
+    items: [
+      ['Song', 'Your timeline — arrange clips across tracks and time'],
+      ['Clips', 'Launch loops live instead of following the timeline'],
+      ['Edit', 'Everything about the selected track: notes, sound, effects, automation'],
+      ['Mix', 'Levels, pan, mute and solo for every track'],
+      ['Project', 'Tempo, time signature, saving and export'],
+    ],
+  },
+  {
+    title: 'Playing',
+    items: [
+      ['Play', 'Start and pause the song'],
+      ['Stop', 'Stop and jump back to the beginning'],
+      ['⋯', 'Loop, metronome, punch record, tempo, undo, redo and save'],
+    ],
+  },
+  {
+    title: 'Tracks',
+    items: [
+      ['Tap a track name', 'Volume, pan, arm, edit, automation and delete'],
+      ['+ Track', 'Add a synth, drum or audio track'],
+      ['M / S', 'Mute or solo — in the row on landscape, in the track sheet on portrait'],
+    ],
+  },
+  {
+    title: 'Making music',
+    items: [
+      ['Drag an empty lane', 'Draw a new clip there'],
+      ['Double-tap a clip', 'Open it in the right editor'],
+      ['Drag a clip', 'Move it; drag its right edge to change the length'],
+      ['✕ on a clip', 'Delete that clip'],
+    ],
+  },
+  {
+    title: 'Editing notes',
+    items: [
+      ['Draw + drag', 'Draw a note as long as you drag'],
+      ['Select + drag', 'Select everything inside the box'],
+      ['Erase', 'Tap notes to remove them'],
+      ['Velocity lane', 'Drag the bar under a note to change how hard it hits'],
+    ],
+  },
+  {
+    title: 'Beats',
+    items: [
+      ['Tap a step', 'Turn it on or off'],
+      ['Drag up / down on a step', 'Set how hard it hits'],
+      ['Prob', 'Tap a lit step to cycle its chance of firing: 100/75/50/25%'],
+      ['Steps', 'Change the pattern length'],
+    ],
+  },
+];
+
 export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () => void }) {
+  const isMobile = useIsMobile();
+  const GROUPS = isMobile ? TOUCH_GROUPS : KEY_GROUPS;
   return (
     <div
       onClick={onClose}
@@ -151,12 +219,13 @@ export const HelpOverlay = memo(function HelpOverlay({ onClose }: { onClose: () 
           </span>
           <div style={{ flex: 1 }} />
           <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
-            ESC or ? to close
+            {isMobile ? 'Tap outside to close' : 'ESC or ? to close'}
           </span>
           <button
             className="hud-btn hud-btn--icon"
             onClick={onClose}
             title="Close"
+            aria-label="Close help"
             style={{}}
           >
             ✕

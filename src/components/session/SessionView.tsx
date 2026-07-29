@@ -46,22 +46,26 @@ export function SessionView() {
           flexWrap: 'wrap',
         }}
       >
-        <span className="hud-label">Clip launcher</span>
-        <button
-          className={`hud-btn ${sessionMode ? 'is-active' : ''}`}
-          onClick={() => setSessionMode(true)}
-          aria-pressed={sessionMode}
-          title="Engine plays session loops"
-        >
-          SESSION MODE
-        </button>
+        {/* One control that states what is playing, rather than two buttons
+            whose relationship you had to infer from which was highlighted. */}
+        <span className="hud-readout" style={{ textTransform: 'none' }}>
+          Playing:
+        </span>
         <button
           className={`hud-btn ${!sessionMode ? 'is-active' : ''}`}
           onClick={() => setSessionMode(false)}
           aria-pressed={!sessionMode}
-          title="Engine plays the arrangement timeline"
+          title="Play the timeline from the Song tab"
         >
-          ARRANGEMENT
+          Timeline
+        </button>
+        <button
+          className={`hud-btn ${sessionMode ? 'is-active' : ''}`}
+          onClick={() => setSessionMode(true)}
+          aria-pressed={sessionMode}
+          title="Play the loops launched below instead of the timeline"
+        >
+          These loops
         </button>
         <button
           className="hud-btn hud-btn--ghost"
@@ -69,13 +73,13 @@ export function SessionView() {
             stopAllSessionClips();
             audioEngine.stopAllSessionClips();
           }}
-          title="Stop every track's session clip"
+          title="Stop every track's loop"
         >
-          ■ STOP ALL
+          ■ Stop all
         </button>
         <div style={{ flex: 1 }} />
-        <button className="hud-btn hud-btn--icon" onClick={addScene} title="Add scene column">
-          +SCENE
+        <button className="hud-btn" onClick={addScene} title="Add another scene column">
+          + Scene
         </button>
       </div>
 
@@ -334,7 +338,7 @@ const ClipPicker = memo(function ClipPicker({
       }}
       aria-label={`Scene ${sceneIndex + 1} slot for ${track.name}`}
     >
-      <option value="">— empty —</option>
+      <option value="">Pick a clip…</option>
       {candidates.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name ?? c.kind}
