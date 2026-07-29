@@ -201,10 +201,10 @@ export function Transport() {
           aria-pressed={playing}
           title="Play / Pause"
         >
-          {playing ? `⏸${lbl('PAUSE')}` : `▶${lbl('PLAY')}`}
+          {playing ? `⏸${lbl('Pause')}` : `▶${lbl('Play')}`}
         </button>
         <button className="hud-btn touch-target" onClick={stop} title="Stop">
-          ■{lbl('STOP')}
+          ■{lbl('Stop')}
         </button>
         <button
           className={`hud-btn hud-btn--rec touch-target ${micRecording ? 'is-active' : ''}`}
@@ -212,7 +212,7 @@ export function Transport() {
           aria-pressed={micRecording}
           title="Record from microphone into an audio track"
         >
-          ●{lbl(micRecording ? 'STOP REC' : 'MIC REC')}
+          ●{lbl(micRecording ? 'Stop' : 'Record')}
         </button>
         {!compactStrip && (
         <button
@@ -224,7 +224,7 @@ export function Transport() {
               : 'Punch-in MIDI record at the playhead onto the armed synth track'
           }
         >
-          ⏺{lbl('PUNCH')}
+          ⏺{lbl('Punch in')}
         </button>
         )}
         {!isMobile && (
@@ -249,7 +249,7 @@ export function Transport() {
             aria-pressed={bouncing}
             title="Bounce the master output to an audio file"
           >
-            ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
+            ⭳{lbl(bouncing ? 'Stop bounce' : 'Bounce')}
           </button>
         )}
         {!compactStrip && (
@@ -260,7 +260,7 @@ export function Transport() {
               aria-pressed={loopEnabled}
               title="Loop"
             >
-              ↻{lbl('LOOP')}
+              ↻{lbl('Loop')}
             </button>
             <button
               className={`hud-btn touch-target ${metronome ? 'is-active' : ''}`}
@@ -268,7 +268,7 @@ export function Transport() {
               aria-pressed={metronome}
               title="Metronome"
             >
-              ⛬{lbl('CLICK')}
+              ⛬{lbl('Click')}
             </button>
           </>
         )}
@@ -281,7 +281,7 @@ export function Transport() {
               title="Undo"
               style={{ opacity: canUndo ? 1 : 0.35 }}
             >
-              ↶{lbl('UNDO')}
+              ↶{lbl('Undo')}
             </button>
             <button
               className="hud-btn hud-btn--ghost touch-target"
@@ -290,14 +290,14 @@ export function Transport() {
               title="Redo"
               style={{ opacity: canRedo ? 1 : 0.35 }}
             >
-              ↷{lbl('REDO')}
+              ↷{lbl('Redo')}
             </button>
             <button
               className="hud-btn hud-btn--ghost touch-target"
               onClick={() => saveProjectToStorage()}
               title="Save current project to local storage"
             >
-              💾{lbl('SAVE')}
+              💾{lbl('Save')}
             </button>
           </>
         )}

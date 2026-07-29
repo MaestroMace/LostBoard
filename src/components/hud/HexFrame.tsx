@@ -4,12 +4,17 @@ type Variant = 'orange' | 'green' | 'red' | 'soft';
 
 export function HexFrame({
   title,
+  action,
   children,
   variant = 'orange',
   style,
   className,
 }: {
   title?: string;
+  /** Optional control pinned to the right of the title row — an on/off
+   *  toggle belongs beside its section name, not on a full-width row of
+   *  its own that costs 44px of height per panel. */
+  action?: React.ReactNode;
   children: React.ReactNode;
   variant?: Variant;
   style?: React.CSSProperties;
@@ -26,7 +31,12 @@ export function HexFrame({
     .join(' ');
   return (
     <div className={cls} style={style}>
-      {title && <div className="hex-frame__title">{title}</div>}
+      {(title || action) && (
+        <div className="hex-frame__title">
+          <span>{title}</span>
+          {action}
+        </div>
+      )}
       {children}
     </div>
   );

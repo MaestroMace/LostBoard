@@ -107,8 +107,8 @@ export function SessionView() {
       </div>
 
       <EditorTip>
-        tap a slot to launch · tap ▶ at the top of a column to launch the whole scene · use the small dropdown in
-        each slot to assign a clip · ■ STOP clears a track · ARRANGEMENT swaps the engine back to the timeline
+        Tap a slot to start that loop. Tap ▶ above a column to start the whole column at once. Use the dropdown in a
+        slot to choose which clip it holds. &ldquo;Timeline&rdquo; at the top goes back to playing the song as arranged.
       </EditorTip>
     </div>
   );

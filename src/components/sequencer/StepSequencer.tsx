@@ -18,7 +18,7 @@ import { useIsMobile } from '../../hooks/useLayoutMode';
  * never drift apart — the cursor previously mirrored the template by hand in a
  * calc() string.
  */
-const LABEL_COL_W = 80;
+const LABEL_COL_W = 96;
 const GRID_GAP = 4;
 const TOUCH_CELL_W = 40;
 
@@ -110,9 +110,9 @@ export function StepSequencer() {
           className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
         >
-          + PATTERN
+          + Pattern
         </button>
-        <span className="hud-readout">STEPS</span>
+        <span className="hud-readout" style={{ textTransform: 'none' }}>Length</span>
         <select
           className="display"
           value={activeClip.pattern.length}
@@ -131,7 +131,7 @@ export function StepSequencer() {
           aria-pressed={mode === 'normal'}
           title="Normal mode — tap toggles, drag sets velocity"
         >
-          NORM
+          Steps
         </button>
         <button
           className={`hud-btn ${mode === 'prob' ? 'is-active' : ''}`}
@@ -139,7 +139,7 @@ export function StepSequencer() {
           aria-pressed={mode === 'prob'}
           title="Probability mode — tap cycles trigger chance (100/75/50/25%)"
         >
-          PROB
+          Chance
         </button>
       </div>
 
@@ -349,21 +349,24 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         {DRUM_LABELS[pad]}
         {sampleId && <span style={{ color: 'var(--hud-orange-bright)' }}> ◆</span>}
       </button>
+      {/* Only worth a row when there is something to choose. It used to render
+          permanently disabled under all eight pads, doubling the grid height. */}
+      {samples.length > 0 && (
       <select
         className="display"
         value={sampleId}
         onChange={(e) => setPadSample(trackId, pad, e.target.value || null)}
         title="Swap this pad's voice for a sample"
         style={{ fontSize: 11, padding: '1px 2px', width: '100%' }}
-        disabled={samples.length === 0}
       >
-        <option value="">SYNTH</option>
+        <option value="">Built-in sound</option>
         {samples.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
           </option>
         ))}
       </select>
+      )}
     </div>
   );
 });

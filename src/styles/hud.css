@@ -72,6 +72,11 @@
  * of every section heading in the app was sliced off. At 9px they were barely
  * legible even unclipped. */
 .hex-frame__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
   font-family: var(--font-display);
   font-size: 12px;
   letter-spacing: 0.06em;
@@ -110,13 +115,15 @@
 /* lifted from 0.55 — the dim readout (tips, footers) was barely legible on black */
 .hud-readout--dim { color: rgba(255, 106, 0, 0.72); }
 
+/* Sentence case, not caps.
+   Every string in the app used to be shouted, so nothing had hierarchy: a
+   destructive button, a knob caption and a section heading all read at the
+   same volume, and all-caps is slower to scan besides. Uppercase now survives
+   in exactly one place — .hex-frame__title — where it marks a section header. */
 .hud-label {
   font-family: var(--font-display);
-  /* 9 -> 10px and tighter tracking: wide letter-spacing on tiny uppercase
-     text was a big part of why labels read as decoration, not words */
   font-size: 12px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: rgba(255, 170, 90, 0.95);
 }
 
@@ -139,9 +146,8 @@
 .hud-btn {
   position: relative;
   font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.02em;
   color: var(--hud-orange);
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.1), rgba(255, 106, 0, 0.02));
   border: 1px solid rgba(255, 106, 0, 0.55);
@@ -378,9 +384,8 @@
 
 .hud-tab {
   font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0.02em;
   padding: 6px 12px;
   color: rgba(255, 106, 0, 0.6);
   border: 1px solid transparent;

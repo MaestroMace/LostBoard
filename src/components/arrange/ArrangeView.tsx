@@ -786,7 +786,12 @@ const TrackHeader = memo(function TrackHeader({
           ✕
         </button>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto' }}>
+      {/* Two rows, not one. Sharing a 196px line with three buttons and a
+          readout left the fader 29px of travel for a 54 dB range — 1.86 dB per
+          pixel, so a single pixel of finger movement jumped nearly two
+          decibels. On its own row it gets the full header width. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
           className={`hud-btn hud-btn--icon hud-btn--tight ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
@@ -826,6 +831,8 @@ const TrackHeader = memo(function TrackHeader({
         >
           ●
         </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <input
           type="range"
           className="hud-slider"
@@ -836,13 +843,15 @@ const TrackHeader = memo(function TrackHeader({
           onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
-          style={{ flex: 1, height: 6 }}
+          aria-label={`${track.name} volume`}
+          style={{ flex: 1, minWidth: 0, height: 6 }}
         />
         {!compact && (
-          <span className="hud-readout" style={{ fontSize: 11, width: 28, textAlign: 'right' }}>
+          <span className="hud-readout" style={{ fontSize: 11, width: 28, textAlign: 'right', flex: '0 0 auto' }}>
             {track.volume.toFixed(0)}
           </span>
         )}
+      </div>
       </div>
     </div>
   );
@@ -924,7 +933,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
 
         <div className="sheet__row">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span className="hud-label" style={{ fontSize: 12 }}>VOLUME</span>
+            <span className="hud-label" style={{ fontSize: 12 }}>Volume</span>
             <span className="hud-readout">{track.volume.toFixed(1)} dB</span>
           </div>
           <input
@@ -941,9 +950,9 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
 
         <div className="sheet__row">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span className="hud-label" style={{ fontSize: 12 }}>PAN</span>
+            <span className="hud-label" style={{ fontSize: 12 }}>Pan</span>
             <span className="hud-readout">
-              {track.pan === 0 ? 'CENTRE' : track.pan < 0 ? `L${Math.round(-track.pan * 100)}` : `R${Math.round(track.pan * 100)}`}
+              {track.pan === 0 ? 'Centre' : track.pan < 0 ? `L${Math.round(-track.pan * 100)}` : `R${Math.round(track.pan * 100)}`}
             </span>
           </div>
           <input
@@ -1011,7 +1020,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
               onClose();
             }}
           >
-            {laneCount === 0 ? 'ADD AUTOMATION' : `AUTOMATION (${laneCount})`}
+            {laneCount === 0 ? 'Automate something' : `Automation (${laneCount})`}
           </button>
         </div>
 
@@ -1780,33 +1789,33 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         flexWrap: 'wrap',
       }}
     >
-      <span className="hud-label">CLIP // {found.name ?? found.kind.toUpperCase()}</span>
+      <span className="hud-label">{found.name ?? 'Audio clip'}</span>
       <button
         className={`hud-btn ${warp ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { warp: !warp })}
         aria-pressed={warp}
-        title="Warp playback rate to follow project tempo"
+        title="Stretch this recording so it stays in time when the song tempo changes"
       >
-        ⇄ WARP
+        Follow tempo
       </button>
-      <span className="hud-readout">MODE</span>
+      <span className="hud-label">How</span>
       <button
         className={`hud-btn ${(found.stretchMode ?? 'pitch') === 'pitch' ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { stretchMode: 'pitch' })}
-        title="Varispeed — pitch follows tempo (cheap, instant)"
+        title="Like speeding up a record — faster also means higher"
         disabled={!warp}
       >
-        PITCH
+        Speed up
       </button>
       <button
         className={`hud-btn ${found.stretchMode === 'time' ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { stretchMode: 'time' })}
-        title="Granular time-stretch — pitch preserved across tempo changes (Tone.GrainPlayer)"
+        title="Keeps the original pitch however far the tempo moves"
         disabled={!warp}
       >
-        TIME
+        Keep pitch
       </button>
-      <span className="hud-readout">SRC BPM</span>
+      <span className="hud-label" title="The tempo this recording was made at">Its tempo</span>
       <input
         type="number"
         className="display"
@@ -1817,7 +1826,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         onChange={(e) => updateAudioClip(found.id, { sourceBpm: parseFloat(e.target.value || '120') })}
         style={{ width: 70, padding: 3 }}
       />
-      <span className="hud-readout">GAIN</span>
+      <span className="hud-label">Level</span>
       <input
         type="range"
         className="hud-slider"

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import {
@@ -15,6 +15,13 @@ const CURVE_GLYPH: Record<AutomationCurve, string> = {
   exponential: '⌒',
   hold: '⎺',
   step: '⌐',
+};
+/** What the shape does, not what the code calls it. */
+const CURVE_LABEL: Record<AutomationCurve, string> = {
+  linear: 'Straight',
+  exponential: 'Curved',
+  hold: 'Hold, then jump',
+  step: 'Jump',
 };
 
 const ALL_PARAMS: AutomationParam[] = [
@@ -81,11 +88,12 @@ export function AutomationView() {
       className="hex-grid-bg"
     >
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span className="hud-label">AUTOMATION // M.A.G.I. PARAM RAMPS</span>
+        <span className="hud-label">Automate</span>
         <select
           className="display"
           value={active.id}
           onChange={(e) => selectTrack(e.target.value)}
+          aria-label="Track to automate"
         >
           {tracks.map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
@@ -98,10 +106,11 @@ export function AutomationView() {
       </div>
 
       {lanes.length === 0 ? (
-        <HexFrame title="NO AUTOMATION">
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
-            No automation lanes on this track yet. Use + ADD LANE above to start automating volume,
-            pan, filter cutoff, or a send.
+        <HexFrame title="Nothing automated yet">
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+            Automation makes a control move on its own as the song plays &mdash; a filter opening up
+            over four bars, a fade at the end. Tap <b>Add</b> to pick what should move, then tap the
+            lane to place points.
           </p>
         </HexFrame>
       ) : (
@@ -146,8 +155,13 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className="hud-btn hud-btn--green" onClick={() => setOpen((v) => !v)}>
-        + ADD LANE
+      <button
+        className="hud-btn hud-btn--green"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title="Choose a control to automate on this track"
+      >
+        + Add
       </button>
       {open && (
         <div
@@ -184,6 +198,16 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
 }
 
 const LANE_HEIGHT = 100;
+
+const POINT_ROW: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '22px 1fr 1fr 96px 44px',
+  gap: 6,
+  padding: '2px 6px',
+  background: 'rgba(0,0,0,0.4)',
+  border: '1px solid rgba(255,106,0,0.2)',
+  alignItems: 'center',
+};
 
 /**
  * LaneEditor — one parameter's breakpoints, rendered as both a clickable
@@ -292,18 +316,20 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
           <button
             className="hud-btn hud-btn--ghost"
             onClick={() => addAutomationPoint(track.id, lane.param, projectBeats / 2, currentValueFor(track, lane.param))}
+            title="Drop a point at the middle of the song"
           >
-            + POINT
+            + Point
           </button>
           <button
             className="hud-btn hud-btn--rec"
             onClick={() => {
-              if (confirm(`Remove the ${meta.label} automation lane?`)) {
+              if (confirm(`Stop automating ${meta.label.toLowerCase()}? The points you placed will be lost.`)) {
                 removeAutomationLane(track.id, lane.param);
               }
             }}
+            title={`Stop automating ${meta.label.toLowerCase()}`}
           >
-            ✕ REMOVE LANE
+            Remove
           </button>
         </div>
 
@@ -357,23 +383,26 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 180, overflow: 'auto' }}>
           {sorted.length === 0 && (
             <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
-              Click anywhere on the lane above to drop a breakpoint.
+              Tap anywhere on the lane above to place a point.
             </p>
+          )}
+          {/* A row of bare number boxes tells you nothing about what it holds;
+              the header names the columns once instead of per row. */}
+          {sorted.length > 0 && (
+            <div style={{ ...POINT_ROW, background: 'transparent', border: 'none', paddingBottom: 0 }}>
+              <span className="hud-label" style={{ fontSize: 11 }}>#</span>
+              <span className="hud-label" style={{ fontSize: 11 }}>Beat</span>
+              <span className="hud-label" style={{ fontSize: 11 }}>{meta.unit ? `Value (${meta.unit})` : 'Value'}</span>
+              <span className="hud-label" style={{ fontSize: 11 }}>Shape</span>
+              <span />
+            </div>
           )}
           {sorted.map((pt, i) => (
             <div
               key={pt.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '60px 1fr 1fr 110px 50px',
-                gap: 6,
-                padding: '2px 6px',
-                background: 'rgba(0,0,0,0.4)',
-                border: '1px solid rgba(255,106,0,0.2)',
-                alignItems: 'center',
-              }}
+              style={POINT_ROW}
             >
-              <span className="hud-value" style={{ fontSize: 12 }}>PT-{String(i + 1).padStart(2, '0')}</span>
+              <span className="hud-value" style={{ fontSize: 12 }}>{i + 1}</span>
               <input
                 className="display"
                 type="number"
@@ -404,12 +433,13 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
                   setAutomationPointCurve(track.id, lane.param, pt.id, e.target.value as AutomationCurve)
                 }
                 disabled={i === 0}
-                title={i === 0 ? 'First point — no curve into it' : 'Curve from previous point'}
+                aria-label={`Shape into point ${i + 1}`}
+                title={i === 0 ? 'Nothing comes before the first point' : 'How the value moves from the point before'}
                 style={{ width: '100%' }}
               >
                 {CURVE_MODES.map((m) => (
                   <option key={m} value={m}>
-                    {CURVE_GLYPH[m]} {m}
+                    {CURVE_GLYPH[m]} {CURVE_LABEL[m]}
                   </option>
                 ))}
               </select>

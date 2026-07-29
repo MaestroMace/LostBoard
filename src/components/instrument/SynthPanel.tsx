@@ -10,6 +10,23 @@ import { importSample } from '../../state/samples';
 
 const OSCS: SynthParams['osc'][] = ['sine', 'triangle', 'square', 'sawtooth', 'fatsawtooth', 'pwm'];
 
+/** Waveform names as people say them, not as Tone.js spells them. */
+const OSC_LABEL: Record<SynthParams['osc'], string> = {
+  sine: 'Sine',
+  triangle: 'Triangle',
+  square: 'Square',
+  sawtooth: 'Saw',
+  fatsawtooth: 'Fat saw',
+  pwm: 'Pulse',
+};
+
+const ENGINES: { id: SynthEngine; label: string; hint: string }[] = [
+  { id: 'subtractive', label: 'Classic', hint: 'A waveform run through a filter — the familiar analogue sound' },
+  { id: 'fm', label: 'FM', hint: 'One tone bending another: bells, metallic and electric-piano sounds' },
+  { id: 'wavetable', label: 'Wavetable', hint: 'Draw your own waveform from harmonics' },
+  { id: 'sampler', label: 'Sampler', hint: 'Play a recording of your own back across the keyboard' },
+];
+
 const PRESETS: Record<string, Partial<SynthParams>> = {
   'Bass': { osc: 'square', cutoff: 500, resonance: 8, attack: 0.005, decay: 0.2, sustain: 0.5, release: 0.2, drive: 0.25, reverb: 0.05, delay: 0.0 },
   'Pad': { osc: 'fatsawtooth', cutoff: 2400, resonance: 1.2, attack: 0.6, decay: 1, sustain: 0.8, release: 1.5, drive: 0, reverb: 0.6, delay: 0.25 },
@@ -48,33 +65,58 @@ export function SynthPanel() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span className="hud-label">Instrument</span>
-        <select
-          className="display"
-          value={active.id}
-          onChange={(e) => selectTrack(e.target.value)}
-        >
-          {synthTracks.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
-        <span className="hud-readout" style={{ textTransform: 'none' }}>Engine</span>
-        {(['subtractive', 'fm', 'wavetable', 'sampler'] as SynthEngine[]).map((e) => (
-          <button
-            key={e}
-            className={`hud-btn ${engine === e ? 'is-active' : ''}`}
-            onClick={() => setSynthEngine(active.id, e)}
+      {/* Three separate rows, not one wrapping row. As a single flex line the
+          groups interleaved once they wrapped: "Preset" ended up stranded at
+          the end of the engine buttons, with its own buttons on the line
+          below, so the header read as one undifferentiated wall of chips. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="hud-label" style={{ minWidth: 64 }}>Track</span>
+          <select
+            className="display"
+            value={active.id}
+            onChange={(e) => selectTrack(e.target.value)}
+            aria-label="Track to edit the sound of"
+            style={{ flex: '1 1 120px', minWidth: 0 }}
           >
-            {e === 'subtractive' ? 'Subtractive' : e === 'fm' ? 'FM' : e === 'wavetable' ? 'Wavetable' : 'Sampler'}
+            {synthTracks.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <button
+            className="hud-btn hud-btn--ghost"
+            onClick={() => patch(DEFAULT_SYNTH)}
+            title="Put every control on this page back to its starting value"
+          >
+            Reset
           </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <span className="hud-readout" style={{ textTransform: 'none' }}>Preset</span>
-        {Object.keys(PRESETS).map((k) => (
-          <button key={k} className="hud-btn" onClick={() => patch(PRESETS[k])}>{k}</button>
-        ))}
-        <button className="hud-btn hud-btn--ghost" onClick={() => patch(DEFAULT_SYNTH)}>Reset</button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="hud-label" style={{ minWidth: 64 }} title="How this instrument makes sound">
+            Type
+          </span>
+          {ENGINES.map((e) => (
+            <button
+              key={e.id}
+              className={`hud-btn hud-btn--tight ${engine === e.id ? 'is-active' : ''}`}
+              aria-pressed={engine === e.id}
+              onClick={() => setSynthEngine(active.id, e.id)}
+              title={e.hint}
+            >
+              {e.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="hud-label" style={{ minWidth: 64 }} title="A starting point you can then change">
+            Starting point
+          </span>
+          {Object.keys(PRESETS).map((k) => (
+            <button key={k} className="hud-btn hud-btn--tight" onClick={() => patch(PRESETS[k])}>
+              {k}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
@@ -82,7 +124,7 @@ export function SynthPanel() {
           <HexFrame title="FM">
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
               <Knob
-                label="RATIO"
+                label="Ratio"
                 value={s.harmonicity}
                 min={0.25}
                 max={12}
@@ -91,7 +133,7 @@ export function SynthPanel() {
                 onChange={(v) => patch({ harmonicity: v })}
               />
               <Knob
-                label="FM AMT"
+                label="Amount"
                 value={s.fmDepth}
                 min={0}
                 max={40}
@@ -100,7 +142,7 @@ export function SynthPanel() {
                 onChange={(v) => patch({ fmDepth: v })}
               />
               <Knob
-                label="DETUNE"
+                label="Detune"
                 value={s.detune}
                 min={-100}
                 max={100}
@@ -109,7 +151,7 @@ export function SynthPanel() {
                 onChange={(v) => patch({ detune: v })}
               />
               <Knob
-                label="GLIDE"
+                label="Glide"
                 value={s.glide}
                 min={0}
                 max={0.5}
@@ -124,48 +166,49 @@ export function SynthPanel() {
         ) : engine === 'sampler' ? (
           <SamplerSource trackId={active.id} />
         ) : (
-        <HexFrame title="Oscillator">
+        <HexFrame title="Waveform">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {OSCS.map((o) => (
               <button
                 key={o}
-                className={`hud-btn ${s.osc === o ? 'is-active' : ''}`}
+                className={`hud-btn hud-btn--tight ${s.osc === o ? 'is-active' : ''}`}
+                aria-pressed={s.osc === o}
                 onClick={() => patch({ osc: o })}
                 style={{ flex: '1 1 auto' }}
               >
-                {o}
+                {OSC_LABEL[o]}
               </button>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around', marginTop: 12 }}>
-            <Knob label="DETUNE" value={s.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
-            <Knob label="UNISON" value={s.unison} min={1} max={7} step={1} display={(v) => `${v.toFixed(0)}`} onChange={(v) => patch({ unison: v })} />
-            <Knob label="GLIDE" value={s.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
+            <Knob label="Detune" value={s.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
+            <Knob label="Voices" value={s.unison} min={1} max={7} step={1} display={(v) => `${v.toFixed(0)}`} onChange={(v) => patch({ unison: v })} />
+            <Knob label="Glide" value={s.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
           </div>
         </HexFrame>
         )}
 
         <HexFrame title="Filter">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="CUTOFF" title="Filter cutoff frequency" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
-            <Knob label="RES" title="Resonance (filter Q)" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
-            <Knob label="DRIVE" title="Drive / distortion" value={s.drive} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ drive: v })} />
+            <Knob label="Cutoff" title="How much of the bright, high part of the sound gets through" value={s.cutoff} min={50} max={18000} step={1} log display={(v) => `${v < 1000 ? v.toFixed(0) : (v / 1000).toFixed(1) + 'k'}Hz`} onChange={(v) => patch({ cutoff: v })} />
+            <Knob label="Resonance" title="Emphasises the frequencies right at the cutoff — the classic squelch" value={s.resonance} min={0.1} max={20} step={0.1} display={(v) => `Q${v.toFixed(1)}`} onChange={(v) => patch({ resonance: v })} />
+            <Knob label="Drive" title="Pushes the sound harder, adding grit" value={s.drive} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ drive: v })} />
           </div>
         </HexFrame>
 
-        <HexFrame title="Envelope">
+        <HexFrame title="Shape over time">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="A" title="Attack — fade-in time" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
-            <Knob label="D" title="Decay — drop to sustain" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
-            <Knob label="S" title="Sustain — held level" value={s.sustain} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ sustain: v })} />
-            <Knob label="R" title="Release — fade-out time" value={s.release} min={0.001} max={5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ release: v })} log />
+            <Knob label="Attack" title="How long the note takes to reach full volume" value={s.attack} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ attack: v })} log />
+            <Knob label="Decay" title="How fast it falls back after the attack" value={s.decay} min={0.001} max={3} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ decay: v })} log />
+            <Knob label="Sustain" title="The level it holds at while the note is held" value={s.sustain} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ sustain: v })} />
+            <Knob label="Release" title="How long the sound takes to fade after the note ends" value={s.release} min={0.001} max={5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ release: v })} log />
           </div>
         </HexFrame>
 
-        <HexFrame title="Sends">
+        <HexFrame title="Space">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
-            <Knob label="REVERB" value={s.reverb} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ reverb: v })} />
-            <Knob label="DELAY" value={s.delay} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ delay: v })} />
+            <Knob label="Reverb" value={s.reverb} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ reverb: v })} />
+            <Knob label="Delay" value={s.delay} min={0} max={1} step={0.01} display={(v) => `${(v * 100).toFixed(0)}%`} onChange={(v) => patch({ delay: v })} />
           </div>
         </HexFrame>
 
@@ -290,7 +333,7 @@ function WavetablePanel({
     <HexFrame title="WAVETABLE">
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
         <Knob
-          label="POSITION"
+          label="Position"
           value={synth.wavePosition ?? 0.33}
           min={0}
           max={1}
@@ -298,8 +341,8 @@ function WavetablePanel({
           display={(v) => `${(v * 100).toFixed(0)}%`}
           onChange={(v) => patch({ wavePosition: v })}
         />
-        <Knob label="DETUNE" value={synth.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
-        <Knob label="GLIDE" value={synth.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
+        <Knob label="Detune" value={synth.detune} min={-100} max={100} step={1} display={(v) => `${v.toFixed(0)}c`} onChange={(v) => patch({ detune: v })} />
+        <Knob label="Glide" value={synth.glide} min={0} max={0.5} step={0.005} display={(v) => `${(v * 1000).toFixed(0)}ms`} onChange={(v) => patch({ glide: v })} />
       </div>
 
       {partials && partials.length > 0 && (

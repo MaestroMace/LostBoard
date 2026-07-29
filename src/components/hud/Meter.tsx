@@ -5,7 +5,14 @@ import { meterBus } from '../../state/meterBus';
  * LiveMeter — registers its bar element with the MeterBus, which drives the
  * height directly via one shared rAF loop. No React re-renders per frame.
  */
-export function LiveMeter({ meterKey, height = 80 }: { meterKey: string; height?: number }) {
+export function LiveMeter({
+  meterKey,
+  height = 80,
+}: {
+  meterKey: string;
+  /** Number of pixels, or any CSS length — '100%' lets it stretch with a flex parent. */
+  height?: number | string;
+}) {
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

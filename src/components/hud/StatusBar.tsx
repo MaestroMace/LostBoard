@@ -234,20 +234,20 @@ function Ticker() {
       // Live engine telemetry first — pulled fresh so each cycle is current.
       if (audioEngine.isInited()) {
         const peak = audioEngine.getMasterLevel();
-        lines.push(`MASTER ${peak > -60 ? peak.toFixed(1) + ' dB' : '—∞ dB'}`);
+        lines.push(`Output ${peak > -60 ? peak.toFixed(1) + ' dB' : 'silent'}`);
       } else {
-        lines.push('ENGINE WARMING UP');
+        lines.push('Starting audio…');
       }
       lines.push(`${playing ? 'Playing' : 'Stopped'} at ${bpm.toFixed(1)} BPM`);
-      lines.push(`MODE ${sessionMode ? 'SESSION' : 'ARRANGEMENT'}`);
-      lines.push(`TRACKS ${String(trackCount).padStart(2, '0')} / CLIPS ${String(clipCount).padStart(3, '0')}`);
-      if (automationLanes > 0) lines.push(`AUTO LANES ${automationLanes}`);
-      if (tempoEvents > 0) lines.push(`TEMPO MAP ${tempoEvents} EV`);
-      if (micRecording) lines.push('MIC RECORDING — ARMED');
-      if (midiClockOut) lines.push('MIDI CLOCK OUT ACTIVE');
-      if (midiClockIn) lines.push('MIDI CLOCK IN — TRANSPORT SLAVED');
+      lines.push(sessionMode ? 'Playing launched loops' : 'Playing the timeline');
+      lines.push(`${trackCount} track${trackCount === 1 ? '' : 's'}, ${clipCount} clip${clipCount === 1 ? '' : 's'}`);
+      if (automationLanes > 0) lines.push(`${automationLanes} thing${automationLanes === 1 ? '' : 's'} automated`);
+      if (tempoEvents > 0) lines.push(`${tempoEvents} tempo change${tempoEvents === 1 ? '' : 's'}`);
+      if (micRecording) lines.push('Microphone armed');
+      if (midiClockOut) lines.push('Sending MIDI clock');
+      if (midiClockIn) lines.push('Following an outside MIDI clock');
       if (midi.supported) {
-        lines.push(midi.connected ? `MIDI IN: ${midi.device.toUpperCase()}` : 'MIDI BUS IDLE');
+        lines.push(midi.connected ? `MIDI keyboard: ${midi.device}` : 'No MIDI keyboard connected');
       }
       // Sprinkle in flavor every few cycles.
       lines.push(FLAVOR[Math.floor(Math.random() * FLAVOR.length)]);
