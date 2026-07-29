@@ -7,17 +7,17 @@ import { Scope } from './Scope';
 import { getMidiSnapshot, subscribeMidi } from '../../audio/midiInput';
 import { audioEngine } from '../../audio/engine';
 
-/** Flavor lines that get mixed into the live telemetry rotation. */
 /**
- * Ticker filler lines. Mostly turned into actual tips (the ticker is prime
- * real estate for teaching the UI) with a couple of atmospheric lines kept
- * for flavor.
+ * Ticker lines mixed into the live readout rotation. All four are tips now —
+ * the ticker is the one place in the app that can teach the UI without costing
+ * layout, so atmosphere is a waste of it.
  */
-const FLAVOR = [
+const TIPS = [
   'Tip: drag on an empty lane to draw a clip',
   'Tip: tap a track name to open its settings',
   'Tip: arm a track to record MIDI into it',
-  'Tip: double-tap a clip to edit its notes',
+  // Touch opens a clip on a single tap; only a mouse needs the double.
+  'Tip: tap a clip to edit its notes',
 ];
 
 export function StatusBar() {
@@ -249,8 +249,7 @@ function Ticker() {
       if (midi.supported) {
         lines.push(midi.connected ? `MIDI keyboard: ${midi.device}` : 'No MIDI keyboard connected');
       }
-      // Sprinkle in flavor every few cycles.
-      lines.push(FLAVOR[Math.floor(Math.random() * FLAVOR.length)]);
+      lines.push(TIPS[Math.floor(Math.random() * TIPS.length)]);
       return lines;
     };
     let i = 0;

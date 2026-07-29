@@ -824,7 +824,7 @@ const TrackHeader = memo(function TrackHeader({
           }}
           title={
             laneCount === 0
-              ? 'No automation lanes — opens AUTOMATION tab'
+              ? 'No automation lanes — opens the Automation tab'
               : overlayActive
                 ? 'Hide automation lanes'
                 : `Show ${laneCount} automation lane${laneCount === 1 ? '' : 's'}`
@@ -962,7 +962,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet__grab" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span style={{ width: 4, alignSelf: 'stretch', background: track.color, flex: '0 0 auto' }} />
           <span className="hud-label" style={{ fontSize: 12, flex: '0 0 auto' }}>
             {TRACK_KIND_LABEL[track.kind]}
@@ -988,6 +988,12 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
           </button>
         </div>
 
+        {/* Side by side on a short viewport (see .sheet__rows). Stacked, the
+            sheet needed 363px inside a 336px screen, so Delete and both of the
+            "edit this track" buttons sat below the fold — the sheet scrolled,
+            but the actions you opened it for were the hidden ones. 640px of
+            sheet halves to 300px of slider, which is still 0.18 dB/px. */}
+        <div className="sheet__rows">
         <div className="sheet__row">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span className="hud-label" style={{ fontSize: 12 }}>Volume</span>
@@ -1023,8 +1029,9 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
             onChange={(e) => updateTrack(track.id, { pan: parseFloat(e.target.value) })}
           />
         </div>
+        </div>
 
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
           <button
             className={`hud-btn ${track.mute ? 'is-active' : ''}`}
             style={toggle(track.mute)}
@@ -1049,7 +1056,7 @@ function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
           {track.kind !== 'audio' && (
             <button
               className="hud-btn"
@@ -1292,7 +1299,7 @@ function AutomationOverlayHeader({
             selectTrack(track.id);
             setView('automation');
           }}
-          title="Open AUTOMATION tab for this track"
+          title="Open the Automation tab for this track"
           style={{ minWidth: 0, padding: '2px 4px', fontSize: 12 }}
         >
           ⇲
@@ -1800,7 +1807,7 @@ function AudioWaveform({ sampleId, width, height }: { sampleId: string; width: n
           fontSize: 11,
         }}
       >
-        SAMPLE NOT LOADED
+        Sample not loaded
       </div>
     );
   }

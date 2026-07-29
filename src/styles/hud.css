@@ -847,3 +847,15 @@ button, .hud-btn { touch-action: manipulation; }
   width: 100%;
   height: 14px;
 }
+
+/* Volume and pan share a row when height is the scarce resource. */
+@media (max-height: 560px) {
+  .sheet__rows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 14px;
+  }
+  .sheet__row {
+    margin-bottom: 8px;
+  }
+}

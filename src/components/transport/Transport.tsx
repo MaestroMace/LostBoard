@@ -259,7 +259,7 @@ export function Transport() {
             aria-pressed={bouncing}
             title="Bounce the master output to an audio file"
           >
-            ⭳{lbl(bouncing ? 'Stop bounce' : 'Bounce')}
+            {lbl(bouncing ? 'Stop bounce' : 'Bounce').trim()}
           </button>
         )}
         {!compactStrip && (
@@ -309,7 +309,7 @@ export function Transport() {
               onClick={() => saveProjectToStorage()}
               title="Save current project to local storage"
             >
-              💾{lbl('Save')}
+              {lbl('Save').trim()}
             </button>
           </>
         )}
@@ -358,7 +358,7 @@ export function Transport() {
           style={{ minWidth: 100 }}
           title="Tempo"
         >
-          TEMPO {bpm.toFixed(1)}
+          Tempo {bpm.toFixed(1)}
         </button>
       )}
       {!isMobile && <TapTempoButton compact={false} setBpm={setBpm} />}
@@ -512,7 +512,7 @@ function TransportOverflow({
                 style={item}
                 onClick={() => { setMetronome(!metronome); setOpen(false); }}
               >
-                ⛬ Click {metronome ? 'on' : 'off'}
+                Click {metronome ? 'on' : 'off'}
               </button>
               <button
                 className="hud-btn hud-btn--rec"
@@ -570,7 +570,7 @@ function TransportOverflow({
               setOpen(false);
             }}
           >
-            💾 Save
+            Save
           </button>
           <button
             className={`hud-btn hud-btn--rec ${bouncing ? 'is-active' : ''}`}
@@ -580,7 +580,7 @@ function TransportOverflow({
               setOpen(false);
             }}
           >
-            ⭳ {bouncing ? 'Stop bouncing' : 'Bounce to a file'}
+            {bouncing ? 'Stop bouncing' : 'Bounce to a file'}
           </button>
           <label style={{ ...item, borderBottom: 'none' }}>
             <span className="hud-label" style={{ fontSize: 12, flex: 1 }}>
@@ -606,7 +606,7 @@ function TransportOverflow({
 }
 
 /**
- * PreRollIndicator — shows a "PRE-ROLL n" countdown while the transport is
+ * PreRollIndicator — shows a "Pre-roll n" countdown while the transport is
  * inside the punch-in pre-roll (position before the MIDI record gate).
  * Renders nothing once recording is live, so it's invisible during normal
  * playback. Memoized + playhead-subscribed so only this leaf re-renders.
@@ -628,7 +628,7 @@ const PreRollIndicator = memo(function PreRollIndicator({ numerator }: { numerat
         whiteSpace: 'nowrap',
       }}
     >
-      ⏺ PRE-ROLL {barsLeft}
+      Pre-roll {barsLeft}
     </div>
   );
 });

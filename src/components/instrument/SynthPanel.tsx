@@ -498,7 +498,7 @@ function WavetablePanel({
 
       <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button className="hud-btn hud-btn--green" onClick={() => fileRef.current?.click()} disabled={busy}>
-          {busy ? '⌛ ANALYSING' : '⬆ LOAD WAVETABLE'}
+          {busy ? 'Analysing…' : 'Load a wavetable'}
         </button>
         <input
           ref={fileRef}
@@ -516,14 +516,14 @@ function WavetablePanel({
             className="hud-btn hud-btn--ghost"
             onClick={() => updateTrack(trackId, { wavetablePartials: undefined })}
           >
-            ✕ CLEAR
+            Clear the wavetable
           </button>
         )}
       </div>
       <p className="hud-readout--dim hud-readout" style={{ fontSize: 12, margin: '6px 0 0' }}>
         {partials && partials.length > 0
-          ? 'POSITION morphs sine → the loaded wavetable.'
-          : 'POSITION morphs sine → hollow → bright → saw. Load a sample to derive a custom wave.'}
+          ? 'Position morphs from a sine into the loaded wavetable.'
+          : 'Position morphs sine → hollow → bright → saw. Load a sample to derive a custom wave.'}
       </p>
     </HexFrame>
   );
@@ -756,8 +756,8 @@ function SamplerSource({ trackId }: { trackId: string }) {
           </div>
         )}
         <p className="hud-readout--dim hud-readout" style={{ fontSize: 12, margin: 0 }}>
-          ROOT = MIDI pitch a zone's sample plays at unity rate. VEL = velocity range
-          (%) the zone responds to — give zones different ranges for velocity layers.
+          Root is the pitch a zone's sample plays at its original speed. Velocity is the
+          range (%) the zone responds to — give zones different ranges for velocity layers.
           Zones sharing a range key-map together.
         </p>
       </div>

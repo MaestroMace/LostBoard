@@ -5,7 +5,7 @@ type ShortcutGroup = { title: string; items: [string, string][] };
 
 const KEY_GROUPS: ShortcutGroup[] = [
   {
-    title: 'TRANSPORT',
+    title: 'Transport',
     items: [
       ['Space', 'Play / pause'],
       ['Enter', 'Stop & rewind'],
@@ -16,7 +16,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'EDITING',
+    title: 'Editing',
     items: [
       ['⌘ / Ctrl + Z', 'Undo'],
       ['⌘ / Ctrl + ⇧ + Z', 'Redo (also Ctrl+Y)'],
@@ -26,7 +26,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'SONG',
+    title: 'Song',
     items: [
       ['Double-click lane', 'New 4-beat clip at that beat'],
       ['Double-click clip', 'Open the right editor (piano roll / sequencer)'],
@@ -38,10 +38,10 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'PIANO ROLL',
+    title: 'Piano roll',
     items: [
-      ['DRAW + drag grid', 'Draw a note whose length follows the pointer'],
-      ['SELECT + drag grid', 'Marquee — select every note inside the rect'],
+      ['Draw + drag grid', 'Draw a note whose length follows the pointer'],
+      ['Select + drag grid', 'Marquee — select every note inside the rect'],
       ['Click a note', 'Select it (Cmd/Ctrl-click toggles multi)'],
       ['Drag a selected note', 'Moves the whole selection in lockstep'],
       ['Drag right edge', 'Resize (single note)'],
@@ -51,7 +51,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'AUTOMATION',
+    title: 'Automation',
     items: [
       ['Click empty lane', 'Drop a breakpoint at that beat / value'],
       ['Drag a point', 'Move it (in both the tab and the arrange overlay)'],
@@ -61,7 +61,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'SEQUENCER',
+    title: 'Sequencer',
     items: [
       ['Hits: tap', 'Turn a step on or off'],
       ['Hits: drag up/down', 'Make that hit louder or softer'],
@@ -70,7 +70,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'CLIPS',
+    title: 'Clips',
     items: [
       ['Tap slot', 'Launch its clip on that track (MIDI / pattern / audio)'],
       ['Tap ▶ in scene header', 'Launch every clip in that scene'],
@@ -78,16 +78,16 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'INSTRUMENTS',
+    title: 'Instruments',
     items: [
       ['Classic / FM', 'A waveform through a filter, or one tone bending another'],
       ['Wavetable', 'Position morphs through the frames; you can import your own'],
       ['Sampler', 'Your own recordings, layered across keys and velocities'],
-      ['MIDI OUT panel', 'Route a track\'s notes to external hardware'],
+      ['MIDI out panel', 'Route a track\'s notes to external hardware'],
     ],
   },
   {
-    title: 'MIX + TEMPO',
+    title: 'Mix and tempo',
     items: [
       ['Pan / Swing knobs', 'Per-track pan, and a swing setting that overrides the song'],
       ['Song swing slider', 'The default swing, on 1/8 or 1/16 notes'],
@@ -96,7 +96,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'MUSICAL INPUT',
+    title: 'Musical input',
     items: [
       ['A W S E D F T G Y H U J K…', 'Synth keys (chromatic, octave 4 by default)'],
       ['Z / X', 'Shift octave down / up'],
@@ -105,7 +105,7 @@ const KEY_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'BOUNCING TO AUDIO',
+    title: 'Bouncing to audio',
     items: [
       ['Whole song to WAV', 'Renders the finished song faster than real time'],
       ['Each track to its own WAV', 'One file per track, rendered offline'],

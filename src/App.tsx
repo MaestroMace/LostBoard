@@ -195,7 +195,7 @@ export default function App() {
           className="hud-readout--dim hud-readout desktop-only"
           style={{ alignSelf: 'center', whiteSpace: 'nowrap', flex: '0 0 auto' }}
         >
-          VER 0.1.0
+          v0.1.0
         </span>
       </div>
 
@@ -285,7 +285,7 @@ const FooterBar = memo(function FooterBar() {
       {/* Keyboard shortcuts are meaningless on a touch device — .desktop-only
           drops them under (pointer: coarse). */}
       <span className="hud-readout--dim hud-readout desktop-only">
-        SPACE ▶ PLAY · ENTER ■ STOP · ? HELP · AUTOSAVES LOCALLY
+        Space ▶ Play · Enter ■ Stop · ? Help · autosaves locally
       </span>
     </div>
   );
