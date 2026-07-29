@@ -1291,9 +1291,18 @@ export const useStore = create<Store>()(
     updateSamplerZone: (trackId, zoneId, patch) => {
       const tracks = get().project.tracks.map((t) => {
         if (t.id !== trackId) return t;
-        const zones = currentSamplerZones(t).map((z) =>
-          z.id === zoneId ? { ...z, ...patch } : z,
-        );
+        const zones = currentSamplerZones(t).map((z) => {
+          if (z.id !== zoneId) return z;
+          const next = { ...z, ...patch };
+          next.rootPitch = intIn(next.rootPitch, 0, 127, 60);
+          // A zone whose velMin exceeds its velMax responds to no velocity at
+          // all: silent, and nothing on screen says why. Order them instead.
+          const lo = numIn(next.velMin ?? 0, 0, 1, 0);
+          const hi = numIn(next.velMax ?? 1, 0, 1, 1);
+          next.velMin = Math.min(lo, hi);
+          next.velMax = Math.max(lo, hi);
+          return next;
+        });
         return { ...t, samplerZones: zones, samplerSampleId: undefined, samplerRootPitch: undefined };
       });
       set({ project: { ...get().project, tracks, updatedAt: Date.now() } });
@@ -1563,15 +1572,21 @@ export const useStore = create<Store>()(
                 if (c.id !== clipId || c.kind !== 'pattern') return c;
                 const oldLen = c.pattern.length;
                 if (oldLen === clamped) return c;
+                // Extend and truncate, do not rescale.
+                //
+                // This used to map step i to floor(i * new / old), which
+                // STRETCHES the pattern: a four-on-the-floor kick on 0,4,8,12
+                // became 0,8,16,24 when you changed 16 steps to 32, so your
+                // kick moved from beat 2 to beat 3. Going 16 -> 8 -> 16 lost
+                // half the hits. The control is a step count, not a time
+                // scale: growing adds empty steps at the end, shrinking drops
+                // the tail, and everything that fits keeps its position.
                 const nextSteps: Record<DrumPad, Step[]> = {} as Record<DrumPad, Step[]>;
                 for (const pad of Object.keys(c.pattern.steps) as DrumPad[]) {
                   const src = c.pattern.steps[pad];
-                  const dst: Step[] = Array.from({ length: clamped }, () => ({ on: false, velocity: 0.9 }));
-                  for (let i = 0; i < oldLen; i++) {
-                    const j = Math.floor((i * clamped) / oldLen);
-                    if (j < clamped && src[i].on) dst[j] = { ...src[i] };
-                  }
-                  nextSteps[pad] = dst;
+                  nextSteps[pad] = Array.from({ length: clamped }, (_, i) =>
+                    i < oldLen && src[i] ? { ...src[i] } : { on: false, velocity: 0.9 },
+                  );
                 }
                 return { ...c, pattern: { length: clamped, steps: nextSteps } };
               }),
