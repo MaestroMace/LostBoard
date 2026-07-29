@@ -293,8 +293,9 @@ export function PianoRoll() {
             else folds away on a phone, where the four-row header was eating
             420px of a 923px screen before a single note was visible. */}
         <div style={land ? { display: 'contents' } : { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {/* the editor tab already says "Notes" */}
-        {!land && <span className="hud-label">Notes</span>}
+        {/* No "Notes" label: the editor tab directly above says Notes, in both
+            orientations. The comment already said so while the code kept
+            rendering it in portrait. */}
         <select className="display" style={{ maxWidth: 120 }} value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)} aria-label="Track to edit">
           {synthTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -392,7 +393,7 @@ export function PianoRoll() {
             onClick={() => setShowVel((v) => !v)}
             title="Show the bars that set how hard each note hits"
           >
-            Loud
+            Loudness
           </button>
           </>
         )}
@@ -1102,7 +1103,9 @@ const VelocityLane = memo(function VelocityLane({
           zIndex: 6,
         }}
       >
-        <span className="hud-label" style={{ fontSize: 11 }} title="How hard each note is played">Loud</span>
+        {/* "Loudness", matching the drum sequencer — the same idea was called
+            two different things depending on which editor you were in. */}
+        <span className="hud-label" style={{ fontSize: 11 }} title="How hard each note is played">Loudness</span>
       </div>
       <div
         data-velocity-lane

@@ -84,6 +84,7 @@ export default function App() {
    * carries both levels of navigation on one row and drops the footer.
    */
   const oneRowNav = useLayoutMode() === 'phone-landscape';
+  const isMobile = useIsMobile();
 
   useGlobalKeys();
   useEngineSync();
@@ -234,9 +235,12 @@ export default function App() {
 
       {booted && <FirstRunHint />}
 
-      {/* "● Ready  Stopped" is 23px of a 336px landscape screen restating what
-          the transport already shows. Portrait and desktop keep it. */}
-      {!oneRowNav && <FooterBar />}
+      {/* Nothing in this bar was doing any work on a phone: "● Ready" is a
+          hardcoded constant, "Stopped" restates the transport's own Play/Stop
+          state, and the keyboard hints are already dropped under a coarse
+          pointer. Landscape dropped it for the 23px; portrait drops it because
+          it was noise. Desktop keeps it — there the shortcut hints earn it. */}
+      {!isMobile && <FooterBar />}
 
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
 
@@ -275,11 +279,9 @@ const FooterBar = memo(function FooterBar() {
         flex: '0 0 auto',
       }}
     >
-      <span className="hud-readout--green hud-readout">● Ready</span>
-      {!isMobile && <span className="hud-readout">TRK {String(trackCount).padStart(2, '0')}</span>}
-      {!isMobile && <span className="hud-readout">CLP {String(clipCount).padStart(3, '0')}</span>}
-      <span className="hud-readout" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {playing ? 'Playing' : 'Stopped'}
+      <span className="hud-readout--green hud-readout">{playing ? '● Playing' : '● Stopped'}</span>
+      <span className="hud-readout">
+        {trackCount} track{trackCount === 1 ? '' : 's'} · {clipCount} clip{clipCount === 1 ? '' : 's'}
       </span>
       <div style={{ flex: 1, minWidth: 0 }} />
       {/* Keyboard shortcuts are meaningless on a touch device — .desktop-only
