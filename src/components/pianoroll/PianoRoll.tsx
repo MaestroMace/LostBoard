@@ -973,10 +973,13 @@ const NoteEl = memo(function NoteEl({
         width: Math.max(8, note.length * BEAT_W),
         height: ROW_H - 2,
         background: `linear-gradient(180deg, ${color}cc, ${color}77)`,
-        border: selected ? '1px solid var(--hud-green)' : '1px solid #fff',
-        boxShadow: selected
-          ? '0 0 8px var(--hud-green), inset 0 0 0 1px rgba(120,255,140,0.4)'
-          : '0 0 6px rgba(255,255,255,0.4)',
+        // The default state was the loud one: every unselected note carried a
+        // 1px pure-white border AND a white glow, so a clip full of notes
+        // shouted and the green selection read as quieter than not being
+        // selected. Unselected is a soft edge with no glow; selected keeps the
+        // green and the glow, so it is unmistakably the emphasised state.
+        border: selected ? '1px solid var(--hud-green)' : '1px solid rgba(255,255,255,0.4)',
+        boxShadow: selected ? '0 0 8px var(--hud-green), inset 0 0 0 1px rgba(120,255,140,0.4)' : 'none',
         cursor: 'move',
         borderRadius: 1,
         touchAction: 'none',
