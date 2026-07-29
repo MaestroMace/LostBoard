@@ -89,6 +89,7 @@ export function PianoRoll() {
   }, [activeClip, selectedClipId, selectClip]);
 
   const [tool, setTool] = useState<'draw' | 'select' | 'erase'>('draw');
+  const [showMore, setShowMore] = useState(false);
   const [snap, setSnap] = useState<0.25 | 0.5 | 1>(0.25);
   const [scaleRoot, setScaleRoot] = useState(0);
   const [scaleName, setScaleName] = useState<ScaleName>('chromatic');
@@ -255,21 +256,25 @@ export function PianoRoll() {
         style={{
           padding: 8,
           display: 'flex',
+          flexDirection: 'column',
           gap: 6,
-          alignItems: 'center',
-          flexWrap: 'wrap',
           borderBottom: '1px solid rgba(255,106,0,0.4)',
+          flex: '0 0 auto',
         }}
       >
-        <span className="hud-label">Piano Roll</span>
-        <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
+        {/* Row 1: what am I editing. Row 2: what does tapping do. Everything
+            else folds away on a phone, where the four-row header was eating
+            420px of a 923px screen before a single note was visible. */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="hud-label">Notes</span>
+        <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)} aria-label="Track to edit">
           {synthTracks.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
             </option>
           ))}
         </select>
-        <select className="display" value={activeClip.id} onChange={(e) => selectClip(e.target.value)}>
+        <select className="display" value={activeClip.id} onChange={(e) => selectClip(e.target.value)} aria-label="Clip to edit">
           {midiClips.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name ?? c.id}
@@ -279,33 +284,67 @@ export function PianoRoll() {
         <button
           className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
+          title="Add another clip to this track, right after this one"
         >
-          + CLIP
+          + Clip
         </button>
         <div style={{ flex: 1 }} />
-        <button className={`hud-btn ${tool === 'draw' ? 'is-active' : ''}`} onClick={() => setTool('draw')}>
-          DRAW
+        <button
+          className="hud-btn hud-btn--ghost hud-btn--tight"
+          onClick={() => setShowMore((v) => !v)}
+          aria-expanded={showMore}
+          title="Snap, scale, quantize and humanize"
+        >
+          {showMore ? 'Fewer options' : 'More'}
+        </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="hud-label" style={{ minWidth: 74 }}>Tapping</span>
+        <button
+          className={`hud-btn ${tool === 'draw' ? 'is-active' : ''}`}
+          onClick={() => setTool('draw')}
+          aria-pressed={tool === 'draw'}
+          title="Tap or drag on the grid to add a note"
+        >
+          Draws
         </button>
         <button
           className={`hud-btn hud-btn--green ${tool === 'select' ? 'is-active' : ''}`}
           onClick={() => setTool('select')}
-          title="Drag a rectangle to select notes inside"
+          aria-pressed={tool === 'select'}
+          title="Drag a box round the notes you want to work on together"
         >
-          SELECT
+          Selects
         </button>
         <button
           className={`hud-btn hud-btn--rec ${tool === 'erase' ? 'is-active' : ''}`}
           onClick={() => setTool('erase')}
+          aria-pressed={tool === 'erase'}
+          title="Tap a note to remove it"
         >
-          ERASE
+          Erases
         </button>
-        <span className="hud-readout">SNAP</span>
-        <select className="display" value={snap} onChange={(e) => setSnap(parseFloat(e.target.value) as any)}>
+        {selectedNoteIds.length > 0 && (
+          <button
+            className="hud-btn hud-btn--ghost hud-btn--tight"
+            onClick={clearNoteSelection}
+            title="Clear the selection"
+          >
+            Deselect ({selectedNoteIds.length})
+          </button>
+        )}
+        </div>
+
+        {showMore && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="hud-label" title="New and quantized notes land on this grid">Grid</span>
+        <select className="display" value={snap} onChange={(e) => setSnap(parseFloat(e.target.value) as any)} aria-label="Note grid">
           <option value={1}>1/4</option>
           <option value={0.5}>1/8</option>
           <option value={0.25}>1/16</option>
         </select>
-        <span className="hud-readout">SCALE</span>
+        <span className="hud-label" title="New notes are pulled to the nearest note of this scale">Key</span>
         <select
           className="display"
           value={scaleRoot}
@@ -342,11 +381,11 @@ export function PianoRoll() {
           }
           title={
             selectedNoteIds.length > 0
-              ? `Quantize ${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? '' : 's'} to the current SNAP`
-              : `Quantize every note to the current SNAP (1/${1 / snap === 4 ? 4 : 1 / snap === 8 ? 8 : 16})`
+              ? `Pull the ${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? '' : 's'} onto the grid`
+              : `Pull every note onto the 1/${1 / snap === 4 ? 4 : 1 / snap === 8 ? 8 : 16} grid`
           }
         >
-          ⎌ QUANTIZE{selectedNoteIds.length > 0 ? ` SEL` : ''}
+          Snap to grid{selectedNoteIds.length > 0 ? ' (selected)' : ''}
         </button>
         <button
           className="hud-btn hud-btn--ghost"
@@ -360,20 +399,13 @@ export function PianoRoll() {
           }
           title={
             selectedNoteIds.length > 0
-              ? `Humanize ${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? '' : 's'}`
-              : 'Add small random velocity + timing wobble to every note'
+              ? `Nudge the ${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? '' : 's'} slightly off the grid`
+              : 'Nudge every note slightly off the grid so it sounds played rather than programmed'
           }
         >
-          ~ HUMANIZE{selectedNoteIds.length > 0 ? ` SEL` : ''}
+          Loosen{selectedNoteIds.length > 0 ? ' (selected)' : ''}
         </button>
-        {selectedNoteIds.length > 0 && (
-          <button
-            className="hud-btn hud-btn--ghost"
-            onClick={clearNoteSelection}
-            title="Clear note selection"
-          >
-            ✕ DESEL ({selectedNoteIds.length})
-          </button>
+        </div>
         )}
       </div>
       <div
@@ -477,9 +509,9 @@ export function PianoRoll() {
         />
       </div>
       <EditorTip>
-        DRAW — drag empty grid to draw a note with that length · SELECT — drag empty grid for a rectangle marquee ·
-        click a note to select (Cmd/Ctrl to multi-toggle) · drag selected notes to move them in lockstep · drag the right
-        edge to resize · drag the velocity bars below the grid to shape dynamics · ⌘+wheel to zoom
+        Draws: drag on empty grid and the note is as long as you drag. Selects: drag a box round several notes, then
+        move them together. Erases: tap a note to remove it. Drag a note's right edge to change its length, and drag
+        the bars under the grid to change how hard each note hits. ⌘ or Ctrl with the wheel zooms.
       </EditorTip>
       <ZoomFloater zoom={zoom} setZoom={setZoom} />
     </div>
@@ -500,7 +532,9 @@ const ZoomFloater = memo(function ZoomFloater({
       style={{
         position: 'absolute',
         right: 12,
-        bottom: 28,
+        // clear of the velocity lane — at bottom: 28 this sat on top of the
+        // bars you drag to change how hard a note hits
+        bottom: VEL_LANE_H + 12,
         display: 'flex',
         gap: 2,
         background: 'rgba(0,0,0,0.85)',
@@ -964,7 +998,7 @@ const VelocityLane = memo(function VelocityLane({
           zIndex: 6,
         }}
       >
-        <span className="hud-label" style={{ fontSize: 11 }}>VEL</span>
+        <span className="hud-label" style={{ fontSize: 11 }} title="How hard each note is played">Loud</span>
       </div>
       <div
         data-velocity-lane

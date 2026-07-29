@@ -186,9 +186,9 @@ export function StepSequencer() {
       </HexFrame>
       </div>
       <EditorTip>
-        NORM tap to toggle · drag up/down for velocity · PROB tap to cycle 100/75/50/25% · pad dropdown swaps the
-        voice for any imported sample (◆ marks customised pads) · or drag an audio file straight onto a pad to
-        import + assign
+        Tap a square to turn a hit on or off, and drag up or down to make it louder or softer. Switch "Tapping sets"
+        to Chance to make a hit land only some of the time. Drop an audio file onto a pad to use your own sound
+        there &mdash; ◆ marks a pad you have changed.
       </EditorTip>
     </div>
   );

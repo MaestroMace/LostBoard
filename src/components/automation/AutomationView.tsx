@@ -16,11 +16,12 @@ const CURVE_GLYPH: Record<AutomationCurve, string> = {
   hold: '⎺',
   step: '⌐',
 };
-/** What the shape does, not what the code calls it. */
+/** What the shape does, not what the code calls it. Kept short — this sits in
+ *  a ~96px column on a phone, and "Hold, then jump" truncated to "Hold, t…". */
 const CURVE_LABEL: Record<AutomationCurve, string> = {
-  linear: 'Straight',
-  exponential: 'Curved',
-  hold: 'Hold, then jump',
+  linear: 'Slide',
+  exponential: 'Curve',
+  hold: 'Hold',
   step: 'Jump',
 };
 
