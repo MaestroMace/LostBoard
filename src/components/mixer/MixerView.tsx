@@ -265,7 +265,7 @@ const MasterStrip = memo(function MasterStrip({
         style={{ fontSize: 11, whiteSpace: 'nowrap' }}
         title="A limiter catches the last 1 dB so the whole mix can't clip"
       >
-        Limited to &minus;1 dB
+        {compact ? 'Limit −1 dB' : 'Limited to −1 dB'}
       </div>
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, flex: 1, minHeight: 80, width: '100%', justifyContent: 'center' }}>
         <input

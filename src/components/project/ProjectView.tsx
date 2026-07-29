@@ -155,7 +155,9 @@ export function ProjectView() {
             />
           </Field>
           <Field label={`Swing — ${Math.round((project.swing ?? 0) * 100)}%`}>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {/* min-width on the whole field, so the 1/8 vs 1/16 select cannot
+                be pushed off the right edge by the slider's own floor */}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', minWidth: 190 }}>
               <input
                 type="range"
                 className="hud-slider"

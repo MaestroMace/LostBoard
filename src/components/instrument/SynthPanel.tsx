@@ -130,7 +130,7 @@ export function SynthPanel() {
             aria-label="Load a starting point"
             style={{ maxWidth: 130 }}
           >
-            <option value="">Starting point…</option>
+            <option value="">Preset…</option>
             {Object.keys(PRESETS).map((k) => (
               <option key={k} value={k}>{k}</option>
             ))}
