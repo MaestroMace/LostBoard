@@ -278,6 +278,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
+        aria-label="Zoom out"
         style={{ padding: '2px 6px', fontSize: 13 }}
       >
         −
@@ -294,6 +295,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
+        aria-label="Zoom in"
         style={{ padding: '2px 6px', fontSize: 13 }}
       >
         ＋
@@ -1564,6 +1566,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
           removeClip(clip.id);
         }}
         onPointerDown={(e) => e.stopPropagation()}
+        aria-label="Delete clip"
         title="Delete clip"
         style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '1px 4px', fontSize: 12, zIndex: 3, lineHeight: 1 }}
       >

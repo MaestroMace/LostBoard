@@ -98,9 +98,9 @@ export function StatusBar() {
           <span
             className="hud-value"
             style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}
-            title={`LOSTBOARD // ${name}`}
+            title={`${name}`}
           >
-            LOSTBOARD // {name}
+            {name}
           </span>
         </div>
       </div>

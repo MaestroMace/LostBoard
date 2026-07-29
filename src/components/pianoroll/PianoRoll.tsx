@@ -150,7 +150,7 @@ export function PianoRoll() {
   if (!activeTrack) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No synth track. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="No instrument track">Add a synth track from the Song tab, then come back here to shape its sound.</HexFrame>
       </div>
     );
   }
@@ -158,9 +158,9 @@ export function PianoRoll() {
     return (
       <div style={{ padding: 16 }}>
         <HexFrame title={activeTrack.name}>
-          <p>This track has no MIDI clip.</p>
+          <p>This track has no notes yet.</p>
           <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
-            CREATE MIDI CLIP
+            Create a clip
           </button>
         </HexFrame>
       </div>
@@ -513,6 +513,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
+        aria-label="Zoom out"
         style={{ padding: '2px 6px', fontSize: 13 }}
       >
         −
@@ -529,6 +530,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
+        aria-label="Zoom in"
         style={{ padding: '2px 6px', fontSize: 13 }}
       >
         ＋

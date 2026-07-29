@@ -13,7 +13,7 @@ export function FxPanel() {
   if (!track) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No tracks. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="Nothing here yet">No tracks. Add one from the Song tab.</HexFrame>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export function FxPanel() {
       className="hex-grid-bg"
     >
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className="hud-label">FX RACK // SIGNAL CONDITIONING</span>
+        <span className="hud-label">Effects</span>
         <select className="display" value={track.id} onChange={(e) => selectTrack(e.target.value)}>
           {tracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -60,7 +60,7 @@ export function FxPanel() {
           pointerEvents: fx.enabled ? 'auto' : 'none',
         }}
       >
-        <HexFrame title="EQ // 3-BAND">
+        <HexFrame title="EQ">
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob
               label="LOW"

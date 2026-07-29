@@ -29,7 +29,7 @@ export function SynthPanel() {
   if (!active || !active.synth) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No synth track. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="No instrument track">Add a synth track from the Song tab, then come back here to shape its sound.</HexFrame>
       </div>
     );
   }
@@ -172,7 +172,7 @@ export function SynthPanel() {
         <MidiOutPanel trackId={active.id} channel={active.midiOutChannel} />
       </div>
 
-      <HexFrame title="KEYBOARD // TAP">
+      <HexFrame title="Keyboard">
         <Keyboard onTrigger={preview} />
       </HexFrame>
     </div>

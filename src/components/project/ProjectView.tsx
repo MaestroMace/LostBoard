@@ -50,7 +50,7 @@ export function ProjectView() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
-      <HexFrame title="PROJECT // COMMAND DECK">
+      <HexFrame title="Song settings">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           <Field label="NAME">
             <input
@@ -138,7 +138,7 @@ export function ProjectView() {
 
       <SlotLibrary />
 
-      <HexFrame title="STORAGE // SAVE / LOAD">
+      <HexFrame title="Save & load">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             className="hud-btn"
@@ -215,7 +215,7 @@ export function ProjectView() {
 
       <InstallBanner />
 
-      <HexFrame title="TAILSCALE // iOS NOTE" variant="green">
+      <HexFrame title="Opening on another device" variant="green">
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
           The dev server binds to <span className="hud-value">0.0.0.0:5273</span>. From your iPhone connected to the
           same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5273</span> (or the
@@ -269,7 +269,7 @@ function InstallBanner() {
   if (standalone || installed || !prompt) return null;
 
   return (
-    <HexFrame title="INSTALL // PWA" variant="green">
+    <HexFrame title="Install as an app" variant="green">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           className="hud-btn hud-btn--green"
@@ -372,7 +372,7 @@ function SlotLibrary() {
   }
 
   return (
-    <HexFrame title="PROJECT LIBRARY // SLOTS">
+    <HexFrame title="Saved songs">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="hud-btn hud-btn--green" onClick={saveAsNew}>
@@ -478,7 +478,7 @@ function MidiSyncPanel() {
   const portName = midi.ports.find((p) => p.id === midi.selectedId)?.name;
 
   return (
-    <HexFrame title="MIDI SYNC // CLOCK">
+    <HexFrame title="MIDI sync">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
@@ -618,7 +618,7 @@ function TempoMapEditor() {
   const projectBeats = project.lengthBars * project.numerator;
 
   return (
-    <HexFrame title="TEMPO MAP // BPM AUTOMATION">
+    <HexFrame title="Tempo changes">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <button

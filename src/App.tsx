@@ -5,6 +5,7 @@ import { audioEngine } from './audio/engine';
 import { StatusBar } from './components/hud/StatusBar';
 import { BootSequence } from './components/hud/BootSequence';
 import { HelpOverlay } from './components/hud/HelpOverlay';
+import { FirstRunHint } from './components/hud/FirstRunHint';
 import { Transport } from './components/transport/Transport';
 import { ArrangeView } from './components/arrange/ArrangeView';
 import { SessionView } from './components/session/SessionView';
@@ -150,7 +151,8 @@ export default function App() {
         <button
           className="hud-btn hud-btn--ghost hud-btn--icon"
           onClick={() => setHelpOpen(true)}
-          title="Help (?)"
+          aria-label="Help"
+          title="Help"
           style={{ alignSelf: 'center', flex: '0 0 auto' }}
         >
           ?
@@ -197,6 +199,8 @@ export default function App() {
         {view === 'mixer' && <MixerView />}
         {view === 'project' && <ProjectView />}
       </div>
+
+      {booted && <FirstRunHint />}
 
       <FooterBar />
 

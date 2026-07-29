@@ -46,7 +46,7 @@ export function SessionView() {
           flexWrap: 'wrap',
         }}
       >
-        <span className="hud-label">SESSION // SCENE LAUNCHER</span>
+        <span className="hud-label">Clip launcher</span>
         <button
           className={`hud-btn ${sessionMode ? 'is-active' : ''}`}
           onClick={() => setSessionMode(true)}

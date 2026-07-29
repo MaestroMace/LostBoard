@@ -58,7 +58,7 @@ export function AutomationView() {
   if (!active) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No tracks. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="Nothing here yet">No tracks. Add one from the Song tab.</HexFrame>
       </div>
     );
   }
@@ -282,7 +282,7 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
   })();
 
   return (
-    <HexFrame title={`LANE // ${meta.label}`}>
+    <HexFrame title={`${meta.label}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>

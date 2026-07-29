@@ -65,16 +65,20 @@
   color: var(--hud-red);
 }
 
+/* Sits inside the frame, in flow.
+ *
+ * It used to be absolutely positioned at top:-7px so it straddled the border —
+ * but .hex-frame carries a clip-path, and clip-path clips children, so the top
+ * of every section heading in the app was sliced off. At 9px they were barely
+ * legible even unclipped. */
 .hex-frame__title {
-  position: absolute;
-  top: -7px;
-  left: 12px;
   font-family: var(--font-display);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.06em;
-  padding: 0 8px;
-  background: var(--hud-ink);
-  color: var(--hud-orange);
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 106, 0, 0.25);
+  color: var(--hud-orange-bright);
   text-transform: uppercase;
 }
 

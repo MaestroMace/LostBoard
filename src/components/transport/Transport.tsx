@@ -192,7 +192,7 @@ export function Transport() {
         data-scrollx
         style={{ display: 'flex', gap: 4, minWidth: 0, flex: isMobile ? '1 1 auto' : '0 0 auto' }}
       >
-        <button className="hud-btn touch-target" onClick={() => seek(0)} title="Return to start">
+        <button className="hud-btn touch-target" onClick={() => seek(0)} title="Back to start" aria-label="Back to start">
           ⏮
         </button>
         <button
@@ -460,6 +460,7 @@ function TransportOverflow({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label="More transport controls"
         title="More transport controls"
       >
         ⋯

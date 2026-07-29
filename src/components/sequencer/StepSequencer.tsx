@@ -56,7 +56,7 @@ export function StepSequencer() {
   if (!activeTrack) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No drum track. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="No drum track">Add a drum track from the Song tab, then come back here to program a beat.</HexFrame>
       </div>
     );
   }
@@ -65,9 +65,9 @@ export function StepSequencer() {
     return (
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <HexFrame title={activeTrack.name}>
-          <p>This track has no pattern clip.</p>
+          <p>This track has no beat yet.</p>
           <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
-            CREATE PATTERN CLIP
+            Create a beat
           </button>
         </HexFrame>
       </div>
@@ -143,7 +143,7 @@ export function StepSequencer() {
         </button>
       </div>
 
-      <HexFrame title={`PATTERN // ${activeClip.name ?? activeClip.id}`}>
+      <HexFrame title={`Pattern: ${activeClip.name ?? activeClip.id}`}>
         <div style={{ position: 'relative' }}>
           <div
             style={{
