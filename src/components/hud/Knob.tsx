@@ -83,7 +83,9 @@ export function Knob({
   return (
     <div
       title={tip}
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size + 8 }}
+      // minWidth: size, not size + 8 — the extra 8px pushed three 52px knobs
+      // past the content box of a clipped frame, which sliced the outer two.
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: size }}
     >
       <div
         className="knob"
@@ -94,14 +96,17 @@ export function Knob({
         onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
       >
-        <div className="knob__ring" />
+        <div
+          className="knob__ring"
+          style={{ '--knob-arc': `${norm * 270}deg` } as React.CSSProperties}
+        />
         <div
           className="knob__indicator"
           style={{ transform: `translateX(-50%) rotate(${angle}deg)` }}
         />
       </div>
-      {label && <div className="hud-label" style={{ fontSize: 8 }}>{label}</div>}
-      <div className="hud-value" style={{ fontSize: 9 }}>{shown}</div>
+      {label && <div className="hud-label" style={{ fontSize: 11 }}>{label}</div>}
+      <div className="hud-value" style={{ fontSize: 12 }}>{shown}</div>
     </div>
   );
 }

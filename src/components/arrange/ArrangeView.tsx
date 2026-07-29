@@ -1,4 +1,5 @@
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from '../../state/store';
 import {
   AUTOMATION_PARAM_META,
@@ -10,19 +11,42 @@ import {
 } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useIsMobile';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
 import { usePinchZoom } from '../../hooks/usePinchZoom';
 import { importSample } from '../../state/samples';
 import { EditorTip } from '../hud/EditorTip';
 
 const ROW_H = 64;
+/**
+ * Phone lanes carry a single row — name, mute, solo, and the ⋯ that opens the
+ * track sheet — so 56px comfortably clears the 44px touch floor while showing
+ * ~5 tracks in landscape. (The old two-row header needed 92px and still left
+ * its volume slider with 9px of travel.) Read through RowHeightContext so the
+ * header and the timeline lanes can never disagree about it.
+ */
+const ROW_H_TOUCH = 56;
+const RowHeightContext = createContext(ROW_H);
+const useRowHeight = () => useContext(RowHeightContext);
 const AUTO_LANE_H = 56;
 /** Plain-language name for a track kind, shown as a badge so the codename isn't the only label. */
 const TRACK_KIND_LABEL: Record<Track['kind'], string> = {
-  drum: 'DRUMS',
-  synth: 'SYNTH',
-  sampler: 'SAMPLER',
-  audio: 'AUDIO',
+  drum: 'Drums',
+  synth: 'Synth',
+  sampler: 'Sampler',
+  audio: 'Audio',
+};
+/** True where the primary pointer can't hover — i.e. a finger, not a mouse. */
+const touchPrimary = () =>
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/** The clip's name band. Everything else inside a clip lives below it. */
+const NAME_BAND_H = 15;
+
+/** Fallback name for a clip that has never been given one. */
+const CLIP_KIND_LABEL: Record<Clip['kind'], string> = {
+  midi: 'Notes',
+  pattern: 'Beat',
+  audio: 'Audio',
 };
 /** Default px per beat at zoom = 1×. Consumers read the current value through BeatWidthContext. */
 const BASE_BEAT_W = 24;
@@ -68,8 +92,15 @@ export function ArrangeView() {
   const tracks = useStore((s) => s.project.tracks);
   const totalBeats = useStore((s) => s.project.lengthBars * s.project.numerator);
   const addTrack = useStore((s) => s.addTrack);
-  const isMobile = useIsMobile();
-  const headW = isMobile ? 144 : 196;
+  const mode = useLayoutMode();
+  const isMobile = mode !== 'desktop';
+  // Landscape has 923px to play with, so the header can afford a readable name
+  // beside two 44px toggles. Portrait cannot, and takes the narrower cut.
+  const headW = mode === 'phone-landscape' ? 240 : mode === 'phone-portrait' ? 128 : 196;
+  // 44 in landscape: the row's tallest child is the name/Mute/Solo group at
+  // exactly 44px, so 56 was 12px of padding per lane in the orientation with
+  // 230px to spend. Portrait keeps 56.
+  const rowH = mode === 'phone-landscape' ? 44 : isMobile ? ROW_H_TOUCH : ROW_H;
 
   const [zoom, setZoom] = useState(1);
   const numerator = useStore((s) => s.project.numerator || 4);
@@ -78,6 +109,11 @@ export function ArrangeView() {
   const beatW = BASE_BEAT_W * zoom;
   const timelineW = totalBeats * beatW;
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Track-header column scroll, slaved to the timeline's. */
+  const headRef = useRef<HTMLDivElement>(null);
+  // grows on touch so the add-track control can meet the 44px floor; the ruler
+  // matches it so lane 0 starts at the same y in both columns
+  const rulerH = isMobile ? 48 : 34;
 
   const [overlayVisible, setOverlayVisible] = useState<Record<string, boolean>>({});
   const overlayCtx: AutomationOverlayState = useMemo(
@@ -112,10 +148,14 @@ export function ArrangeView() {
 
   return (
     <BeatWidthContext.Provider value={beatW}>
+    <RowHeightContext.Provider value={rowH}>
     <SnapContext.Provider value={snapBeats}>
     <AutomationOverlayContext.Provider value={overlayCtx}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div className="warning-stripe--thin warning-stripe" />
+      {/* Decoration, and the first thing to go on a phone: 4px of diagonal
+          hazard tape directly under the tab bar, in the view with the most
+          going on. Desktop keeps it. */}
+      {!isMobile && <div className="warning-stripe--thin warning-stripe" />}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {/* Track headers */}
         <div
@@ -131,49 +171,37 @@ export function ArrangeView() {
         >
           <div
             style={{
-              height: 32,
+              // Exactly the ruler's height. These are two separate scrollers
+              // sitting side by side, so any difference between the header
+              // column's first row and the timeline's ruler offsets EVERY lane
+              // by that difference: at 48 vs 34 the name "Bass" was drawn
+              // across 73% of the Bass lane and 27% of the Drums lane above it.
+              height: rulerH,
               padding: '4px 6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 4,
               borderBottom: '1px solid rgba(255,106,0,0.4)',
+              flex: '0 0 auto',
             }}
           >
-            {!isMobile && <span className="hud-label">TRACKS</span>}
-            <div style={{ display: 'flex', gap: 3 }}>
-              <button
-                className="hud-btn hud-btn--icon"
-                onClick={() => addTrack('synth')}
-                title="Add synth track"
-                style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
-              >
-                {isMobile ? '+SYN' : '+ SYNTH'}
-              </button>
-              <button
-                className="hud-btn hud-btn--icon"
-                onClick={() => addTrack('drum')}
-                title="Add drum track"
-                style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
-              >
-                {isMobile ? '+DRM' : '+ DRUMS'}
-              </button>
-              <button
-                className="hud-btn hud-btn--icon"
-                onClick={() => addTrack('audio')}
-                title="Add audio track"
-                style={{ minWidth: 0, padding: '4px 5px', fontSize: 9 }}
-              >
-                {isMobile ? '+AUD' : '+ AUDIO'}
-              </button>
-            </div>
+            {!isMobile && <span className="hud-label">Tracks</span>}
+            {/* Three truncated abbreviations in a 128px column told nobody
+                anything. One clear button, and the choice is spelled out. */}
+            <AddTrackButton compact={isMobile} onAdd={addTrack} />
           </div>
-          <div style={{ overflow: 'auto', flex: 1 }}>
+          {/* overflowY hidden, not auto: this column is slaved to the timeline
+              below. As two independent scrollers, one 250px swipe left the
+              timeline at 250 and the headers at 0 — after which every mute,
+              solo and clip edit landed on a different track than the one you
+              were looking at. */}
+          <div ref={headRef} data-head-scroll style={{ overflowX: 'hidden', overflowY: 'hidden', flex: 1 }}>
             {tracks.map((t) => {
               const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
               return (
                 <div key={t.id}>
-                  <TrackHeader track={t} compact={isMobile} />
+                  <TrackHeader track={t} compact={isMobile} inlineToggles={mode !== 'phone-portrait'} />
                   {lanes.map((lane) => (
                     <AutomationOverlayHeader
                       key={lane.param}
@@ -191,10 +219,15 @@ export function ArrangeView() {
         {/* Timeline */}
         <div
           ref={scrollRef}
+          data-timeline-scroll
+          onScroll={(e) => {
+            const h = headRef.current;
+            if (h) h.scrollTop = e.currentTarget.scrollTop;
+          }}
           style={{ flex: 1, overflow: 'auto', position: 'relative', contain: 'layout style' }}
           className="hex-grid-bg"
         >
-          <Ruler beats={totalBeats} />
+          <Ruler beats={totalBeats} h={rulerH} />
           <div style={{ position: 'relative', width: timelineW, minWidth: '100%' }}>
             {tracks.map((t) => {
               const lanes = overlayVisible[t.id] ? t.automation ?? [] : [];
@@ -217,9 +250,9 @@ export function ArrangeView() {
               height={
                 tracks.reduce(
                   (s, t) =>
-                    s + ROW_H + (overlayVisible[t.id] ? (t.automation?.length ?? 0) * AUTO_LANE_H : 0),
+                    s + rowH + (overlayVisible[t.id] ? (t.automation?.length ?? 0) * AUTO_LANE_H : 0),
                   0,
-                ) + 34
+                )
               }
             />
           </div>
@@ -235,6 +268,7 @@ export function ArrangeView() {
     </div>
     </AutomationOverlayContext.Provider>
     </SnapContext.Provider>
+    </RowHeightContext.Provider>
     </BeatWidthContext.Provider>
   );
 }
@@ -251,12 +285,18 @@ const ZoomFloater = memo(function ZoomFloater({
   snapMode: SnapMode;
   setSnapMode: (m: SnapMode) => void;
 }) {
+  // EditorTip renders nothing on a phone, so its clearance is desktop-only.
+  const tipVisible = !useIsMobile();
   return (
     <div
       style={{
         position: 'absolute',
         right: 12,
-        bottom: 28,
+        // 28 on desktop is clearance for the editor tip strip, which really is
+        // there; on phones the tip renders nothing, and at 28 this box covered
+        // 39% of the width of the bottom visible lane, so taps meant for the
+        // lane hit the zoom control instead.
+        bottom: tipVisible ? 28 : 4,
         display: 'flex',
         gap: 4,
         alignItems: 'center',
@@ -271,18 +311,19 @@ const ZoomFloater = memo(function ZoomFloater({
         value={snapMode}
         onChange={(e) => setSnapMode(e.target.value as SnapMode)}
         title="Snap grid — clip moves, resizes and new clips lock to this"
-        style={{ fontSize: 9, minHeight: 24, padding: '2px 4px' }}
+        style={{ fontSize: 12, padding: '2px 4px' }}
       >
-        <option value="bar">SNAP·BAR</option>
-        <option value="beat">SNAP·BEAT</option>
-        <option value="half">SNAP·½</option>
-        <option value="off">SNAP·OFF</option>
+        <option value="bar">Snap: Bar</option>
+        <option value="beat">Snap: Beat</option>
+        <option value="half">Snap: ½ Beat</option>
+        <option value="off">Snap: Off</option>
       </select>
       <button
         className="hud-btn hud-btn--icon"
         title="Zoom out"
         onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}
-        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+        aria-label="Zoom out"
+        style={{ padding: '2px 6px', fontSize: 13 }}
       >
         −
       </button>
@@ -290,7 +331,7 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Reset zoom to 1×"
         onClick={() => setZoom(() => 1)}
-        style={{ minWidth: 38, padding: '2px 4px', fontSize: 9 }}
+        style={{ minWidth: 38, padding: '2px 4px', fontSize: 12 }}
       >
         {zoom.toFixed(2)}×
       </button>
@@ -298,7 +339,8 @@ const ZoomFloater = memo(function ZoomFloater({
         className="hud-btn hud-btn--icon"
         title="Zoom in"
         onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
-        style={{ minWidth: 24, padding: '2px 6px', fontSize: 11 }}
+        aria-label="Zoom in"
+        style={{ padding: '2px 6px', fontSize: 13 }}
       >
         ＋
       </button>
@@ -306,7 +348,7 @@ const ZoomFloater = memo(function ZoomFloater({
   );
 });
 
-const Ruler = memo(function Ruler({ beats }: { beats: number }) {
+const Ruler = memo(function Ruler({ beats, h }: { beats: number; h: number }) {
   const BEAT_W = useBeatWidth();
   const numerator = useStore((s) => s.project.numerator || 4);
   return (
@@ -315,7 +357,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
         position: 'sticky',
         top: 0,
         zIndex: 5,
-        height: 34,
+        height: h,
         // span the full timeline, not just the viewport — otherwise the
         // flex tick cells shrink to fit and drift out of alignment with
         // the clips below, and the loop strip is undraggable when scrolled
@@ -343,7 +385,7 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
               }}
             >
               {isBar && (
-                <span className="hud-label" style={{ position: 'absolute', top: -14, left: 2, fontSize: 9 }}>
+                <span className="hud-label" style={{ position: 'absolute', top: -14, left: 2, fontSize: 12 }}>
                   {i / numerator + 1}
                 </span>
               )}
@@ -351,7 +393,9 @@ const Ruler = memo(function Ruler({ beats }: { beats: number }) {
           );
         })}
       </div>
-      <LoopLane beats={beats} />
+      {/* Loop is a labelled button in the transport; in landscape this strip
+          is 12px of a 230px region for a second way to do the same thing. */}
+      {h > 40 && <LoopLane beats={beats} />}
     </div>
   );
 });
@@ -451,8 +495,98 @@ const LoopLane = memo(function LoopLane({ beats }: { beats: number }) {
   );
 });
 
+/** Add-track control: one obvious button, with the kinds spelled out on tap. */
+function AddTrackButton({
+  compact,
+  onAdd,
+}: {
+  compact: boolean;
+  onAdd: (kind: Track['kind']) => unknown;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
+  const KINDS: { kind: Track['kind']; label: string; hint: string }[] = [
+    { kind: 'synth', label: 'Synth', hint: 'Play melodies and chords' },
+    { kind: 'drum', label: 'Drums', hint: 'Program a beat' },
+    { kind: 'audio', label: 'Audio', hint: 'Record or import a sample' },
+  ];
+
+  return (
+    <div ref={wrap} style={{ position: 'relative', flex: compact ? 1 : '0 0 auto', minWidth: 0 }}>
+      <button
+        className={`hud-btn ${open ? 'is-active' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Add a track"
+        style={{ width: '100%', fontSize: 12, padding: '4px 8px' }}
+      >
+        + Track
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '106%',
+            left: 0,
+            zIndex: 40,
+            minWidth: 168,
+            background: '#0a0705',
+            border: '1px solid rgba(255,106,0,0.6)',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
+          }}
+        >
+          {KINDS.map((k) => (
+            <button
+              key={k.kind}
+              className="hud-btn hud-btn--ghost"
+              style={{
+                display: 'block',
+                width: '100%',
+                minHeight: 46,
+                padding: '8px 12px',
+                textAlign: 'left',
+                borderBottom: '1px solid rgba(255,106,0,0.18)',
+              }}
+              onClick={() => {
+                onAdd(k.kind);
+                setOpen(false);
+              }}
+            >
+              <div style={{ fontSize: 13 }}>{k.label}</div>
+              <div className="hud-readout--dim hud-readout" style={{ fontSize: 11, textTransform: 'none' }}>
+                {k.hint}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Memoized track header — only re-renders when ITS track object changes. */
-const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track; compact: boolean }) {
+const TrackHeader = memo(function TrackHeader({
+  track,
+  compact,
+  inlineToggles = true,
+}: {
+  track: Track;
+  compact: boolean;
+  inlineToggles?: boolean;
+}) {
+  const rowH = useRowHeight();
   const selected = useStore((s) => s.selectedTrackId === track.id);
   const selectTrack = useStore((s) => s.selectTrack);
   const updateTrack = useStore((s) => s.updateTrack);
@@ -461,12 +595,138 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
   const overlay = useAutomationOverlay();
   const overlayActive = !!overlay.visible[track.id];
   const laneCount = track.automation?.length ?? 0;
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // PHONE: the row carries identity and the two toggles you actually reach for
+  // mid-write. Everything else — and every continuous parameter — moves into
+  // the sheet, where a slider gets the full width of the screen instead of the
+  // ~40px a track header could spare.
+  if (compact) {
+    return (
+      <>
+        <div
+          onClick={() => selectTrack(track.id)}
+          style={{
+            height: rowH,
+            padding: '0 4px 0 10px',
+            borderBottom: '1px solid rgba(255,106,0,0.25)',
+            background: selected ? `linear-gradient(90deg, ${track.color}30, ${track.color}0a)` : 'transparent',
+            boxShadow: selected ? `inset 0 0 0 1px ${track.color}99` : 'none',
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            cursor: 'pointer',
+            contain: 'layout style',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: selected ? 5 : 3,
+              background: track.color,
+              boxShadow: selected ? `0 0 8px ${track.color}` : 'none',
+            }}
+          />
+          {/* The name IS the sheet trigger. A separate ⋯ button would need a
+              fourth 44px target, which a 144-200px header cannot spare without
+              starving the name back down to a couple of characters. */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              selectTrack(track.id);
+              setSheetOpen(true);
+            }}
+            aria-haspopup="dialog"
+            title={`${TRACK_KIND_LABEL[track.kind]} — ${track.name} · tap for volume, pan, arm, edit`}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '0 2px',
+              background: 'transparent',
+              textAlign: 'left',
+            }}
+          >
+            <span
+              className="hud-value"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: 14,
+                color: 'var(--hud-orange-bright)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {track.name}
+            </span>
+            {/* The only visible sign that the track name opens a settings
+                sheet. At 13px and 0.55 alpha in orange on near-black it was
+                effectively invisible, which made volume, pan and arm feel like
+                they were missing rather than one tap away. */}
+            <span aria-hidden style={{ opacity: 0.95, fontSize: 17, lineHeight: 1, flex: '0 0 auto' }}>›</span>
+          </button>
+          {inlineToggles && (
+            <>
+              {/* These were already ~90px wide as bare letters, so spelling
+                  them costs no space and saves guessing. */}
+              <button
+                className={`hud-btn hud-btn--tight ${track.mute ? 'is-active' : ''}`}
+                aria-pressed={track.mute}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateTrack(track.id, { mute: !track.mute });
+                }}
+                title={track.mute ? `Unmute ${track.name}` : `Mute ${track.name}`}
+                style={{ fontSize: 13, flex: '0 0 auto' }}
+              >
+                Mute
+              </button>
+              <button
+                /* Green only when soloed. As a permanent green border it read
+                   as "solo is on" on every track at once, so three tracks all
+                   looked soloed and the state carried no information. */
+                className={`hud-btn hud-btn--tight ${track.solo ? 'hud-btn--green is-active' : ''}`}
+                aria-pressed={track.solo}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateTrack(track.id, { solo: !track.solo });
+                }}
+                title={track.solo ? `Stop soloing ${track.name}` : `Hear only ${track.name}`}
+                style={{ fontSize: 13, flex: '0 0 auto' }}
+              >
+                Solo
+              </button>
+            </>
+          )}
+          {/* Portrait has no width for the toggles; the dots keep their state
+              visible and the sheet is one tap away. */}
+          {!inlineToggles && (track.mute || track.solo) && (
+            <span
+              className="hud-readout"
+              style={{ fontSize: 12, flex: '0 0 auto', color: track.solo ? 'var(--hud-green)' : 'var(--hud-red)' }}
+            >
+              {track.solo ? 'Solo' : 'Muted'}
+            </span>
+          )}
+        </div>
+        {sheetOpen && <TrackSheet track={track} onClose={() => setSheetOpen(false)} />}
+      </>
+    );
+  }
 
   return (
     <div
       onClick={() => selectTrack(track.id)}
       style={{
-        height: ROW_H,
+        height: rowH,
         padding: '4px 6px',
         borderBottom: '1px solid rgba(255,106,0,0.25)',
         // the selected track lights up in its OWN colour — a consistent
@@ -492,19 +752,22 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           boxShadow: selected ? `0 0 8px ${track.color}` : 'none',
         }}
       />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {/* The narrow header column can't fit a type badge AND the name, and the
-            name (now function-first: "DRUMS // VEGA", "BASS // …") is the better
-            plain label — so the kind lives in the tooltip instead. */}
+      {/* The narrow header column can't fit a type badge AND the name, and the
+          name (now function-first: "DRUMS // VEGA", "BASS // …") is the better
+          plain label — so the kind lives in the tooltip instead.
+          On touch the icon buttons are wide enough that sharing a row with the
+          name starved it down to a single letter, so compact mode gives the
+          name a row of its own. */}
+      {compact && (
         <input
           className="hud-value"
           title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
           style={{
-            flex: 1,
-            fontSize: 11,
+            width: '100%',
+            fontSize: 13,
             background: 'transparent',
             border: '1px solid transparent',
-            padding: '2px 4px',
+            padding: '1px 4px',
             color: 'var(--hud-orange-bright)',
             minWidth: 0,
           }}
@@ -512,11 +775,32 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           onChange={(e) => updateTrack(track.id, { name: e.target.value })}
           onClick={(e) => e.stopPropagation()}
         />
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 3 : 6 }}>
+        {!compact && (
+          <input
+            className="hud-value"
+            title={`${TRACK_KIND_LABEL[track.kind]} track — rename freely`}
+            style={{
+              flex: 1,
+              fontSize: 13,
+              background: 'transparent',
+              border: '1px solid transparent',
+              padding: '2px 4px',
+              color: 'var(--hud-orange-bright)',
+              minWidth: 0,
+            }}
+            value={track.name}
+            onChange={(e) => updateTrack(track.id, { name: e.target.value })}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+        {compact && <div style={{ flex: 1, minWidth: 0 }} />}
         {track.kind === 'audio' ? (
           <AudioImportButton trackId={track.id} />
         ) : (
           <button
-            className="hud-btn hud-btn--icon"
+            className="hud-btn hud-btn--icon hud-btn--tight"
             onClick={(e) => {
               e.stopPropagation();
               selectTrack(track.id);
@@ -528,7 +812,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           </button>
         )}
         <button
-          className={`hud-btn hud-btn--icon ${overlayActive ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon hud-btn--tight ${overlayActive ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             if (laneCount === 0) {
@@ -540,7 +824,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           }}
           title={
             laneCount === 0
-              ? 'No automation lanes — opens AUTOMATION tab'
+              ? 'No automation lanes — opens the Automation tab'
               : overlayActive
                 ? 'Hide automation lanes'
                 : `Show ${laneCount} automation lane${laneCount === 1 ? '' : 's'}`
@@ -549,7 +833,7 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           A
         </button>
         <button
-          className="hud-btn hud-btn--icon"
+          className="hud-btn hud-btn--icon hud-btn--tight"
           onClick={(e) => {
             e.stopPropagation();
             if (confirm(`Delete track "${track.name}"?`)) removeTrack(track.id);
@@ -559,36 +843,41 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           ✕
         </button>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto' }}>
+      {/* Two rows, not one. Sharing a 196px line with three buttons and a
+          readout left the fader 29px of travel for a 54 dB range — 1.86 dB per
+          pixel, so a single pixel of finger movement jumped nearly two
+          decibels. On its own row it gets the full header width. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
-          className={`hud-btn hud-btn--icon ${track.mute ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon hud-btn--tight ${track.mute ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { mute: !track.mute });
           }}
-          style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
+          style={{ padding: '4px 6px', fontSize: 12 }}
           title={track.mute ? 'Muted — click to unmute' : 'Mute this track'}
         >
           M
         </button>
         <button
-          className={`hud-btn hud-btn--green hud-btn--icon ${track.solo ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--icon hud-btn--tight ${track.solo ? 'hud-btn--green is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { solo: !track.solo });
           }}
-          style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
+          style={{ padding: '4px 6px', fontSize: 12 }}
           title={track.solo ? 'Soloed — click to clear' : 'Solo — mute all other tracks'}
         >
           S
         </button>
         <button
-          className={`hud-btn hud-btn--rec hud-btn--icon ${track.arm ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--rec hud-btn--icon hud-btn--tight ${track.arm ? 'is-active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             updateTrack(track.id, { arm: !track.arm });
           }}
-          style={{ minWidth: 28, padding: '4px 6px', fontSize: 9 }}
+          style={{ padding: '4px 6px', fontSize: 12 }}
           title={
             track.kind === 'synth'
               ? 'Arm — route MIDI input here and record while transport rolls'
@@ -599,6 +888,8 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
         >
           ●
         </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <input
           type="range"
           className="hud-slider"
@@ -609,17 +900,211 @@ const TrackHeader = memo(function TrackHeader({ track, compact }: { track: Track
           onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
-          style={{ flex: 1, height: 6 }}
+          aria-label={`${track.name} volume`}
+          style={{ flex: 1, minWidth: 0, height: 6 }}
         />
         {!compact && (
-          <span className="hud-readout" style={{ fontSize: 8, width: 28, textAlign: 'right' }}>
+          <span className="hud-readout" style={{ fontSize: 11, width: 28, textAlign: 'right', flex: '0 0 auto' }}>
             {track.volume.toFixed(0)}
           </span>
         )}
       </div>
+      </div>
     </div>
   );
 });
+
+/**
+ * TrackSheet — the phone home for everything a track row has no width for.
+ *
+ * The track header used to carry volume as a ~40px slider, which worked out at
+ * roughly 6 dB per pixel: nine pixels of travel for a 54 dB range. Here the
+ * same control spans the screen, so the same range gets 300+px and lands
+ * nearer 0.18 dB per pixel. Same for pan, and every action becomes a labelled
+ * full-height button instead of a single glyph.
+ */
+function TrackSheet({ track, onClose }: { track: Track; onClose: () => void }) {
+  const updateTrack = useStore((s) => s.updateTrack);
+  const removeTrack = useStore((s) => s.removeTrack);
+  const selectTrack = useStore((s) => s.selectTrack);
+  const setView = useStore((s) => s.setView);
+  const overlay = useAutomationOverlay();
+  const laneCount = track.automation?.length ?? 0;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const toggle = (on: boolean): React.CSSProperties => ({
+    flex: 1,
+    minHeight: 46,
+    fontSize: 13,
+    opacity: on ? 1 : 0.85,
+  });
+  const action: React.CSSProperties = { flex: 1, minHeight: 46, fontSize: 12 };
+
+  // Portalled to <body>. The track header column sets `contain: layout`, which
+  // makes it a containing block for position:fixed descendants — rendering the
+  // sheet in place trapped it inside a 150px column and left the "full width"
+  // slider only 121px wide.
+  return createPortal(
+    <div
+      className="sheet-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${track.name} settings`}
+      onClick={onClose}
+    >
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet__grab" />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ width: 4, alignSelf: 'stretch', background: track.color, flex: '0 0 auto' }} />
+          <span className="hud-label" style={{ fontSize: 12, flex: '0 0 auto' }}>
+            {TRACK_KIND_LABEL[track.kind]}
+          </span>
+          <input
+            className="hud-value"
+            value={track.name}
+            onChange={(e) => updateTrack(track.id, { name: e.target.value })}
+            aria-label="Track name"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 44,
+              fontSize: 14,
+              padding: '4px 8px',
+              background: 'rgba(0,0,0,0.5)',
+              border: '1px solid rgba(255,106,0,0.4)',
+              color: 'var(--hud-orange-bright)',
+            }}
+          />
+          <button className="hud-btn hud-btn--icon" onClick={onClose} title="Close">
+            ✕
+          </button>
+        </div>
+
+        {/* Side by side on a short viewport (see .sheet__rows). Stacked, the
+            sheet needed 363px inside a 336px screen, so Delete and both of the
+            "edit this track" buttons sat below the fold — the sheet scrolled,
+            but the actions you opened it for were the hidden ones. 640px of
+            sheet halves to 300px of slider, which is still 0.18 dB/px. */}
+        <div className="sheet__rows">
+        <div className="sheet__row">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span className="hud-label" style={{ fontSize: 12 }}>Volume</span>
+            <span className="hud-readout">{track.volume.toFixed(1)} dB</span>
+          </div>
+          <input
+            type="range"
+            className="hud-slider sheet__slider"
+            min={-48}
+            max={6}
+            step={0.1}
+            value={track.volume}
+            aria-label="Volume"
+            onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
+          />
+        </div>
+
+        <div className="sheet__row">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span className="hud-label" style={{ fontSize: 12 }}>Pan</span>
+            <span className="hud-readout">
+              {track.pan === 0 ? 'Centre' : track.pan < 0 ? `L${Math.round(-track.pan * 100)}` : `R${Math.round(track.pan * 100)}`}
+            </span>
+          </div>
+          <input
+            type="range"
+            className="hud-slider sheet__slider"
+            min={-1}
+            max={1}
+            step={0.01}
+            value={track.pan}
+            aria-label="Pan"
+            onChange={(e) => updateTrack(track.id, { pan: parseFloat(e.target.value) })}
+          />
+        </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <button
+            className={`hud-btn ${track.mute ? 'is-active' : ''}`}
+            style={toggle(track.mute)}
+            onClick={() => updateTrack(track.id, { mute: !track.mute })}
+          >
+            Mute
+          </button>
+          <button
+            className={`hud-btn ${track.solo ? 'hud-btn--green is-active' : ''}`}
+            style={toggle(track.solo)}
+            onClick={() => updateTrack(track.id, { solo: !track.solo })}
+          >
+            Solo
+          </button>
+          <button
+            className={`hud-btn hud-btn--rec ${track.arm ? 'is-active' : ''}`}
+            style={toggle(track.arm)}
+            onClick={() => updateTrack(track.id, { arm: !track.arm })}
+            title={track.kind === 'audio' ? 'Arm for mic recording' : 'Arm for MIDI recording'}
+          >
+            Arm
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          {track.kind !== 'audio' && (
+            <button
+              className="hud-btn"
+              style={action}
+              onClick={() => {
+                selectTrack(track.id);
+                setView(track.kind === 'drum' ? 'sequencer' : 'pianoroll');
+                onClose();
+              }}
+            >
+              {track.kind === 'drum' ? '✎ Edit the beat' : '✎ Edit the notes'}
+            </button>
+          )}
+          <button
+            className="hud-btn"
+            style={action}
+            onClick={() => {
+              if (laneCount === 0) {
+                selectTrack(track.id);
+                setView('automation');
+                onClose();
+                return;
+              }
+              overlay.toggle(track.id);
+              onClose();
+            }}
+          >
+            {laneCount === 0 ? 'Automate something' : `Automation (${laneCount})`}
+          </button>
+        </div>
+
+        <button
+          className="hud-btn hud-btn--ghost"
+          style={{ width: '100%', minHeight: 46, fontSize: 12, color: 'var(--hud-red)', borderColor: 'rgba(255,60,60,0.5)' }}
+          onClick={() => {
+            if (confirm(`Delete track "${track.name}"?`)) {
+              removeTrack(track.id);
+              onClose();
+            }
+          }}
+        >
+          ✕ Delete this track
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 /**
  * Memoized lane — re-renders only when this track's clip list / colour
@@ -635,6 +1120,7 @@ const TrackLane = memo(function TrackLane({
   color: string;
 }) {
   const BEAT_W = useBeatWidth();
+  const rowH = useRowHeight();
   const snap = useSnap();
   const addClip = useStore((s) => s.addClip);
   const selectTrack = useStore((s) => s.selectTrack);
@@ -728,7 +1214,7 @@ const TrackLane = memo(function TrackLane({
       ref={laneRef}
       style={{
         position: 'relative',
-        height: ROW_H,
+        height: rowH,
         borderBottom: '1px solid rgba(255,106,0,0.18)',
         background: `linear-gradient(180deg, ${color}10, transparent)`,
         contain: 'layout style',
@@ -754,7 +1240,7 @@ const TrackLane = memo(function TrackLane({
           style={{
             position: 'absolute',
             top: 4,
-            height: ROW_H - 8,
+            height: rowH - 8,
             left: draftLo * BEAT_W,
             width: draftW * BEAT_W,
             background: `${color}33`,
@@ -801,7 +1287,7 @@ function AutomationOverlayHeader({
     >
       <span
         className="hud-readout--dim hud-readout"
-        style={{ fontSize: 9, letterSpacing: 1, flex: 1, minWidth: 0 }}
+        style={{ fontSize: 12, letterSpacing: 1, flex: 1, minWidth: 0 }}
       >
         ▸ {AUTOMATION_PARAM_META[param].label}
       </span>
@@ -813,10 +1299,12 @@ function AutomationOverlayHeader({
             selectTrack(track.id);
             setView('automation');
           }}
-          title="Open AUTOMATION tab for this track"
-          style={{ minWidth: 0, padding: '2px 4px', fontSize: 9 }}
+          title="Open the Automation tab for this track"
+          style={{ minWidth: 0, padding: '2px 6px', fontSize: 12 }}
         >
-          ⇲
+          {/* Was ⇲, which nothing in the app explains and a tooltip cannot
+              rescue. This row is desktop-only and has room for the word. */}
+          Edit
         </button>
       )}
     </div>
@@ -967,6 +1455,7 @@ function AutomationOverlayLane({
 
 /** Memoized clip. Drag/resize happens via direct DOM mutation — zero React renders mid-drag. */
 const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: string }) {
+  const rowH = useRowHeight();
   const BEAT_W = useBeatWidth();
   const snap = useSnap();
   const selected = useStore((s) => s.selectedClipIds.includes(clip.id));
@@ -1074,8 +1563,14 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
     // a tap (no real drag) on the clip body: second tap within 380ms opens
     // the editor — replacing the native dblclick that pointer capture eats
     if (d.mode === 'move' && !d.moved) {
+      // On touch one tap opens it. Writing notes into a clip is the whole
+      // point of the app, and it was hidden behind a double-tap with nothing
+      // on screen to suggest it — while the only visible button on a clip
+      // deleted it. A drag still moves the clip; only a tap that went nowhere
+      // counts. Desktop keeps double-click, where single click means select
+      // and shift-click extends the selection.
       const now = performance.now();
-      if (now - lastTap.current < 380) {
+      if (touchPrimary() || now - lastTap.current < 380) {
         openEditor();
         lastTap.current = 0;
       } else {
@@ -1115,7 +1610,7 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         top: 4,
         left: clip.start * BEAT_W,
         width: clip.length * BEAT_W - 2,
-        height: ROW_H - 8,
+        height: rowH - 8,
         background: `linear-gradient(180deg, ${color}66, ${color}22)`,
         border: `1px solid ${selected ? '#fff' : color}`,
         clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
@@ -1127,48 +1622,100 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
         contain: 'layout style paint',
       }}
     >
+      {/* A name band across the top, with its own backdrop.
+          The note preview used to be full-bleed, so its blocks ran straight
+          through the label: "Beat" survived only on its text-shadow, and the
+          squares immediately after it read as more letters. Name band on top,
+          preview below it, nothing overlapping anything. */}
       <div
-        className="hud-label"
         style={{
           position: 'absolute',
-          top: 4,
-          left: 8,
-          fontSize: 8,
-          letterSpacing: '0.2em',
-          color: '#fff',
-          textShadow: '0 0 4px #000',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: NAME_BAND_H,
+          display: 'flex',
+          alignItems: 'center',
+          // 22px left only 2px between a truncated name and the ✕ glyph, so a
+          // long track name read as if it were touching the delete button.
+          padding: '0 26px 0 7px',
+          background: 'rgba(0,0,0,0.5)',
+          pointerEvents: 'none',
         }}
       >
-        {clip.name ?? clip.kind.toUpperCase()}
+        <span
+          className="hud-label"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 11,
+            lineHeight: 1,
+            letterSpacing: '0.02em',
+            color: '#fff',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {clip.name ?? CLIP_KIND_LABEL[clip.kind]}
+        </span>
       </div>
       <ClipPreview clip={clip} />
+      {/* A bare glyph at the right end of the name band, not a bordered button
+          floating over the preview. A clip can be ~94x36, so this cannot reach
+          the 44px floor; it opts out and takes the band's full height. */}
       <button
-        className="hud-btn hud-btn--icon"
+        className="clip-affordance no-touch-floor"
         onClick={(e) => {
           e.stopPropagation();
           removeClip(clip.id);
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        title="Delete clip"
-        style={{ position: 'absolute', top: 2, right: 2, minWidth: 0, padding: '1px 4px', fontSize: 9, zIndex: 3, lineHeight: 1 }}
+        aria-label={`Delete ${clip.name ?? CLIP_KIND_LABEL[clip.kind]}`}
+        title="Delete this clip"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: 20,
+          height: NAME_BAND_H,
+          minWidth: 0,
+          minHeight: 0,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          color: 'rgba(255,255,255,0.8)',
+          fontSize: 11,
+          lineHeight: 1,
+          zIndex: 3,
+        }}
       >
         ✕
       </button>
-      {/* Resize handle starts BELOW the ✕ so the two no longer fight for the
-          same top-right corner (you'd hit delete while trying to resize). */}
+      {/* Below the name band, not from top:20 — at rowH 44 the block is 36px
+          tall, so top:20 put the grip and the ✕ on the same pixels between
+          y=20 and y=25 and you hit delete reaching for resize. */}
       <div
         onPointerDown={(e) => down(e, 'resize')}
         title="Drag to resize"
         style={{
           position: 'absolute',
           right: 0,
-          top: 20,
+          top: NAME_BAND_H,
           bottom: 0,
-          width: 14,
+          width: 13,
           cursor: 'ew-resize',
-          // visible grip so the edge reads as draggable
+          // Two short strokes, not four bright ones. At 0.5 alpha every 4px
+          // across 14px this read as loudly as the note preview underneath it,
+          // in a block only 94px wide.
+          //
+          // The dark fade behind the strokes is what keeps them legible as a
+          // handle: the preview runs full-bleed underneath, so without it the
+          // dashes and the note blocks tangled into one texture and neither
+          // read. Fading the preview out under the grip separates the two
+          // without shrinking the preview's time mapping.
           background:
-            'linear-gradient(90deg, transparent, rgba(255,255,255,0.18)), repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,0.5) 3px 4px)',
+            'repeating-linear-gradient(90deg, transparent 0 4px, rgba(255,255,255,0.28) 4px 5px), linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.85))',
           backgroundPosition: 'right',
           touchAction: 'none',
         }}
@@ -1177,8 +1724,27 @@ const ClipBlock = memo(function ClipBlock({ clip, color }: { clip: Clip; color: 
   );
 });
 
+/**
+ * The clip's contents, sketched.
+ *
+ * It is a hint about what is inside, not a readable score, so it lives below
+ * the name band and at an opacity that keeps it subordinate to the label. As a
+ * full-bleed layer at 0.85/0.7 it was the same visual weight as the name and
+ * ran straight through it.
+ */
+const PREVIEW_BOX: React.CSSProperties = {
+  position: 'absolute',
+  top: NAME_BAND_H,
+  left: 0,
+  right: 0,
+  pointerEvents: 'none',
+};
+
 const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
+  const rowH = useRowHeight();
   const BEAT_W = useBeatWidth();
+  /** Height the preview actually gets, once the name band has taken its cut. */
+  const boxH = Math.max(4, rowH - 8 - NAME_BAND_H);
   if (clip.kind === 'midi') {
     if (clip.notes.length === 0) return null;
     const lo = Math.min(...clip.notes.map((n) => n.pitch));
@@ -1187,22 +1753,22 @@ const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
     return (
       <svg
         width="100%"
-        height="100%"
-        viewBox={`0 0 ${clip.length * BEAT_W} ${ROW_H - 8}`}
+        height={boxH}
+        viewBox={`0 0 ${clip.length * BEAT_W} ${boxH}`}
         preserveAspectRatio="none"
-        style={{ position: 'absolute', inset: 0, opacity: 0.85 }}
+        style={{ ...PREVIEW_BOX, opacity: 0.5 }}
       >
         {clip.notes.map((n) => {
-          const y = ((hi - n.pitch) / range) * (ROW_H - 18) + 14;
+          // pitch mapped into the box, with 2px of air top and bottom
+          const y = ((hi - n.pitch) / range) * Math.max(1, boxH - 5) + 2;
           return (
             <rect
               key={n.id}
               x={n.start * BEAT_W}
               y={y}
               width={Math.max(2, n.length * BEAT_W)}
-              height={3}
+              height={2.5}
               fill="#fff"
-              opacity={0.7}
             />
           );
         })}
@@ -1210,41 +1776,40 @@ const ClipPreview = memo(function ClipPreview({ clip }: { clip: Clip }) {
     );
   }
   if (clip.kind === 'audio') {
-    return <AudioWaveform sampleId={clip.sampleId} width={clip.length * BEAT_W} />;
+    return <AudioWaveform sampleId={clip.sampleId} width={clip.length * BEAT_W} height={boxH} />;
   }
   return (
     <svg
       width="100%"
-      height="100%"
+      height={boxH}
       viewBox={`0 0 ${clip.pattern.length} 8`}
       preserveAspectRatio="none"
-      style={{ position: 'absolute', inset: 0, opacity: 0.7 }}
+      style={{ ...PREVIEW_BOX, opacity: 0.45 }}
     >
       {Object.entries(clip.pattern.steps).map(([pad, steps], ri) =>
         steps.map((s, i) =>
-          s.on ? <rect key={`${pad}${i}`} x={i + 0.05} y={ri + 0.05} width={0.9} height={0.9} fill="#fff" /> : null,
+          s.on ? <rect key={`${pad}${i}`} x={i + 0.1} y={ri + 0.1} width={0.8} height={0.8} fill="#fff" /> : null,
         ),
       )}
     </svg>
   );
 });
 
-function AudioWaveform({ sampleId, width }: { sampleId: string; width: number }) {
+function AudioWaveform({ sampleId, width, height }: { sampleId: string; width: number; height: number }) {
   const buffer = audioEngine.getSample(sampleId);
   if (!buffer) {
     return (
       <div
         className="hud-readout--dim hud-readout"
         style={{
-          position: 'absolute',
-          inset: 0,
+          ...PREVIEW_BOX,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 8,
+          fontSize: 11,
         }}
       >
-        SAMPLE NOT LOADED
+        Sample not loaded
       </div>
     );
   }
@@ -1263,10 +1828,10 @@ function AudioWaveform({ sampleId, width }: { sampleId: string; width: number })
   return (
     <svg
       width="100%"
-      height="100%"
+      height={height}
       viewBox={`0 0 ${cols} 100`}
       preserveAspectRatio="none"
-      style={{ position: 'absolute', inset: 0, opacity: 0.85 }}
+      style={{ ...PREVIEW_BOX, opacity: 0.5 }}
     >
       {peaks.map((p, i) => (
         <rect key={i} x={i} y={50 - p * 48} width={0.9} height={Math.max(0.5, p * 96)} fill="#fff" />
@@ -1361,33 +1926,33 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         flexWrap: 'wrap',
       }}
     >
-      <span className="hud-label">CLIP // {found.name ?? found.kind.toUpperCase()}</span>
+      <span className="hud-label">{found.name ?? 'Audio clip'}</span>
       <button
         className={`hud-btn ${warp ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { warp: !warp })}
         aria-pressed={warp}
-        title="Warp playback rate to follow project tempo"
+        title="Stretch this recording so it stays in time when the song tempo changes"
       >
-        ⇄ WARP
+        Follow tempo
       </button>
-      <span className="hud-readout">MODE</span>
+      <span className="hud-label">How</span>
       <button
         className={`hud-btn ${(found.stretchMode ?? 'pitch') === 'pitch' ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { stretchMode: 'pitch' })}
-        title="Varispeed — pitch follows tempo (cheap, instant)"
+        title="Like speeding up a record — faster also means higher"
         disabled={!warp}
       >
-        PITCH
+        Speed up
       </button>
       <button
         className={`hud-btn ${found.stretchMode === 'time' ? 'is-active' : ''}`}
         onClick={() => updateAudioClip(found.id, { stretchMode: 'time' })}
-        title="Granular time-stretch — pitch preserved across tempo changes (Tone.GrainPlayer)"
+        title="Keeps the original pitch however far the tempo moves"
         disabled={!warp}
       >
-        TIME
+        Keep pitch
       </button>
-      <span className="hud-readout">SRC BPM</span>
+      <span className="hud-label" title="The tempo this recording was made at">Its tempo</span>
       <input
         type="number"
         className="display"
@@ -1398,7 +1963,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         onChange={(e) => updateAudioClip(found.id, { sourceBpm: parseFloat(e.target.value || '120') })}
         style={{ width: 70, padding: 3 }}
       />
-      <span className="hud-readout">GAIN</span>
+      <span className="hud-label">Level</span>
       <input
         type="range"
         className="hud-slider"
@@ -1409,7 +1974,7 @@ const AudioClipInspector = memo(function AudioClipInspector() {
         onChange={(e) => updateAudioClip(found.id, { gain: parseFloat(e.target.value) })}
         style={{ width: 100 }}
       />
-      <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+      <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
         ×{(warp ? projectBpm / src : 1).toFixed(2)}
       </span>
     </div>

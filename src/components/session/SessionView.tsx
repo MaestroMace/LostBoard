@@ -4,8 +4,13 @@ import { useStore, defaultScenes } from '../../state/store';
 import type { Clip, Track } from '../../audio/types';
 import { audioEngine } from '../../audio/engine';
 import { EditorTip } from '../hud/EditorTip';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
 
-const COL_W = 110;
+// 168, not 110: the header is one row now, and two 44px touch targets plus
+// padding left the name box 16px wide -- the column names had vanished.
+const COL_W = 168;
+/** Fallback label for a clip that was never named. */
+const CLIP_KIND: Record<Clip['kind'], string> = { midi: 'Notes', pattern: 'Beat', audio: 'Audio' };
 const ROW_H = 44;
 const HEAD_COL_W = 132;
 
@@ -21,6 +26,7 @@ const HEAD_COL_W = 132;
  * through the same store actions as the Arrange view.
  */
 export function SessionView() {
+  const land = useLayoutMode() === 'phone-landscape';
   const tracks = useStore((s) => s.project.tracks);
   const scenes = useStore((s) => s.project.scenes ?? defaultScenes(), shallow);
   const sessionMode = useStore((s) => s.sessionMode);
@@ -40,27 +46,36 @@ export function SessionView() {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '8px 10px',
+          // one 44px row in landscape: the controls use 470 of 923px, so the
+          // wrap that cost 17px of a 230px region bought nothing
+          padding: land ? '0 8px' : '8px 10px',
+          height: land ? 44 : undefined,
+          boxSizing: 'border-box',
           borderBottom: '1px solid rgba(255,106,0,0.4)',
-          flexWrap: 'wrap',
+          flexWrap: land ? 'nowrap' : 'wrap',
+          flex: '0 0 auto',
         }}
       >
-        <span className="hud-label">SESSION // SCENE LAUNCHER</span>
-        <button
-          className={`hud-btn ${sessionMode ? 'is-active' : ''}`}
-          onClick={() => setSessionMode(true)}
-          aria-pressed={sessionMode}
-          title="Engine plays session loops"
-        >
-          SESSION MODE
-        </button>
+        {/* One control that states what is playing, rather than two buttons
+            whose relationship you had to infer from which was highlighted. */}
+        <span className="hud-readout" style={{ textTransform: 'none' }}>
+          Playing:
+        </span>
         <button
           className={`hud-btn ${!sessionMode ? 'is-active' : ''}`}
           onClick={() => setSessionMode(false)}
           aria-pressed={!sessionMode}
-          title="Engine plays the arrangement timeline"
+          title="Play the timeline from the Song tab"
         >
-          ARRANGEMENT
+          Timeline
+        </button>
+        <button
+          className={`hud-btn ${sessionMode ? 'is-active' : ''}`}
+          onClick={() => setSessionMode(true)}
+          aria-pressed={sessionMode}
+          title="Play the loops launched below instead of the timeline"
+        >
+          These loops
         </button>
         <button
           className="hud-btn hud-btn--ghost"
@@ -68,21 +83,22 @@ export function SessionView() {
             stopAllSessionClips();
             audioEngine.stopAllSessionClips();
           }}
-          title="Stop every track's session clip"
+          title="Stop every track's loop"
         >
-          ■ STOP ALL
+          ■ Stop all
         </button>
         <div style={{ flex: 1 }} />
-        <button className="hud-btn hud-btn--icon" onClick={addScene} title="Add scene column">
-          +SCENE
+        <button className="hud-btn" onClick={addScene} title="Add another scene column">
+          + Scene
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: land ? 0 : 8 }}>
         <div style={{ display: 'inline-block', minWidth: '100%' }}>
-          {/* Scene header row */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            <div style={{ width: HEAD_COL_W, flexShrink: 0 }} />
+          {/* Sticky: the column ▶ buttons used to scroll out of reach the
+              moment you looked at the third track. */}
+          <div style={{ display: 'flex', gap: land ? 2 : 4, position: 'sticky', top: 0, zIndex: 3, background: '#0b0603' }}>
+            <div style={{ width: HEAD_COL_W, flexShrink: 0, position: 'sticky', left: 0, zIndex: 4, background: '#0b0603' }} />
             {scenes.map((scene, i) => (
               <SceneHeader
                 key={i}
@@ -102,8 +118,8 @@ export function SessionView() {
       </div>
 
       <EditorTip>
-        tap a slot to launch · tap ▶ at the top of a column to launch the whole scene · use the small dropdown in
-        each slot to assign a clip · ■ STOP clears a track · ARRANGEMENT swaps the engine back to the timeline
+        Tap a slot to start that loop. Tap ▶ above a column to start the whole column at once. Use the dropdown in a
+        slot to choose which clip it holds. &ldquo;Timeline&rdquo; at the top goes back to playing the song as arranged.
       </EditorTip>
     </div>
   );
@@ -125,13 +141,16 @@ const SceneHeader = memo(function SceneHeader({
     <div
       style={{
         width: COL_W,
+        height: 44,
+        boxSizing: 'border-box',
         flexShrink: 0,
-        padding: 4,
+        padding: '0 4px',
         background: 'rgba(255,106,0,0.08)',
         border: '1px solid rgba(255,106,0,0.4)',
+        // One row, not a name stacked over its buttons: at ~180px tall the
+        // header pushed the third track off the bottom of a landscape phone.
         display: 'flex',
-        flexDirection: 'column',
-        gap: 2,
+        gap: 4,
         alignItems: 'center',
       }}
     >
@@ -139,28 +158,33 @@ const SceneHeader = memo(function SceneHeader({
         value={name}
         onChange={(e) => setSceneName(index, e.target.value)}
         className="display"
+        aria-label={`Name of column ${index + 1}`}
+        title="Rename this column"
         style={{
           background: 'transparent',
           border: 'none',
-          textAlign: 'center',
-          width: '100%',
-          fontSize: 10,
+          textAlign: 'left',
+          flex: 1,
+          minWidth: 0,
+          fontSize: 12,
         }}
       />
-      <div style={{ display: 'flex', gap: 3 }}>
+      <div style={{ display: 'flex', gap: 3, flex: '0 0 auto' }}>
         <button
           className="hud-btn hud-btn--green hud-btn--icon"
           onClick={onLaunch}
-          title={`Launch ${name}`}
-          style={{ minWidth: 28, padding: '2px 6px', fontSize: 12 }}
+          aria-label={`Start every loop in ${name}`}
+          title={`Start every loop in ${name}`}
+          style={{ padding: '2px 6px', fontSize: 14 }}
         >
           ▶
         </button>
         <button
           className="hud-btn hud-btn--icon"
           onClick={onRemove}
-          title="Remove scene"
-          style={{ minWidth: 28, padding: '2px 6px', fontSize: 10 }}
+          aria-label={`Delete the ${name} column`}
+          title={`Delete the ${name} column`}
+          style={{ padding: '2px 6px', fontSize: 12 }}
         >
           ✕
         </button>
@@ -170,43 +194,72 @@ const SceneHeader = memo(function SceneHeader({
 });
 
 const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; sceneCount: number }) {
+  const isMobile = useIsMobile();
   const launchSessionClip = useStore((s) => s.launchSessionClip);
   const playingClipId = useStore((s) => s.sessionPlaying[track.id] ?? null);
+  // Which COLUMN is playing, resolved once per row. sessionPlaying stores a
+  // clip id, and the same clip legitimately appears in several columns.
+  const playingSlot = useMemo(() => {
+    if (!playingClipId) return null;
+    const i = (track.sessionSlots ?? []).indexOf(playingClipId);
+    return i >= 0 ? i : null;
+  }, [playingClipId, track.sessionSlots]);
 
   // every track kind can be session-launched — midi / pattern / audio clips
   // all fire from a session cell
   const canLaunch = true;
 
   return (
-    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+    <div style={{ display: 'flex', gap: 2, marginTop: 2 }}>
+      {/* Sticky: with six columns the grid is wider than the screen, and
+          scrolled right every slot looked identical with no names in sight. */}
       <div
         style={{
           width: HEAD_COL_W,
           height: ROW_H,
           flexShrink: 0,
+          position: 'sticky',
+          left: 0,
+          zIndex: 2,
           padding: '4px 8px',
-          background: 'rgba(0,0,0,0.55)',
+          background: '#0b0603',
           border: `1px solid ${track.color}66`,
           borderLeft: `4px solid ${track.color}`,
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          gap: 2,
+          // side by side rather than stacked: a touch-sized stop button plus a
+          // name does not fit in ROW_H when they are in a column
+          alignItems: 'center',
+          gap: 4,
         }}
       >
-        <span style={{ fontSize: 10, color: '#fff', letterSpacing: '0.1em' }}>{track.name}</span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 12,
+            color: '#fff',
+            letterSpacing: '0.1em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title={track.name}
+        >
+          {track.name}
+        </span>
         <button
           className="hud-btn hud-btn--icon"
           onClick={() => launchSessionClip(track.id, null)}
-          title="Stop this track's session clip"
-          style={{ alignSelf: 'flex-start', minWidth: 30, padding: '1px 6px', fontSize: 9 }}
+          aria-label={`Stop the loop playing on ${track.name}`}
+          title={`Stop the loop playing on ${track.name}`}
+          style={{ padding: '1px 6px', fontSize: 12, flex: '0 0 auto' }}
           disabled={!playingClipId}
         >
-          ■ STOP
+          {isMobile ? '■' : '■ Stop'}
         </button>
       </div>
       {Array.from({ length: sceneCount }).map((_, i) => (
-        <Slot key={i} track={track} sceneIndex={i} playingClipId={playingClipId} canLaunch={canLaunch} />
+        <Slot key={i} track={track} sceneIndex={i} playingSlot={playingSlot} canLaunch={canLaunch} />
       ))}
     </div>
   );
@@ -215,12 +268,12 @@ const TrackRow = memo(function TrackRow({ track, sceneCount }: { track: Track; s
 const Slot = memo(function Slot({
   track,
   sceneIndex,
-  playingClipId,
+  playingSlot,
   canLaunch,
 }: {
   track: Track;
   sceneIndex: number;
-  playingClipId: string | null;
+  playingSlot: number | null;
   canLaunch: boolean;
 }) {
   const setSessionSlot = useStore((s) => s.setSessionSlot);
@@ -231,7 +284,10 @@ const Slot = memo(function Slot({
     () => track.clips.find((c) => c.id === assignedId),
     [assignedId, track.clips],
   );
-  const isPlaying = assigned && playingClipId === assigned.id;
+  // Compare the SLOT, not the clip id. Assigning one clip to several columns
+  // is the normal way to build an arrangement, and by-id every copy lit up as
+  // playing at once.
+  const isPlaying = playingSlot === sceneIndex && !!assigned;
   const launchable = !!(canLaunch && assigned);
 
   return (
@@ -243,10 +299,16 @@ const Slot = memo(function Slot({
         background: assigned ? `${track.color}22` : 'rgba(0,0,0,0.45)',
         border: isPlaying ? `1px solid #fff` : `1px solid ${assigned ? `${track.color}99` : 'rgba(255,106,0,0.25)'}`,
         boxShadow: isPlaying ? `0 0 10px ${track.color}` : 'none',
+        // A row, not a column. As a column the <select> below the name took
+        // the coarse-pointer 44px floor inside a 44px slot, so it covered the
+        // cell and swallowed every tap: hit-testing at 25/50/75/90% of the
+        // cell height all returned the SELECT. Tapping a slot to launch its
+        // loop — the entire purpose of this view — did nothing at all.
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        alignItems: 'center',
         position: 'relative',
-        padding: 4,
+        padding: '0 4px',
         cursor: launchable ? 'pointer' : 'default',
         opacity: !canLaunch ? 0.5 : 1,
       }}
@@ -259,21 +321,27 @@ const Slot = memo(function Slot({
           ? 'Audio tracks can\'t be session-launched yet'
           : assigned
             ? `${assigned.name ?? assigned.kind} — tap to ${isPlaying ? 'stop' : 'launch'}`
-            : 'Empty slot — click ✎ to assign a clip'
+            : 'Empty — tap the pencil to choose a clip for this slot'
       }
     >
+      {/* Owns the whole cell minus the 44px picker, so the tap target for
+          "launch this loop" is the thing you are looking at. */}
       <span
         style={{
-          fontSize: 10,
+          fontSize: 12,
           color: assigned ? '#fff' : 'rgba(255,106,0,0.5)',
-          letterSpacing: '0.1em',
+          letterSpacing: '0.02em',
           flex: 1,
+          minWidth: 0,
+          alignSelf: 'stretch',
+          display: 'flex',
+          alignItems: 'center',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}
       >
-        {assigned?.name ?? assigned?.kind?.toUpperCase() ?? '—'}
+        {assigned?.name ?? (assigned ? CLIP_KIND[assigned.kind] : '—')}
       </span>
       <ClipPicker
         track={track}
@@ -300,29 +368,39 @@ const ClipPicker = memo(function ClipPicker({
   const candidates = track.clips;
   if (candidates.length === 0) return null;
   return (
+    <span style={{ position: 'relative', width: 44, height: 44, flex: '0 0 auto', display: 'grid', placeItems: 'center' }}>
+      {/* The glyph is what you see; the select sits invisibly on top of it so
+          the native picker still opens, but it can no longer claim the rest of
+          the cell. */}
+      <span aria-hidden style={{ fontSize: 14, color: 'var(--hud-orange-bright)', pointerEvents: 'none' }}>
+        ✎
+      </span>
     <select
       value={currentId ?? ''}
       onChange={(e) => onAssign(e.target.value || null)}
       onClick={(e) => e.stopPropagation()}
       className="display"
-      title="Assign clip"
+      title="Choose which clip this slot holds"
       style={{
-        fontSize: 9,
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        opacity: 0.01,
         background: 'transparent',
         border: 'none',
-        color: 'var(--hud-orange-bright)',
         cursor: 'pointer',
         padding: 0,
-        marginTop: 2,
       }}
-      aria-label={`Scene ${sceneIndex + 1} slot for ${track.name}`}
+      aria-label={`Choose the clip in column ${sceneIndex + 1} for ${track.name}`}
     >
-      <option value="">— empty —</option>
+      <option value="">Pick a clip…</option>
       {candidates.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name ?? c.kind}
         </option>
       ))}
     </select>
+    </span>
   );
 });

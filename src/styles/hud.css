@@ -65,16 +65,34 @@
   color: var(--hud-red);
 }
 
+/* Sits inside the frame, in flow.
+ *
+ * It used to be absolutely positioned at top:-7px so it straddled the border —
+ * but .hex-frame carries a clip-path, and clip-path clips children, so the top
+ * of every section heading in the app was sliced off. At 9px they were barely
+ * legible even unclipped. */
+/* clip-path on .hex-frame clips its DESCENDANTS, not just its own border.
+   That one fact was the root cause of two defects filed as unrelated: the drum
+   sequencer amputating every step past the frame edge, and the effects panel
+   slicing the outer knobs. Consumers that need to overflow opt out here rather
+   than each inventing a workaround. */
+.hex-frame--noclip {
+  clip-path: none;
+}
+
 .hex-frame__title {
-  position: absolute;
-  top: -7px;
-  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
   font-family: var(--font-display);
-  font-size: 9px;
-  letter-spacing: 0.3em;
-  padding: 0 8px;
-  background: var(--hud-ink);
-  color: var(--hud-orange);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 106, 0, 0.25);
+  color: var(--hud-orange-bright);
   text-transform: uppercase;
 }
 
@@ -97,30 +115,31 @@
 /* HUD ticker / readout */
 .hud-readout {
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--hud-orange-bright);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .hud-readout--green { color: var(--hud-green); }
 /* lifted from 0.55 — the dim readout (tips, footers) was barely legible on black */
 .hud-readout--dim { color: rgba(255, 106, 0, 0.72); }
 
+/* Sentence case, not caps.
+   Every string in the app used to be shouted, so nothing had hierarchy: a
+   destructive button, a knob caption and a section heading all read at the
+   same volume, and all-caps is slower to scan besides. Uppercase now survives
+   in exactly one place — .hex-frame__title — where it marks a section header. */
 .hud-label {
   font-family: var(--font-display);
-  /* 9 -> 10px and tighter tracking: wide letter-spacing on tiny uppercase
-     text was a big part of why labels read as decoration, not words */
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(255, 106, 0, 0.9);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 170, 90, 0.95);
 }
 
 .hud-value {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.02em;
   color: var(--hud-orange-bright);
 }
 
@@ -136,9 +155,8 @@
 .hud-btn {
   position: relative;
   font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.02em;
   color: var(--hud-orange);
   background: linear-gradient(180deg, rgba(255, 106, 0, 0.1), rgba(255, 106, 0, 0.02));
   border: 1px solid rgba(255, 106, 0, 0.55);
@@ -203,6 +221,16 @@
   min-width: 36px;
 }
 
+/* Buttons stacked two rows deep inside a fixed-height track lane. The standard
+   36px floor makes those two rows overflow a 64px lane and overlap each other,
+   so they get a shorter floor; the phone rules below restore a touch-sized
+   target, which the taller touch lane has room for. */
+.hud-btn--tight {
+  min-height: 26px;
+  min-width: 28px;
+  padding: 3px 6px;
+}
+
 /* Sliders / knobs */
 .hud-slider {
   -webkit-appearance: none;
@@ -233,9 +261,16 @@
   box-shadow: 0 0 6px rgba(255, 106, 0, 0.8);
 }
 
+/* Vertical fader.
+ *
+ * `appearance: slider-vertical` is deprecated (dropped in Chromium 121+) and it
+ * also suppressed the custom ::-webkit-slider-thumb, which is why these
+ * rendered as default blue browser sliders in an otherwise orange HUD.
+ * writing-mode + direction is the standard way to stand a range input up, and
+ * it keeps the themed thumb from .hud-slider. */
 .hud-fader {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
+  -webkit-appearance: none;
+  appearance: none;
   writing-mode: vertical-lr;
   direction: rtl;
   width: 22px;
@@ -268,19 +303,27 @@
 .led.amber.on { background: var(--hud-amber); box-shadow: 0 0 6px var(--hud-amber); }
 
 /* Meters */
+/* A bordered black box that is empty whenever nothing is playing reads as an
+   empty input field, especially sitting beside a dB readout in a mixer row.
+   No border and a faintly lit track: at rest it is visibly a level at zero. */
 .meter {
   display: flex;
   flex-direction: column-reverse;
   width: 8px;
   height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 106, 0, 0.4);
+  background: rgba(255, 106, 0, 0.13);
   overflow: hidden;
   gap: 1px;
-  padding: 1px;
 }
 .meter__bar {
   width: 100%;
+  /* Full height, scaled down by the meter bus. The gradient scales with the
+     bar exactly as it did when height was animated, so this looks identical
+     while costing no layout. */
+  height: 100%;
+  transform: scaleY(0);
+  transform-origin: bottom;
+  will-change: transform;
   background: linear-gradient(to top, var(--hud-green) 0%, var(--hud-green) 65%, var(--hud-amber) 80%, var(--hud-red) 95%);
   /* driven directly by the meter bus at 60fps — no CSS transition */
 }
@@ -317,18 +360,58 @@
 /* Tabs */
 .hud-tabs {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   padding: 4px 8px;
   border-bottom: 1px solid rgba(255, 106, 0, 0.4);
   background: rgba(255, 106, 0, 0.04);
+  min-width: 0;
+}
+
+/* Sub-navigation inside Edit: quieter than the primary row so the hierarchy
+   reads at a glance rather than looking like ten equal choices. */
+.hud-tabs--sub {
+  background: rgba(255, 106, 0, 0.02);
+  border-bottom: 1px solid rgba(255, 106, 0, 0.22);
+}
+.hud-tabs--sub .hud-tab {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.hud-tabs--sub .hud-tab.is-active {
+  opacity: 1;
+}
+
+/* Divider between the two nav levels when landscape folds them onto one row,
+   so nine tabs still read as "five destinations, then what's inside Edit". */
+/* Vertical rail form of the sub-nav, for Project in landscape where a
+   full-width strip wasted 722px of empty row. */
+.hud-tabs--sub .hud-tabs__strip .hud-tab {
+  white-space: nowrap;
+}
+
+.hud-tabs__divider {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 6px;
+  background: rgba(255, 106, 0, 0.45);
+}
+
+/* The tabs themselves live in their own strip so they can scroll independently
+   while the help button stays pinned and reachable. */
+.hud-tabs__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .hud-tab {
   font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0.02em;
   padding: 6px 12px;
   color: rgba(255, 106, 0, 0.6);
   border: 1px solid transparent;
@@ -365,12 +448,38 @@
   transform-origin: 50% 20px;
   box-shadow: 0 0 4px var(--hud-orange-bright);
 }
+/* This was a dashed circle drawn identically whatever the knob was set to:
+   twelve knobs on the Sound panel meant twelve identical rings of texture and
+   not one of them told you anything. Same pixels, now they are the value —
+   a 270° sweep from the knob's 7-o'clock start, filled to where it sits. */
 .knob__ring {
   position: absolute;
-  inset: -4px;
+  inset: -3px;
   border-radius: 50%;
-  border: 1px dashed rgba(255, 106, 0, 0.25);
   pointer-events: none;
+  /* Deliberately dimmer and thinner than the pointer: the pointer is what you
+     read, the arc is context. At full brightness and 3px it turned every knob
+     into a glowing donut and three of them shouted over the panel title. */
+  background: conic-gradient(
+    from 225deg,
+    rgba(255, 106, 0, 0.75) 0deg var(--knob-arc, 0deg),
+    rgba(255, 106, 0, 0.13) var(--knob-arc, 0deg) 270deg,
+    transparent 270deg
+  );
+  /* Keep only a 2px annulus — without this the gradient fills the whole disc
+     and swallows the knob face. */
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px));
+  mask: radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px));
+}
+
+/* Horizontal meter, for the landscape mixer rows. */
+.meter--h {
+  flex-direction: row;
+  width: auto;
+  height: 5px;
+}
+.meter--h .meter__bar {
+  transform-origin: left center;
 }
 
 /* Display window (7-seg-ish) */
@@ -379,7 +488,7 @@
   border: 1px solid rgba(255, 106, 0, 0.5);
   padding: 4px 8px;
   font-family: var(--font-display);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.04em;
   color: var(--hud-orange-bright);
   text-shadow: 0 0 6px rgba(255, 106, 0, 0.5);
   display: inline-flex;
@@ -423,49 +532,101 @@
 button, .hud-btn { touch-action: manipulation; }
 .touch-target { min-width: 44px; min-height: 44px; }
 
-/* ---------------- MOBILE / PHONE LAYOUT ---------------- */
-@media (max-width: 720px) {
+/* ---------------- SCROLL AFFORDANCE ---------------- *
+ * Any strip that can run wider than its container. Keeping the overflow on a
+ * shared utility means a row can never silently clip content off-screen — the
+ * failure mode that hid UNDO/REDO/SAVE on a phone.                            */
+.hud-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.hud-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.hud-scroll-x > * {
+  flex: 0 0 auto;
+}
+
+/* Fades the right edge so a scrollable strip reads as "there is more". */
+.hud-scroll-fade {
+  position: relative;
+  min-width: 0;
+}
+.hud-scroll-fade::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(2, 2, 2, 0.92));
+}
+
+/* ---------------- PHONE LAYOUT (EITHER ORIENTATION) ---------------- *
+ * Matches useLayoutMode.ts PHONE_QUERY — keep the two in sync.               */
+@media (max-width: 720px), (max-height: 560px) {
   html {
-    font-size: 13px;
+    font-size: 15px;
   }
 
-  /* Tabs become a single swipeable row instead of wrapping */
   .hud-tabs {
+    padding: 4px 6px;
+  }
+  /* Single swipeable row instead of wrapping — every tab stays reachable. */
+  .hud-tabs__strip {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 4px 6px;
+    overscroll-behavior-x: contain;
   }
-  .hud-tabs::-webkit-scrollbar {
+  .hud-tabs__strip::-webkit-scrollbar {
     display: none;
   }
+  /* Navigation is how you find your way around; it earns more type, not less.
+     At 9px it was smaller than the body text it organised — the scale was
+     upside down at the top. There is ~230px of slack on the widest row
+     (Edit, both tab levels), so this costs nothing. */
   .hud-tab {
     flex: 0 0 auto;
     padding: 8px 10px;
-    font-size: 9px;
+    font-size: 12px;
+  }
+  /* Second-level tabs read as subordinate by size, not just by a divider. */
+  .hud-tab[data-tab='editor'] {
+    font-size: 11px;
+    opacity: 0.88;
+  }
+  /* Landscape folds both tab levels onto one row, and both active tabs were
+     getting the same filled box and underline — two identical "you are here"
+     boxes in one strip, which answers the question twice and settles neither.
+     The primary level keeps the box; the editor level keeps only the
+     underline, so the strip reads as section then page. */
+  .hud-tab[data-tab='editor'].is-active {
+    background: transparent;
+    border-color: transparent;
+    opacity: 1;
   }
 
-  /* Tighter chrome */
   .hud-btn {
     padding: 7px 9px;
-    letter-spacing: 0.12em;
-    min-height: 38px;
+    letter-spacing: 0.02em;
   }
   .hud-btn--icon {
     padding: 6px 7px;
-    min-width: 38px;
-  }
-  .touch-target {
-    min-width: 40px;
-    min-height: 40px;
   }
   .hex-frame {
     padding: 7px 8px;
   }
+  /* A section heading smaller than the values under it is not a heading. */
   .hex-frame__title {
-    font-size: 8px;
-    letter-spacing: 0.18em;
+    font-size: 11px;
+    letter-spacing: 0.04em;
   }
   .display--big {
     font-size: 18px;
@@ -486,21 +647,215 @@ button, .hud-btn { touch-action: manipulation; }
     display: none;
   }
 
-  /* Slightly thicker scrollbars so panels can still be grabbed */
+  /* A 24px orange grid painted behind nine views. On a desktop with air around
+     the panels it reads as backdrop; at 923x336 with controls edge to edge it
+     crosses every frame border and, in the arrangement, sits behind the beat
+     grid — a grid that means nothing directly underneath one that does. */
+  .hex-grid-bg {
+    background-image: none;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 }
 
-/* Coarse-pointer (touch) tuning regardless of width */
+/* ---------------- SHORT VIEWPORT (PHONE LANDSCAPE) ---------------- *
+ * ~411px of height total, so vertical space is the scarce resource: every row
+ * of chrome is bought out of the timeline. Compress aggressively.            */
+@media (max-height: 560px) {
+  html {
+    font-size: 14px;
+  }
+
+  /* Padding and type shrink on a short viewport, but NOT the tap area — the
+     44px floor below is what makes the app operable by thumb, and trading it
+     away for a couple of pixels of height is what made this unusable before. */
+  .hud-btn {
+    padding: 4px 8px;
+  }
+  .hud-btn--icon {
+    padding: 4px 6px;
+  }
+  .hud-tab {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  .hud-tabs {
+    padding: 2px 6px;
+  }
+  .hex-frame {
+    padding: 5px 7px;
+  }
+  /* 8px x ~20 framed panels across Effects, Sound, Automation, Project and the
+     mixer. Highest-leverage single rule in the short-viewport block. */
+  .hex-frame__title {
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+  }
+  .display--big {
+    font-size: 15px;
+    min-height: 26px;
+  }
+  /* Decorative chrome is the first thing to go when height is scarce. */
+  .scanlines::before,
+  .crt-flicker::after {
+    display: none;
+  }
+  .knob {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
+
+/* ---------------- TOUCH TARGET FLOOR ---------------- *
+ * The single most important rule for the Android build. Every interactive
+ * control gets a 44px minimum on a coarse pointer, regardless of viewport.
+ * This is deliberately NOT relaxed on short viewports: a control you cannot
+ * reliably hit is not worth the pixels it saves.
+ *
+ * Anything that genuinely cannot be 44px (grid cells, piano keys, timeline
+ * clips) opts out with .no-touch-floor and must provide its own affordance.  */
 @media (pointer: coarse) {
+  .hud-btn,
+  .hud-tab,
+  .touch-target,
+  select.display,
+  button {
+    min-height: 44px;
+  }
+  .hud-btn--icon,
+  .touch-target {
+    min-width: 44px;
+  }
+  /* Track-lane buttons live in a fixed-height row; the row grows to suit. */
+  .hud-btn--tight {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px 6px;
+  }
+
+  .no-touch-floor,
+  .no-touch-floor button,
+  .no-touch-floor select,
+  [data-overlap-ok] button,
+  .clip-affordance {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /* A timeline clip can be ~80x48, so its delete control cannot be 44px and
+     cannot borrow space from outside either — the clip clips its own overflow,
+     so an enlarged pseudo-element hit area would just be cut off. Take the
+     largest target the clip can actually hold and leave it there; selecting the
+     clip and editing it is the primary path on touch. */
+  .clip-affordance {
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+  }
+
+  /* Fat thumb, and a taller track so the thumb has something to sit on. */
+  .hud-slider {
+    height: 12px;
+  }
   .hud-slider::-webkit-slider-thumb {
-    width: 22px;
-    height: 24px;
+    width: 26px;
+    height: 30px;
   }
   .hud-slider::-moz-range-thumb {
-    width: 22px;
-    height: 24px;
+    width: 26px;
+    height: 30px;
+  }
+
+  /* Keyboard-only hints are noise on a touch device. */
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* A horizontal slider in a row: 44px of hit box, 12px of visible track.
+   Deliberately scoped — applying this to every .hud-slider would add 32px to
+   each slider in Sound, Effects, Automation and the track sheet, and the
+   vertical mixer faders inherit .hud-slider too.
+   
+   This block MUST stay after the generic `.hud-slider { height: 12px }` above.
+   Both selectors are one class, so the cascade is decided by source order, and
+   while this sat earlier in the file the mixer row slider silently collapsed
+   from a 44px hit box to 12px — a thumb-hostile control on the one screen made
+   entirely of sliders — and the 30px thumb spilled 9px past the row into its
+   neighbour. */
+@media (pointer: coarse) {
+  input.hud-slider--row {
+    height: 44px;
+    background: transparent;
+    border: 0;
+  }
+  input.hud-slider--row::-webkit-slider-runnable-track {
+    height: 12px;
+    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
+    border: 1px solid rgba(255, 106, 0, 0.5);
+  }
+  input.hud-slider--row::-moz-range-track {
+    height: 12px;
+    background: linear-gradient(to right, var(--hud-orange-deep), var(--hud-orange));
+    border: 1px solid rgba(255, 106, 0, 0.5);
+  }
+}
+
+/* ---------------- SHEET ---------------- *
+ * Where controls go when a row has no room for them. Continuous parameters get
+ * the full width of the screen here instead of the ~40px a track header could
+ * spare, which is the difference between 6 dB per pixel and 0.2.             */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: linear-gradient(180deg, rgba(20, 10, 4, 0.98), rgba(6, 4, 3, 0.99));
+  border-top: 1px solid var(--hud-orange);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+}
+
+.sheet__grab {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 106, 0, 0.5);
+  margin: 2px auto 10px;
+}
+
+.sheet__row {
+  margin-bottom: 14px;
+}
+
+/* Full-bleed slider: the whole point of the sheet. */
+.sheet__slider {
+  width: 100%;
+  height: 14px;
+}
+
+/* Volume and pan share a row when height is the scarce resource. */
+@media (max-height: 560px) {
+  .sheet__rows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 14px;
+  }
+  .sheet__row {
+    margin-bottom: 8px;
   }
 }

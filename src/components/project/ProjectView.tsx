@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { useStore, saveProjectToStorage, loadProjectFromStorage, PROJECT_STORAGE_KEY } from '../../state/store';
+import { useStore, saveProjectToStorage, loadProjectFromStorage, migrateNames, PROJECT_STORAGE_KEY } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import {
   deleteSlot,
@@ -14,8 +14,25 @@ import { midiInput } from '../../audio/midiInput';
 import { subscribeMidiOut, getMidiOutSnapshot } from '../../audio/midiOutput';
 import { audioBufferToWav } from '../../audio/wav';
 import { projectDurationSec, type TempoEvent } from '../../audio/types';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
+
+/**
+ * Project used to be one unbroken scroll: tempo, a tempo map, MIDI clock,
+ * a slot library, save/load, a raw JSON box and a note about dev servers, all
+ * at the same level with nothing to say which you wanted. They answer three
+ * different questions, so they now sit behind three named sections and you
+ * land on the one people actually come here for.
+ */
+type Section = 'song' | 'files' | 'advanced';
+
+const SECTIONS: { id: Section; label: string; hint: string }[] = [
+  { id: 'song', label: 'Song', hint: 'Name, tempo, time signature, length' },
+  { id: 'files', label: 'Saving', hint: 'Saved songs, export, bounce to audio' },
+  { id: 'advanced', label: 'Advanced', hint: 'MIDI clock, raw project data, install' },
+];
 
 export function ProjectView() {
+  const land = useLayoutMode() === 'phone-landscape';
   const project = useStore((s) => s.project);
   const newProject = useStore((s) => s.newProject);
   const importProject = useStore((s) => s.importProject);
@@ -26,6 +43,7 @@ export function ProjectView() {
 
   const [json, setJson] = useState('');
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [section, setSection] = useState<Section>('song');
 
   useEffect(() => {
     const raw = localStorage.getItem(PROJECT_STORAGE_KEY);
@@ -49,10 +67,36 @@ export function ProjectView() {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }} className="hex-grid-bg">
-      <HexFrame title="PROJECT // COMMAND DECK">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-          <Field label="NAME">
+    <div
+      style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: land ? 'row' : 'column' }}
+      className="hex-grid-bg"
+    >
+      <div
+        className="hud-tabs hud-tabs--sub"
+        style={land ? { flexDirection: 'column', alignItems: 'stretch', borderBottom: 'none', borderRight: '1px solid rgba(255,106,0,0.22)', flex: '0 0 auto' } : undefined}
+      >
+        <div className="hud-tabs__strip" style={land ? { flexDirection: 'column', flexWrap: 'nowrap' } : undefined}>
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              className={`hud-tab ${section === s.id ? 'is-active' : ''}`}
+              onClick={() => setSection(s.id)}
+              title={s.hint}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {section === 'song' && (
+      <>
+      <HexFrame title="Song settings">
+        {/* 140 not 200: at 200 a phone got one field per row and the four
+            short numeric fields each ate a full-width box. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+          <Field label="Name">
             <input
               className="display"
               style={{ width: '100%' }}
@@ -60,7 +104,7 @@ export function ProjectView() {
               onChange={(e) => useStore.setState({ project: { ...project, name: e.target.value, updatedAt: Date.now() } })}
             />
           </Field>
-          <Field label="BPM">
+          <Field label="Tempo (BPM)">
             <input
               className="display"
               type="number"
@@ -72,7 +116,7 @@ export function ProjectView() {
               style={{ width: '100%' }}
             />
           </Field>
-          <Field label="TIME">
+          <Field label="Time signature">
             <div style={{ display: 'flex', gap: 4 }}>
               <input
                 className="display"
@@ -81,13 +125,17 @@ export function ProjectView() {
                 max={16}
                 value={project.numerator}
                 onChange={(e) => setTimeSig(parseInt(e.target.value), project.denominator)}
+                aria-label="Beats per bar"
                 style={{ width: 60 }}
               />
               <span style={{ alignSelf: 'center' }}>/</span>
+              {/* The wrapping <label> names the first control only, so this one
+                  needs its own or it reads as an unnamed dropdown. */}
               <select
                 className="display"
                 value={project.denominator}
                 onChange={(e) => setTimeSig(project.numerator, parseInt(e.target.value))}
+                aria-label="Beat length"
               >
                 {[2, 4, 8, 16].map((d) => (
                   <option key={d} value={d}>{d}</option>
@@ -95,7 +143,7 @@ export function ProjectView() {
               </select>
             </div>
           </Field>
-          <Field label="BARS">
+          <Field label="Length (bars)">
             <input
               className="display"
               type="number"
@@ -106,8 +154,12 @@ export function ProjectView() {
               style={{ width: '100%' }}
             />
           </Field>
-          <Field label={`SWING ${Math.round((project.swing ?? 0) * 100)}%`}>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {/* Two columns wide. A 1fr column here is ~150px, and the field's own
+              floor is 190 (120 of slider travel plus the 1/8 vs 1/16 select),
+              so as a single column it pushed 30px of the select past the right
+              edge of the viewport with only 8px of scroll to recover it. */}
+          <Field label={`Swing — ${Math.round((project.swing ?? 0) * 100)}%`} span={2}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', minWidth: 0 }}>
               <input
                 type="range"
                 className="hud-slider"
@@ -116,13 +168,17 @@ export function ProjectView() {
                 step={0.01}
                 value={project.swing ?? 0}
                 onChange={(e) => setSwing(parseFloat(e.target.value), project.swingSubdivision ?? '8n')}
-                style={{ flex: 1 }}
+                aria-label="Swing amount"
+                // a floor, not just flex: with the section rail taking width in
+                // landscape this collapsed to 48px of travel
+                style={{ flex: 1, minWidth: 120 }}
               />
               <select
                 className="display"
                 value={project.swingSubdivision ?? '8n'}
                 onChange={(e) => setSwing(project.swing ?? 0, e.target.value)}
-                title="Swing grid"
+                aria-label="Swing note length"
+                title="Whether swing is applied to 1/8 or 1/16 notes"
               >
                 <option value="8n">1/8</option>
                 <option value="16n">1/16</option>
@@ -133,12 +189,12 @@ export function ProjectView() {
       </HexFrame>
 
       <TempoMapEditor />
+      </>
+      )}
 
-      <MidiSyncPanel />
-
-      <SlotLibrary />
-
-      <HexFrame title="STORAGE // SAVE / LOAD">
+      {section === 'files' && (
+      <>
+      <HexFrame title="This song">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             className="hud-btn"
@@ -146,23 +202,50 @@ export function ProjectView() {
               saveProjectToStorage();
               setSavedAt(new Date().toLocaleString());
             }}
+            title="Keep the current song on this device"
           >
-            💾 SAVE TO BROWSER
+            Save now
           </button>
           <button
             className="hud-btn"
             onClick={() => {
-              if (!loadProjectFromStorage()) alert('No saved project found.');
+              if (!loadProjectFromStorage()) alert('Nothing has been saved on this device yet.');
+            }}
+            title="Go back to the last saved version, losing changes since"
+          >
+            Revert to saved
+          </button>
+          <button
+            className="hud-btn hud-btn--rec"
+            onClick={() => {
+              if (confirm('Start a new song? Anything unsaved will be lost.')) newProject();
             }}
           >
-            ⤓ LOAD FROM BROWSER
+            New song
           </button>
-          <button className="hud-btn" onClick={exportFile}>⬇ EXPORT JSON</button>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
+            {savedAt ? `Last saved ${savedAt}` : 'Saves by itself every 20 seconds'}
+          </span>
+        </div>
+      </HexFrame>
+
+      <SlotLibrary />
+
+      <HexFrame title="Bounce to audio">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <OfflineBounceButton />
           <OfflineStemsButton />
           <StemBounceButton />
+        </div>
+      </HexFrame>
+
+      <HexFrame title="Move between devices">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="hud-btn" onClick={exportFile} title="Download the song as a file you can keep or share">
+            Export song file
+          </button>
           <label className="hud-btn" style={{ cursor: 'pointer' }}>
-            ⬆ IMPORT JSON
+            Import song file
             <input
               type="file"
               accept="application/json"
@@ -176,27 +259,30 @@ export function ProjectView() {
               style={{ display: 'none' }}
             />
           </label>
-          <button
-            className="hud-btn hud-btn--rec"
-            onClick={() => {
-              if (confirm('Discard current project and start new?')) newProject();
-            }}
-          >
-            ⌫ NEW PROJECT
-          </button>
-          {savedAt && (
-            <span className="hud-readout--green hud-readout">LAST SAVE: {savedAt}</span>
-          )}
         </div>
       </HexFrame>
+      </>
+      )}
 
-      <HexFrame title="RAW DATA">
+      {section === 'advanced' && (
+      <>
+      <MidiSyncPanel />
+
+      <InstallBanner />
+
+      <HexFrame title="Project data" variant="soft">
+        <p className="hud-readout--dim hud-readout" style={{ margin: '0 0 8px', fontSize: 12 }}>
+          The whole song as text. Editing this by hand can break it &mdash; export a file first.
+        </p>
         <textarea
           className="display"
-          rows={10}
+          rows={3}
           value={json || exportProject()}
           onChange={(e) => setJson(e.target.value)}
-          style={{ width: '100%', minHeight: 220, fontFamily: 'var(--font-data)', fontSize: 11 }}
+          aria-label="Project data as JSON"
+          // 84, not 220: at 220 the only non-textarea drag surface shrank to
+          // 2px and Apply first appeared at scrollTop 252.
+          style={{ width: '100%', minHeight: 84, overscrollBehavior: 'contain', fontFamily: 'var(--font-data)', fontSize: 13 }}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button
@@ -207,22 +293,16 @@ export function ProjectView() {
               setJson('');
             }}
           >
-            APPLY JSON
+            Apply
           </button>
-          <button className="hud-btn hud-btn--ghost" onClick={() => setJson(exportProject())}>RELOAD</button>
+          <button className="hud-btn hud-btn--ghost" onClick={() => setJson(exportProject())}>
+            Discard edits
+          </button>
         </div>
       </HexFrame>
-
-      <InstallBanner />
-
-      <HexFrame title="TAILSCALE // iOS NOTE" variant="green">
-        <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6 }}>
-          The dev server binds to <span className="hud-value">0.0.0.0:5273</span>. From your iPhone connected to the
-          same Tailnet, open <span className="hud-value">http://{'<machine-name>'}.tail-scale.ts.net:5273</span> (or the
-          tailnet IP). For a more app-like feel, use Safari → Share → Add to Home Screen. The manifest registers a
-          standalone display + iOS status-bar styling.
-        </p>
-      </HexFrame>
+      </>
+      )}
+      </div>
     </div>
   );
 }
@@ -269,7 +349,7 @@ function InstallBanner() {
   if (standalone || installed || !prompt) return null;
 
   return (
-    <HexFrame title="INSTALL // PWA" variant="green">
+    <HexFrame title="Install as an app" variant="green">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           className="hud-btn hud-btn--green"
@@ -283,23 +363,27 @@ function InstallBanner() {
             setPrompt(null);
           }}
         >
-          ⬇ INSTALL TO HOME
+          Add to home screen
         </button>
-        <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
-          Run LOSTBOARD as a standalone app, with safe-area insets honored on
-          phone screens.
+        <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
+          Opens LostBoard like any other app, full screen, without the browser bar.
         </span>
       </div>
     </HexFrame>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * A real <label> wrapping the control, not a <span> sitting above it — so the
+ * caption is the control's accessible name and tapping the caption focuses the
+ * field. As a span, the song-name box had no name at all.
+ */
+function Field({ label, children, span }: { label: string; children: React.ReactNode; span?: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span className="hud-label" style={{ fontSize: 9 }}>{label}</span>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: span ? `span ${span}` : undefined, minWidth: 0 }}>
+      <span className="hud-label" style={{ fontSize: 12 }}>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 
@@ -345,7 +429,7 @@ function SlotLibrary() {
 
   async function load(slot: ProjectSlot) {
     if (!confirm(`Load "${slot.name}"? Unsaved changes to the current project will be lost.`)) return;
-    loadProject(slot.project);
+    loadProject(migrateNames(slot.project));
     // re-decode persisted audio after a load, since samples may have been
     // added in another slot's session
     rehydrateSamples().then((n) => {
@@ -372,36 +456,39 @@ function SlotLibrary() {
   }
 
   return (
-    <HexFrame title="PROJECT LIBRARY // SLOTS">
+    <HexFrame title="Saved songs">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="hud-btn hud-btn--green" onClick={saveAsNew}>
-            + SAVE AS NEW SLOT
+          <button className="hud-btn hud-btn--green" onClick={saveAsNew} title="Keep a named copy you can come back to">
+            + Save a copy
           </button>
-          <button className="hud-btn hud-btn--ghost" onClick={refresh} title="Re-read the slot list">
-            ↻ REFRESH
+          <button className="hud-btn hud-btn--ghost" onClick={refresh} title="Re-read the list">
+            Refresh
           </button>
           <button
             className="hud-btn hud-btn--ghost"
             onClick={async () => {
-              if (!confirm('Delete persisted audio samples not referenced by any slot or the current project?')) return;
+              if (!confirm('Delete recorded audio that no saved song uses any more?')) return;
               const n = await gcOrphanedSamples();
-              alert(n === 0 ? 'No orphaned samples found.' : `Removed ${n} orphaned sample${n === 1 ? '' : 's'}.`);
+              alert(n === 0 ? 'Nothing to clean up.' : `Freed ${n} unused recording${n === 1 ? '' : 's'}.`);
             }}
-            title="Garbage-collect audio samples no project references any more"
+            title="Delete recorded audio that no saved song refers to any more"
           >
-            ⌫ GC SAMPLES
+            Free up space
           </button>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
-            {slots.length} slot{slots.length === 1 ? '' : 's'} · stored in browser IndexedDB
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
+            {slots.length} saved on this device
           </span>
         </div>
+        {/* Capped and scrollable: with four saved songs, zero rows were
+            visible and nothing on screen said any existed. */}
         {slots.length === 0 ? (
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
-            No saved slots yet. Save the current project to create one.
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
+            Nothing saved yet. &ldquo;Save a copy&rdquo; keeps the song you have now under a name of its own, so you
+            can try something else without losing it.
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', overscrollBehavior: 'contain' }}>
             {slots.map((slot) => (
               <div
                 key={slot.id}
@@ -415,39 +502,42 @@ function SlotLibrary() {
                   flexWrap: 'wrap',
                 }}
               >
-                <span className="hud-value" style={{ minWidth: 160, fontSize: 11 }}>
+                <span className="hud-value" style={{ minWidth: 160, fontSize: 13 }}>
                   {slot.name}
                 </span>
-                <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+                <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
                   {new Date(slot.savedAt).toLocaleString()}
                 </span>
-                <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
-                  {slot.project.tracks.length}t · {slot.project.bpm.toFixed(0)} bpm
+                <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
+                  {slot.project.tracks.length} track{slot.project.tracks.length === 1 ? '' : 's'} ·{' '}
+                  {slot.project.bpm.toFixed(0)} BPM
                 </span>
                 <div style={{ flex: 1 }} />
-                <button className="hud-btn hud-btn--icon" onClick={() => load(slot)} title="Load this slot">
-                  ⤓ LOAD
+                <button className="hud-btn hud-btn--tight" onClick={() => load(slot)} title={`Open ${slot.name}`}>
+                  Open
                 </button>
                 <button
-                  className="hud-btn hud-btn--icon"
+                  className="hud-btn hud-btn--tight"
                   onClick={() => overwrite(slot)}
-                  title="Overwrite with current project"
+                  title={`Replace ${slot.name} with the song you have open now`}
                 >
-                  ↻ OVR
+                  Replace
                 </button>
                 <button
-                  className="hud-btn hud-btn--icon"
+                  className="hud-btn hud-btn--tight"
                   onClick={() => exportSlot(slot)}
-                  title="Download as JSON"
+                  aria-label={`Export ${slot.name} as a file`}
+                  title="Download as a file"
                 >
-                  ⬇
+                  Export
                 </button>
                 <button
-                  className="hud-btn hud-btn--icon hud-btn--rec"
+                  className="hud-btn hud-btn--tight hud-btn--rec"
                   onClick={() => remove(slot)}
-                  title="Delete this slot"
+                  aria-label={`Delete ${slot.name}`}
+                  title={`Delete ${slot.name}`}
                 >
-                  ✕
+                  Delete
                 </button>
               </div>
             ))}
@@ -477,8 +567,20 @@ function MidiSyncPanel() {
   const midi = useSyncExternalStore(subscribeMidiOut, getMidiOutSnapshot, getMidiOutSnapshot);
   const portName = midi.ports.find((p) => p.id === midi.selectedId)?.name;
 
+  // Android WebView has no Web MIDI. Showing two permanently-disabled buttons
+  // plus an apology is worse than showing one sentence.
+  if (!midi.supported) {
+    return (
+      <HexFrame title="MIDI sync" variant="soft">
+        <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13 }}>
+          This device can&rsquo;t talk MIDI to other gear, so clock sync is unavailable here.
+        </p>
+      </HexFrame>
+    );
+  }
+
   return (
-    <HexFrame title="MIDI SYNC // CLOCK">
+    <HexFrame title="MIDI sync">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
@@ -491,14 +593,12 @@ function MidiSyncPanel() {
             disabled={!midi.supported}
             aria-pressed={midiClockOut}
           >
-            ⧖ CLOCK OUT {midiClockOut ? 'ON' : 'OFF'}
+            Send clock: {midiClockOut ? 'on' : 'off'}
           </button>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
-            {!midi.supported
-              ? 'Web MIDI unavailable in this browser.'
-              : midiClockOut
-                ? `24-PPQN clock → ${portName ?? 'no output port'}`
-                : 'Sync external gear to the transport tempo.'}
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
+            {midiClockOut
+              ? `Other gear follows this tempo, via ${portName ?? 'no output chosen yet'}`
+              : 'Make other gear follow this song’s tempo.'}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -512,12 +612,12 @@ function MidiSyncPanel() {
             disabled={!midi.supported}
             aria-pressed={midiClockIn}
           >
-            ⧗ CLOCK IN {midiClockIn ? 'ON' : 'OFF'}
+            Follow clock: {midiClockIn ? 'on' : 'off'}
           </button>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 10 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {midiClockIn
-              ? 'Transport follows an incoming external clock — it owns the tempo.'
-              : 'Lock the transport to an external MIDI clock.'}
+              ? 'This song follows the other device’s tempo — the tempo box here is ignored.'
+              : 'Follow another device’s tempo instead of this song’s.'}
           </span>
         </div>
       </div>
@@ -586,13 +686,13 @@ function TempoCurve({
       </svg>
       <span
         className="hud-readout--dim hud-readout"
-        style={{ position: 'absolute', top: 2, left: 4, fontSize: 8 }}
+        style={{ position: 'absolute', top: 2, left: 4, fontSize: 11 }}
       >
         {hi.toFixed(0)} BPM
       </span>
       <span
         className="hud-readout--dim hud-readout"
-        style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 8 }}
+        style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 11 }}
       >
         {lo.toFixed(0)} BPM
       </span>
@@ -618,43 +718,43 @@ function TempoMapEditor() {
   const projectBeats = project.lengthBars * project.numerator;
 
   return (
-    <HexFrame title="TEMPO MAP // BPM AUTOMATION">
+    <HexFrame title="Tempo changes">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             className="hud-btn hud-btn--green"
             onClick={() => addTempoEvent(events.length === 0 ? 0 : projectBeats / 2, project.bpm)}
           >
-            + ADD EVENT
+            + Add a change
           </button>
           {events.length > 0 && (
             <button className="hud-btn hud-btn--ghost" onClick={() => clearTempoMap()}>
-              ✕ CLEAR MAP
+              Clear all
             </button>
           )}
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {events.length === 0
-              ? `flat — using ${project.bpm.toFixed(1)} BPM throughout`
-              : `${events.length} event${events.length === 1 ? '' : 's'}`}
+              ? `Steady ${project.bpm.toFixed(1)} BPM the whole way through`
+              : `${events.length} change${events.length === 1 ? '' : 's'}`}
           </span>
         </div>
         {events.length > 0 && <TempoCurve events={events} projectBpm={project.bpm} projectBeats={projectBeats} />}
         {events.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', overscrollBehavior: 'contain' }}>
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: '70px 1fr 1fr 100px 60px',
                 gap: 6,
                 padding: '4px 8px',
-                fontSize: 9,
+                fontSize: 12,
               }}
               className="hud-readout--dim hud-readout"
             >
               <span>#</span>
-              <span>BEAT</span>
+              <span>Beat</span>
               <span>BPM</span>
-              <span>CURVE</span>
+              <span>Shape</span>
               <span></span>
             </div>
             {events.map((ev, i) => (
@@ -670,7 +770,7 @@ function TempoMapEditor() {
                   alignItems: 'center',
                 }}
               >
-                <span className="hud-value" style={{ fontSize: 11 }}>EV-{String(i + 1).padStart(2, '0')}</span>
+                <span className="hud-value" style={{ fontSize: 13 }}>{i + 1}</span>
                 <input
                   className="display"
                   type="number"
@@ -695,11 +795,12 @@ function TempoMapEditor() {
                   value={ev.curve ?? 'step'}
                   onChange={(e) => updateTempoEvent(ev.id, { curve: e.target.value as 'step' | 'ramp' })}
                   disabled={i === 0}
-                  title={i === 0 ? 'First event — no curve into it' : 'Step jumps; ramp glides linearly from previous BPM'}
+                  aria-label={`Shape into change ${i + 1}`}
+                  title={i === 0 ? 'Nothing comes before the first change' : 'Jump changes tempo at once; glide slides there from the tempo before'}
                   style={{ width: '100%' }}
                 >
-                  <option value="step">⌐ step</option>
-                  <option value="ramp">╱ ramp</option>
+                  <option value="step">⌐ Jump</option>
+                  <option value="ramp">╱ Glide</option>
                 </select>
                 <button
                   className="hud-btn hud-btn--icon hud-btn--rec"
@@ -712,9 +813,8 @@ function TempoMapEditor() {
             ))}
           </div>
         )}
-        <p className="hud-readout--dim hud-readout" style={{ fontSize: 9, margin: 0 }}>
-          Events fire on their beat. An event at beat 0 overrides the project
-          BPM as the starting tempo. Affects offline bounce duration too.
+        <p className="hud-readout--dim hud-readout" style={{ fontSize: 12, margin: 0 }}>
+          Each change takes effect on its beat. One placed at beat 0 sets the tempo the song starts at.
         </p>
       </div>
     </HexFrame>
@@ -738,7 +838,7 @@ function OfflineBounceButton() {
 
   async function bounce() {
     if (sessionMode) {
-      alert('Switch back to ARRANGEMENT mode in the SESSION tab first.');
+      alert('Switch the Clips tab back to playing the Timeline first — tracks bounce from the song timeline, not from launched loops.');
       return;
     }
     setRunning(true);
@@ -766,7 +866,7 @@ function OfflineBounceButton() {
       disabled={running}
       title="Render the full project to WAV faster-than-real-time (Tone.Offline)"
     >
-      {running ? '⌛ RENDERING…' : '⚡ BOUNCE WAV'}
+      {running ? 'Bouncing…' : 'Whole song to WAV'}
     </button>
   );
 }
@@ -788,7 +888,7 @@ function OfflineStemsButton() {
 
   async function bounce() {
     if (sessionMode) {
-      alert('Switch back to ARRANGEMENT mode in the SESSION tab first.');
+      alert('Switch the Clips tab back to playing the Timeline first — tracks bounce from the song timeline, not from launched loops.');
       return;
     }
     if (!confirm(`Render ${project.tracks.length} offline stems? Usually faster than real-time.`)) return;
@@ -823,7 +923,7 @@ function OfflineStemsButton() {
       disabled={running}
       title="Render each track to its own WAV faster-than-real-time"
     >
-      {running ? `⌛ STEMS ${Math.round(progress * 100)}%` : '⚡⬇ OFFLINE STEMS'}
+      {running ? `Bouncing tracks… ${Math.round(progress * 100)}%` : 'Each track to its own WAV'}
     </button>
   );
 }
@@ -849,7 +949,7 @@ function StemBounceButton() {
 
   async function bounce() {
     if (sessionMode) {
-      alert('Switch back to ARRANGEMENT mode in the SESSION tab first — stems bounce from the arrangement timeline.');
+      alert('Switch the Clips tab back to playing the Timeline first — tracks bounce from the song timeline, not from launched loops.');
       return;
     }
     if (!confirm(`Bounce ${project.tracks.length} stems? Playback runs for ~${durationSec.toFixed(1)}s.`)) return;
@@ -885,7 +985,7 @@ function StemBounceButton() {
       disabled={busy}
       title="Bounce each track to its own audio file (real-time playthrough)"
     >
-      {running ? `⌛ BOUNCING ${Math.round(progress * 100)}%` : '⬇⬇ STEMS'}
+      {running ? `Recording tracks… ${Math.round(progress * 100)}%` : 'Each track, recorded live'}
     </button>
   );
 }

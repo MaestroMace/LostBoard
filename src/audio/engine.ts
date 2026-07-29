@@ -53,6 +53,9 @@ class Engine {
   async init() {
     if (this.inited) return;
     await Tone.start();
+    // Must complete before any live node is constructed — Tone.Offline swaps
+    // the global context while it renders.
+    await ensureMetallicBuffers();
     Tone.getContext().lookAhead = 0.03;
     this.masterGain = new Tone.Gain(0.9);
     this.master = new Tone.Limiter(-1);
@@ -557,19 +560,40 @@ class Engine {
     if (sorted[0].beat <= 0.0001) {
       t.bpm.value = sorted[0].bpm;
     }
+    // A ramp event's beat is where the glide ARRIVES, so the ramp has to be
+    // scheduled at the START of the segment leading up to it. Asking for
+    // `linearRampToValueAtTime(bpm, time)` inside a callback that fires AT the
+    // event's beat sets the target to the current instant, which Web Audio
+    // resolves as an immediate jump: 'ramp' was audibly identical to 'step',
+    // while projectDurationSec sized the bounce for a glide that never played.
+    //
+    // Ramping needs the segment's wall-clock length, and that is the same
+    // average-tempo integral projectDurationSec uses: N beats gliding a → b
+    // last N * 60 / ((a + b) / 2) seconds.
+    let prevBeat = 0;
+    let prevBpm = sorted[0].beat <= 0.0001 ? sorted[0].bpm : project.bpm;
     for (const ev of sorted) {
-      if (ev.beat <= 0.0001) continue;
-      const id = t.schedule((time) => {
-        if (ev.curve === 'ramp') {
-          // chains from whatever was scheduled before — Web Audio ramps
-          // from the prior automation event's value, so consecutive ramp
-          // events produce piecewise-linear BPM glides
-          t.bpm.linearRampToValueAtTime(ev.bpm, time);
-        } else {
+      if (ev.beat <= 0.0001) {
+        prevBpm = ev.bpm;
+        continue;
+      }
+      if (ev.curve === 'ramp') {
+        const segBeats = ev.beat - prevBeat;
+        const segSec = segBeats > 0 ? (segBeats / ((prevBpm + ev.bpm) / 2)) * 60 : 0;
+        const target = ev.bpm;
+        const id = t.schedule((time) => {
+          t.bpm.setValueAtTime(t.bpm.value, time);
+          t.bpm.linearRampToValueAtTime(target, time + segSec);
+        }, beatsToBarsBeats(prevBeat));
+        this.scheduledIds.push(id);
+      } else {
+        const id = t.schedule((time) => {
           t.bpm.setValueAtTime(ev.bpm, time);
-        }
-      }, beatsToBarsBeats(ev.beat));
-      this.scheduledIds.push(id);
+        }, beatsToBarsBeats(ev.beat));
+        this.scheduledIds.push(id);
+      }
+      prevBeat = ev.beat;
+      prevBpm = ev.bpm;
     }
   }
 
@@ -1393,17 +1417,73 @@ class FmInstrument implements Instrument {
   }
 }
 
+/**
+ * Pre-rendered metallic drum buffers, rendered once per session.
+ *
+ * Tone.Offline swaps the GLOBAL Tone context for the duration of the render,
+ * so any live node constructed while it runs binds to the offline context and
+ * later throws "cannot connect to an AudioNode belonging to a different audio
+ * context". It therefore has to complete before the engine builds anything.
+ */
+const METALLIC_SPECS: {
+  pad: MetallicPad;
+  opts: ConstructorParameters<typeof Tone.MetalSynth>[0];
+  dur: string;
+  secs: number;
+  voices: number;
+}[] = [
+  { pad: 'hatClosed', opts: { envelope: { attack: 0.001, decay: 0.04, release: 0.02 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }, dur: '32n', secs: 0.4, voices: 2 },
+  { pad: 'hatOpen', opts: { envelope: { attack: 0.001, decay: 0.3, release: 0.2 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }, dur: '8n', secs: 0.7, voices: 3 },
+  { pad: 'rim', opts: { envelope: { attack: 0.001, decay: 0.02, release: 0.01 }, harmonicity: 12, modulationIndex: 16, resonance: 7000, octaves: 0.5 }, dur: '32n', secs: 0.3, voices: 2 },
+  { pad: 'cymbal', opts: { envelope: { attack: 0.001, decay: 1.5, release: 1.5 }, harmonicity: 8, modulationIndex: 64, resonance: 6000, octaves: 1.2 }, dur: '2n', secs: 1.6, voices: 3 },
+];
+
+let metallicBuffers: Map<MetallicPad, Tone.ToneAudioBuffer> | null = null;
+let metallicRender: Promise<void> | null = null;
+
+/**
+ * Render the four metallic voices to buffers.
+ *
+ * Tone.MetalSynth is six FM oscillators, and a Web Audio oscillator can only
+ * start once — so every hi-hat allocated ~12 native nodes, and because Tone
+ * routes through standardized-audio-context each connect ran a recursive graph
+ * walk (detectCycles). On a phone-class CPU that walk measured ~40% of all
+ * script time, and hats are the densest voice in most patterns. Rendering the
+ * same synth offline keeps the timbre while collapsing a hit to one buffer.
+ */
+function ensureMetallicBuffers(): Promise<void> {
+  if (metallicBuffers) return Promise.resolve();
+  metallicRender ??= (async () => {
+    const out = new Map<MetallicPad, Tone.ToneAudioBuffer>();
+    for (const s of METALLIC_SPECS) {
+      out.set(
+        s.pad,
+        await Tone.Offline(() => {
+          new Tone.MetalSynth(s.opts).toDestination().triggerAttackRelease(s.dur, 0, 1);
+        }, s.secs),
+      );
+    }
+    metallicBuffers = out;
+  })().catch((e) => {
+    // Leave metallicBuffers null; DrumInstrument falls back to live synths.
+    console.warn('drum prerender failed, using live metal synths', e);
+  });
+  return metallicRender;
+}
+
 class DrumInstrument implements Instrument {
   kind = 'drum' as const;
   output: Tone.Gain;
   private kick: Tone.MembraneSynth;
   private snare: Tone.NoiseSynth;
   private clap: Tone.NoiseSynth;
-  private hatClosed: Tone.MetalSynth;
-  private hatOpen: Tone.MetalSynth;
   private tom: Tone.MembraneSynth;
-  private rim: Tone.MetalSynth;
-  private cymbal: Tone.MetalSynth;
+  /** Only constructed when the pre-rendered buffers are unavailable. */
+  private hatClosed?: Tone.MetalSynth;
+  private hatOpen?: Tone.MetalSynth;
+  private rim?: Tone.MetalSynth;
+  private cymbal?: Tone.MetalSynth;
+  private oneShots = new Map<MetallicPad, OneShot>();
 
   constructor() {
     this.output = new Tone.Gain(1);
@@ -1420,53 +1500,45 @@ class DrumInstrument implements Instrument {
       noise: { type: 'pink' },
       envelope: { attack: 0.003, decay: 0.25, sustain: 0 },
     });
-    this.hatClosed = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.04, release: 0.02 },
-      harmonicity: 5.1,
-      modulationIndex: 32,
-      resonance: 4000,
-      octaves: 1.5,
-    });
-    this.hatOpen = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.3, release: 0.2 },
-      harmonicity: 5.1,
-      modulationIndex: 32,
-      resonance: 4000,
-      octaves: 1.5,
-    });
     this.tom = new Tone.MembraneSynth({
       pitchDecay: 0.06,
       octaves: 3,
       envelope: { attack: 0.005, decay: 0.3, sustain: 0, release: 0.2 },
     });
-    this.rim = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.02, release: 0.01 },
-      harmonicity: 12,
-      modulationIndex: 16,
-      resonance: 7000,
-      octaves: 0.5,
-    });
-    this.cymbal = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 1.5, release: 1.5 },
-      harmonicity: 8,
-      modulationIndex: 64,
-      resonance: 6000,
-      octaves: 1.2,
-    });
+
+    if (metallicBuffers) {
+      // Cheap path: players are connected once here, and a hit costs one
+      // buffer source instead of six FM oscillators.
+      for (const spec of METALLIC_SPECS) {
+        const buf = metallicBuffers.get(spec.pad);
+        if (buf) this.oneShots.set(spec.pad, new OneShot(buf, this.output, spec.voices));
+      }
+    } else {
+      for (const spec of METALLIC_SPECS) {
+        const synth = new Tone.MetalSynth(spec.opts);
+        if (spec.pad === 'hatClosed') this.hatClosed = synth;
+        else if (spec.pad === 'hatOpen') this.hatOpen = synth;
+        else if (spec.pad === 'rim') this.rim = synth;
+        else this.cymbal = synth;
+        synth.connect(this.output);
+      }
+    }
 
     this.kick.connect(this.output);
     this.snare.connect(this.output);
     this.clap.connect(this.output);
-    this.hatClosed.connect(this.output);
-    this.hatOpen.connect(this.output);
     this.tom.connect(this.output);
-    this.rim.connect(this.output);
-    this.cymbal.connect(this.output);
   }
 
   triggerAt(pad: number | DrumPad, vel: number, _dur: string | number, time: number) {
     const v = Math.max(0.05, vel);
     const pp = typeof pad === 'string' ? pad : 'kick';
+    const shot = this.oneShots.get(pp as MetallicPad);
+    if (shot) {
+      const scale = pp === 'hatClosed' ? 0.4 : pp === 'hatOpen' ? 0.35 : pp === 'rim' ? 0.45 : 0.35;
+      shot.play(time, v * scale);
+      return;
+    }
     switch (pp) {
       case 'kick':
         this.kick.triggerAttackRelease('C1', '8n', time, v);
@@ -1478,19 +1550,19 @@ class DrumInstrument implements Instrument {
         this.clap.triggerAttackRelease('16n', time, v * 0.9);
         break;
       case 'hatClosed':
-        this.hatClosed.triggerAttackRelease('32n', time, v * 0.4);
+        this.hatClosed?.triggerAttackRelease('32n', time, v * 0.4);
         break;
       case 'hatOpen':
-        this.hatOpen.triggerAttackRelease('8n', time, v * 0.35);
+        this.hatOpen?.triggerAttackRelease('8n', time, v * 0.35);
         break;
       case 'tom':
         this.tom.triggerAttackRelease('G2', '8n', time, v);
         break;
       case 'rim':
-        this.rim.triggerAttackRelease('32n', time, v * 0.45);
+        this.rim?.triggerAttackRelease('32n', time, v * 0.45);
         break;
       case 'cymbal':
-        this.cymbal.triggerAttackRelease('2n', time, v * 0.35);
+        this.cymbal?.triggerAttackRelease('2n', time, v * 0.35);
         break;
     }
   }
@@ -1503,12 +1575,51 @@ class DrumInstrument implements Instrument {
     this.kick.dispose();
     this.snare.dispose();
     this.clap.dispose();
-    this.hatClosed.dispose();
-    this.hatOpen.dispose();
     this.tom.dispose();
-    this.rim.dispose();
-    this.cymbal.dispose();
+    // Only present on the fallback path.
+    this.hatClosed?.dispose();
+    this.hatOpen?.dispose();
+    this.rim?.dispose();
+    this.cymbal?.dispose();
+    this.oneShots.forEach((s) => s.dispose());
+    this.oneShots.clear();
     this.output.dispose();
+  }
+}
+
+type MetallicPad = 'hatClosed' | 'hatOpen' | 'rim' | 'cymbal';
+
+/**
+ * A pre-rendered percussive hit, played from a buffer.
+ *
+ * The players are constructed and connected once; only the buffer source
+ * inside each start() is per-hit, which is the cheapest thing Web Audio can do
+ * for a one-shot. Several players are round-robined so a ringing voice (open
+ * hat, cymbal) is not choked by the next hit.
+ */
+class OneShot {
+  private players: Tone.Player[];
+  private next = 0;
+
+  constructor(buffer: Tone.ToneAudioBuffer, out: Tone.Gain, voices: number) {
+    this.players = Array.from({ length: Math.max(1, voices) }, () =>
+      new Tone.Player({ url: buffer, fadeOut: 0.01 }).connect(out),
+    );
+  }
+
+  play(time: number, vel: number) {
+    const p = this.players[this.next];
+    this.next = (this.next + 1) % this.players.length;
+    p.volume.value = Tone.gainToDb(Math.max(0.02, Math.min(1, vel)));
+    try {
+      p.start(time);
+    } catch {
+      /* retriggered inside its own fade-out — safe to drop */
+    }
+  }
+
+  dispose() {
+    this.players.forEach((p) => p.dispose());
   }
 }
 

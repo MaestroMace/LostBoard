@@ -63,14 +63,14 @@ export const DRUM_PADS: DrumPad[] = [
 ];
 
 export const DRUM_LABELS: Record<DrumPad, string> = {
-  kick: 'KICK',
-  snare: 'SNR',
-  clap: 'CLP',
-  hatClosed: 'HHC',
-  hatOpen: 'HHO',
-  tom: 'TOM',
-  rim: 'RIM',
-  cymbal: 'CYM',
+  kick: 'Kick',
+  snare: 'Snare',
+  clap: 'Clap',
+  hatClosed: 'Hi-hat',
+  hatOpen: 'Open hat',
+  tom: 'Tom',
+  rim: 'Rim',
+  cymbal: 'Cymbal',
 };
 
 export type Note = {
@@ -277,17 +277,17 @@ export type AutomationLane = {
 };
 
 export const AUTOMATION_PARAM_META: Record<AutomationParam, { label: string; min: number; max: number; step: number; unit: string }> = {
-  volume: { label: 'VOLUME', min: -60, max: 6, step: 0.5, unit: 'dB' },
-  pan: { label: 'PAN', min: -1, max: 1, step: 0.05, unit: '' },
-  cutoff: { label: 'CUTOFF', min: 50, max: 18000, step: 10, unit: 'Hz' },
-  reverb: { label: 'REVERB', min: 0, max: 1, step: 0.01, unit: '' },
-  delay: { label: 'DELAY', min: 0, max: 1, step: 0.01, unit: '' },
-  eqLow: { label: 'EQ LOW', min: -24, max: 24, step: 0.5, unit: 'dB' },
-  eqMid: { label: 'EQ MID', min: -24, max: 24, step: 0.5, unit: 'dB' },
-  eqHigh: { label: 'EQ HIGH', min: -24, max: 24, step: 0.5, unit: 'dB' },
-  compThreshold: { label: 'COMP THRES', min: -60, max: 0, step: 0.5, unit: 'dB' },
-  compRatio: { label: 'COMP RATIO', min: 1, max: 20, step: 0.5, unit: '' },
-  bitcrush: { label: 'BITCRUSH', min: 1, max: 16, step: 1, unit: 'bit' },
+  volume: { label: 'Volume', min: -60, max: 6, step: 0.5, unit: 'dB' },
+  pan: { label: 'Pan', min: -1, max: 1, step: 0.05, unit: '' },
+  cutoff: { label: 'Filter cutoff', min: 50, max: 18000, step: 10, unit: 'Hz' },
+  reverb: { label: 'Reverb send', min: 0, max: 1, step: 0.01, unit: '' },
+  delay: { label: 'Delay send', min: 0, max: 1, step: 0.01, unit: '' },
+  eqLow: { label: 'Tone: low', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  eqMid: { label: 'Tone: mid', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  eqHigh: { label: 'Tone: high', min: -24, max: 24, step: 0.5, unit: 'dB' },
+  compThreshold: { label: 'Compressor threshold', min: -60, max: 0, step: 0.5, unit: 'dB' },
+  compRatio: { label: 'Compressor ratio', min: 1, max: 20, step: 0.5, unit: '' },
+  bitcrush: { label: 'Bit crush', min: 1, max: 16, step: 1, unit: 'bit' },
 };
 
 /**
@@ -314,7 +314,18 @@ export type TempoEvent = {
  * events. Step segments contribute `(beats / bpm) * 60`; ramp segments
  * use `(beats / avgBpm) * 60` because a linear BPM ramp from `a` to `b`
  * across N beats lasts `N * 60 / ((a + b) / 2)` seconds.
- * `endBeat` exclusive. Empty tempo map → just uses `project.bpm`.
+ * Empty tempo map → just uses `project.bpm`.
+ *
+ * A ramp event's beat is where the glide ARRIVES, so the glide itself happens
+ * in the segment before it. Two boundary cases follow from that and both used
+ * to be wrong, because the loop bailed on `ev.beat >= endBeat`:
+ *
+ *  - A ramp sitting exactly on `endBeat` glides entirely inside the range, so
+ *    it must be counted. Dropping it measured the segment at the old flat
+ *    tempo — a project whose last bar ends on a tempo change bounced to a
+ *    length computed for music that never played.
+ *  - A ramp beyond `endBeat` is entered partway. The tempo at `endBeat` is the
+ *    interpolated value, and the segment's average runs between the two.
  */
 export function projectDurationSec(project: Project, endBeat: number): number {
   const map = (project.tempoMap ?? []).slice().sort((a, b) => a.beat - b.beat);
@@ -323,14 +334,16 @@ export function projectDurationSec(project: Project, endBeat: number): number {
   let total = 0;
   for (const ev of map) {
     if (ev.beat <= 0) continue;
-    if (ev.beat >= endBeat) break;
-    const segBeats = ev.beat - cursor;
-    if (ev.curve === 'ramp') {
-      const avg = (bpm + ev.bpm) / 2;
-      total += (segBeats / avg) * 60;
-    } else {
-      total += (segBeats / bpm) * 60;
+    if (ev.beat > endBeat) {
+      if (ev.curve === 'ramp' && ev.beat > cursor) {
+        const frac = (endBeat - cursor) / (ev.beat - cursor);
+        const bpmAtEnd = bpm + (ev.bpm - bpm) * frac;
+        return total + ((endBeat - cursor) / ((bpm + bpmAtEnd) / 2)) * 60;
+      }
+      break;
     }
+    const segBeats = ev.beat - cursor;
+    total += ev.curve === 'ramp' ? (segBeats / ((bpm + ev.bpm) / 2)) * 60 : (segBeats / bpm) * 60;
     cursor = ev.beat;
     bpm = ev.bpm;
   }

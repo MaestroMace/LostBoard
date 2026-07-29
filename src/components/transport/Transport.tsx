@@ -4,7 +4,8 @@ import { useStore, saveProjectToStorage } from '../../state/store';
 import { audioEngine } from '../../audio/engine';
 import { midiInput } from '../../audio/midiInput';
 import { transportClock, seek, usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useIsMobile';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
+import { Indicator, PositionReadout, AppMark } from '../hud/StatusBar';
 import { putSample } from '../../state/sampleDB';
 
 export function Transport() {
@@ -111,7 +112,7 @@ export function Transport() {
         putSample(result.id, result.blob).catch((e) => console.warn('persist failed', e));
         const trackId = recTrackId.current;
         if (trackId) {
-          addAudioClip(trackId, recStartBeat.current, result.id, result.duration, 'MIC TAKE');
+          addAudioClip(trackId, recStartBeat.current, result.id, result.duration, 'Mic take');
         }
       }
     } else {
@@ -161,7 +162,13 @@ export function Transport() {
 
   const [showBpmEdit, setShowBpmEdit] = useState(false);
   const isMobile = useIsMobile();
-  const lbl = (full: string) => (isMobile ? '' : ` ${full}`);
+  // Landscape drops the StatusBar entirely and carries its readouts here, so a
+  // 411px-tall viewport spends one row on chrome instead of two.
+  const mergedHeader = useLayoutMode() === 'phone-landscape';
+  // Portrait has room for the four controls you reach for constantly; the
+  // rest move into ⋯ rather than shrinking back into unlabelled symbols.
+  const compactStrip = useLayoutMode() === 'phone-portrait';
+  const lbl = (full: string) => ` ${full}`;
 
   return (
     <div
@@ -174,10 +181,25 @@ export function Transport() {
         borderBottom: '1px solid rgba(255,106,0,0.4)',
         flexWrap: 'wrap',
         contain: 'layout style',
+        // `contain: layout` makes this row a stacking context, which trapped
+        // the ⋯ menu inside it: the menu asked for z-index 40 but the whole row
+        // still painted below the view area that follows it in the DOM, so the
+        // timeline showed straight through the menu and the two sets of text
+        // sat on top of each other. Lifting the row lifts the menu with it.
+        position: 'relative',
+        zIndex: 30,
       }}
     >
-      <div style={{ display: 'flex', gap: 4 }}>
-        <button className="hud-btn touch-target" onClick={() => seek(0)} title="Return to start">
+      {mergedHeader && <AppMark size={22} />}
+      {/* Scrollable so this strip can never clip its own controls — it used to
+          push UNDO / REDO / SAVE past the right edge of a phone with no way to
+          reach them. On phones the rarely-used half moves into the ⋯ menu. */}
+      <div
+        className="hud-scroll-x"
+        data-scrollx
+        style={{ display: 'flex', gap: 4, minWidth: 0, flex: isMobile ? '1 1 auto' : '0 0 auto' }}
+      >
+        <button className="hud-btn touch-target" onClick={() => seek(0)} title="Back to start" aria-label="Back to start">
           ⏮
         </button>
         <button
@@ -186,10 +208,10 @@ export function Transport() {
           aria-pressed={playing}
           title="Play / Pause"
         >
-          {playing ? `⏸${lbl('PAUSE')}` : `▶${lbl('PLAY')}`}
+          {playing ? `⏸${lbl('Pause')}` : `▶${lbl('Play')}`}
         </button>
         <button className="hud-btn touch-target" onClick={stop} title="Stop">
-          ■{lbl('STOP')}
+          ■{lbl('Stop')}
         </button>
         <button
           className={`hud-btn hud-btn--rec touch-target ${micRecording ? 'is-active' : ''}`}
@@ -197,8 +219,9 @@ export function Transport() {
           aria-pressed={micRecording}
           title="Record from microphone into an audio track"
         >
-          ●{lbl(micRecording ? 'STOP REC' : 'MIC REC')}
+          ●{lbl(micRecording ? 'Stop' : 'Record')}
         </button>
+        {!compactStrip && (
         <button
           className={`hud-btn hud-btn--rec touch-target ${playing ? 'is-active' : ''}`}
           onClick={punchRecord}
@@ -208,84 +231,138 @@ export function Transport() {
               : 'Punch-in MIDI record at the playhead onto the armed synth track'
           }
         >
-          ⏺{lbl('PUNCH')}
+          {/* No glyph: this was ⏺, visually identical to Record's ● one button
+              to the left, so the icon distinguished nothing and the word did
+              all the work anyway. */}
+          Punch in
         </button>
-        <select
-          className="display touch-target"
-          value={countInBars}
-          onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
-          title="Count-in bars before a punch-in record"
-          style={{ minWidth: isMobile ? 44 : 64 }}
-        >
-          {[0, 1, 2, 4].map((n) => (
-            <option key={n} value={n}>
-              {isMobile ? `${n}` : `CI ${n}`}
-            </option>
-          ))}
-        </select>
-        <button
-          className={`hud-btn hud-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
-          onClick={toggleBounce}
-          aria-pressed={bouncing}
-          title="Bounce the master output to an audio file"
-        >
-          ⭳{lbl(bouncing ? 'STOP BOUNCE' : 'BOUNCE')}
-        </button>
-        <button
-          className={`hud-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
-          onClick={() => setLoop(!loopEnabled)}
-          aria-pressed={loopEnabled}
-          title="Loop"
-        >
-          ↻{lbl('LOOP')}
-        </button>
-        <button
-          className={`hud-btn touch-target ${metronome ? 'is-active' : ''}`}
-          onClick={() => setMetronome(!metronome)}
-          aria-pressed={metronome}
-          title="Metronome"
-        >
-          ⛬{lbl('CLICK')}
-        </button>
-        <button
-          className="hud-btn hud-btn--ghost touch-target"
-          onClick={undo}
-          disabled={!canUndo}
-          title="Undo"
-          style={{ opacity: canUndo ? 1 : 0.35 }}
-        >
-          ↶{lbl('UNDO')}
-        </button>
-        <button
-          className="hud-btn hud-btn--ghost touch-target"
-          onClick={redo}
-          disabled={!canRedo}
-          title="Redo"
-          style={{ opacity: canRedo ? 1 : 0.35 }}
-        >
-          ↷{lbl('REDO')}
-        </button>
-        <button
-          className="hud-btn hud-btn--ghost touch-target"
-          onClick={() => saveProjectToStorage()}
-          title="Save current project to local storage"
-        >
-          💾{lbl('SAVE')}
-        </button>
+        )}
+        {!isMobile && (
+          <select
+            className="display touch-target"
+            value={countInBars}
+            onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
+            title="Count-in bars before a punch-in record"
+            style={{ minWidth: 64 }}
+          >
+            {[0, 1, 2, 4].map((n) => (
+              <option key={n} value={n}>
+                CI {n}
+              </option>
+            ))}
+          </select>
+        )}
+        {!isMobile && (
+          <button
+            className={`hud-btn hud-btn--rec touch-target ${bouncing ? 'is-active' : ''}`}
+            onClick={toggleBounce}
+            aria-pressed={bouncing}
+            title="Bounce the master output to an audio file"
+          >
+            {lbl(bouncing ? 'Stop bounce' : 'Bounce').trim()}
+          </button>
+        )}
+        {!compactStrip && (
+          <>
+            <button
+              className={`hud-btn touch-target ${loopEnabled ? 'is-active' : ''}`}
+              onClick={() => setLoop(!loopEnabled)}
+              aria-pressed={loopEnabled}
+              title="Loop"
+            >
+              ↻{lbl('Loop')}
+            </button>
+            <button
+              className={`hud-btn touch-target ${metronome ? 'is-active' : ''}`}
+              onClick={() => setMetronome(!metronome)}
+              aria-pressed={metronome}
+              title="Metronome"
+            >
+              {/* ⛬ is a historic-site marker, not a metronome — it rendered as
+                  three floating dots and meant nothing. */}
+              Click
+            </button>
+          </>
+        )}
+        {!isMobile && (
+          <>
+            <button
+              className="hud-btn hud-btn--ghost touch-target"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo"
+              style={{ opacity: canUndo ? 1 : 0.35 }}
+            >
+              ↶{lbl('Undo')}
+            </button>
+            <button
+              className="hud-btn hud-btn--ghost touch-target"
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo"
+              style={{ opacity: canRedo ? 1 : 0.35 }}
+            >
+              ↷{lbl('Redo')}
+            </button>
+            <button
+              className="hud-btn hud-btn--ghost touch-target"
+              onClick={() => saveProjectToStorage()}
+              title="Save current project to local storage"
+            >
+              {lbl('Save').trim()}
+            </button>
+          </>
+        )}
       </div>
+
+      {isMobile && (
+        <TransportOverflow
+          compactStrip={compactStrip}
+          loopEnabled={loopEnabled}
+          setLoop={setLoop}
+          metronome={metronome}
+          setMetronome={setMetronome}
+          punchRecord={punchRecord}
+          bpm={bpm}
+          setBpm={setBpm}
+          bouncing={bouncing}
+          toggleBounce={toggleBounce}
+          countInBars={countInBars}
+          setCountInBars={setCountInBars}
+          undo={undo}
+          redo={redo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+        />
+      )}
+
+      {mergedHeader && (
+        <>
+          <div style={{ flex: 1, minWidth: 8 }} />
+          <Indicator label="Play" on={playing} color="green" />
+          {/* "Rec", not "REC" — it sits beside "Play" and was the only
+              shouted string left in the header. */}
+          <Indicator label="Rec" on={micRecording || bouncing} color="red" />
+          <PositionReadout numerator={tparams.numerator} />
+        </>
+      )}
 
       {!isMobile && <div style={{ flex: 1 }} />}
 
-      <button
-        className="hud-btn touch-target"
-        onClick={() => setShowBpmEdit((v) => !v)}
-        style={{ minWidth: isMobile ? 64 : 100 }}
-        title="Tempo"
-      >
-        {isMobile ? bpm.toFixed(0) : `TEMPO ${bpm.toFixed(1)}`}
-      </button>
-      <TapTempoButton compact={isMobile} setBpm={setBpm} />
-      {showBpmEdit && (
+      {/* Redundant on phones — tempo lives in the ⋯ menu with room to drag,
+          and this button was the one element forcing the row to wrap. */}
+      {!isMobile && (
+        <button
+          className="hud-btn touch-target"
+          onClick={() => setShowBpmEdit((v) => !v)}
+          style={{ minWidth: 100 }}
+          title="Tempo"
+        >
+          Tempo {bpm.toFixed(1)}
+        </button>
+      )}
+      {!isMobile && <TapTempoButton compact={false} setBpm={setBpm} />}
+      {!isMobile && showBpmEdit && (
         <input
           type="number"
           className="display"
@@ -298,25 +375,238 @@ export function Transport() {
         />
       )}
 
-      <input
-        className="hud-slider"
-        type="range"
-        min={60}
-        max={200}
-        step={0.5}
-        value={bpm}
-        onChange={(e) => setBpm(parseFloat(e.target.value))}
-        style={{ width: isMobile ? 100 : 160, flex: isMobile ? 1 : undefined }}
-      />
+      {!isMobile && (
+        <input
+          className="hud-slider"
+          type="range"
+          min={60}
+          max={200}
+          step={0.5}
+          value={bpm}
+          onChange={(e) => setBpm(parseFloat(e.target.value))}
+          style={{ width: 160 }}
+        />
+      )}
 
       <PreRollIndicator numerator={tparams.numerator} />
-      <PositionBar />
+      {/* Duplicates the bars:beats readout and is what tipped the row into
+          wrapping on a phone. */}
+      {!isMobile && <PositionBar />}
     </div>
   );
 }
 
 /**
- * PreRollIndicator — shows a "PRE-ROLL n" countdown while the transport is
+ * TransportOverflow — the ⋯ menu that holds the controls a phone row has no
+ * width for. Everything in here stays a real, labelled, finger-sized target
+ * rather than being dropped: on a phone SAVE and UNDO matter more than BOUNCE,
+ * and all three used to sit off the right edge of the screen entirely.
+ */
+function TransportOverflow({
+  compactStrip,
+  loopEnabled,
+  setLoop,
+  metronome,
+  setMetronome,
+  punchRecord,
+  bpm,
+  setBpm,
+  bouncing,
+  toggleBounce,
+  countInBars,
+  setCountInBars,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+}: {
+  compactStrip: boolean;
+  loopEnabled: boolean;
+  setLoop: (on: boolean) => void;
+  metronome: boolean;
+  setMetronome: (on: boolean) => void;
+  punchRecord: () => void;
+  bpm: number;
+  setBpm: (n: number) => void;
+  bouncing: boolean;
+  toggleBounce: () => void;
+  countInBars: number;
+  setCountInBars: (n: number) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const item: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '10px 12px',
+    minHeight: 42,
+    textAlign: 'left',
+    borderBottom: '1px solid rgba(255,106,0,0.18)',
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+      <button
+        className={`hud-btn touch-target ${open ? 'is-active' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="More transport controls"
+        title="More transport controls"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '110%',
+            right: 0,
+            zIndex: 40,
+            minWidth: 190,
+            // never taller than the viewport allows in landscape
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            // opaque, not 0.97: at 3% the bright clip colours behind a
+            // pop-up still read as ghost text through the panel
+            background: '#0a0705',
+            border: '1px solid rgba(255,106,0,0.6)',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.75)',
+          }}
+        >
+          {compactStrip && (
+            <>
+              <button
+                className={`hud-btn ${loopEnabled ? 'is-active' : ''}`}
+                style={item}
+                onClick={() => { setLoop(!loopEnabled); setOpen(false); }}
+              >
+                ↻ Loop {loopEnabled ? 'on' : 'off'}
+              </button>
+              <button
+                className={`hud-btn ${metronome ? 'is-active' : ''}`}
+                style={item}
+                onClick={() => { setMetronome(!metronome); setOpen(false); }}
+              >
+                Click {metronome ? 'on' : 'off'}
+              </button>
+              <button
+                className="hud-btn hud-btn--rec"
+                style={item}
+                onClick={() => { punchRecord(); setOpen(false); }}
+              >
+                ⏺ Punch in
+              </button>
+            </>
+          )}
+          <div style={{ ...item, display: 'block' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span className="hud-label" style={{ fontSize: 12 }}>Tempo</span>
+              <span className="hud-readout">{bpm.toFixed(1)} BPM</span>
+            </div>
+            <input
+              type="range"
+              className="hud-slider"
+              min={40}
+              max={220}
+              step={0.5}
+              value={bpm}
+              aria-label="Tempo"
+              onChange={(e) => setBpm(parseFloat(e.target.value))}
+              style={{ width: '100%', height: 14 }}
+            />
+          </div>
+          <button
+            className="hud-btn hud-btn--ghost"
+            style={{ ...item, opacity: canUndo ? 1 : 0.35 }}
+            disabled={!canUndo}
+            onClick={() => {
+              undo();
+              setOpen(false);
+            }}
+          >
+            ↶ Undo
+          </button>
+          <button
+            className="hud-btn hud-btn--ghost"
+            style={{ ...item, opacity: canRedo ? 1 : 0.35 }}
+            disabled={!canRedo}
+            onClick={() => {
+              redo();
+              setOpen(false);
+            }}
+          >
+            ↷ Redo
+          </button>
+          <button
+            className="hud-btn hud-btn--ghost"
+            style={item}
+            onClick={() => {
+              saveProjectToStorage();
+              setOpen(false);
+            }}
+          >
+            Save
+          </button>
+          <button
+            className={`hud-btn hud-btn--rec ${bouncing ? 'is-active' : ''}`}
+            style={item}
+            onClick={() => {
+              toggleBounce();
+              setOpen(false);
+            }}
+          >
+            {bouncing ? 'Stop bouncing' : 'Bounce to a file'}
+          </button>
+          <label style={{ ...item, borderBottom: 'none' }}>
+            <span className="hud-label" style={{ fontSize: 12, flex: 1 }}>
+              Count-in
+            </span>
+            <select
+              className="display"
+              value={countInBars}
+              onChange={(e) => setCountInBars(parseInt(e.target.value, 10))}
+              style={{ minWidth: 66, minHeight: 34 }}
+            >
+              {[0, 1, 2, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n === 0 ? 'None' : `${n} bar${n === 1 ? '' : 's'}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * PreRollIndicator — shows a "Pre-roll n" countdown while the transport is
  * inside the punch-in pre-roll (position before the MIDI record gate).
  * Renders nothing once recording is live, so it's invisible during normal
  * playback. Memoized + playhead-subscribed so only this leaf re-renders.
@@ -331,14 +621,14 @@ const PreRollIndicator = memo(function PreRollIndicator({ numerator }: { numerat
     <div
       className="hud-readout blink"
       style={{
-        fontSize: 10,
+        fontSize: 12,
         padding: '2px 8px',
         color: '#ff5a5a',
         border: '1px solid rgba(255,60,60,0.6)',
         whiteSpace: 'nowrap',
       }}
     >
-      ⏺ PRE-ROLL {barsLeft}
+      Pre-roll {barsLeft}
     </div>
   );
 });
@@ -391,7 +681,7 @@ const PositionBar = memo(function PositionBar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 9,
+          fontSize: 12,
         }}
       >
         {positionBeats.toFixed(2)} / {totalBeats}

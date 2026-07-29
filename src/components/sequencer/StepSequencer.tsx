@@ -7,6 +7,20 @@ import { usePlayhead } from '../../state/transportClock';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
 import { EditorTip } from '../hud/EditorTip';
 import { importSample } from '../../state/samples';
+import { useIsMobile, useLayoutMode } from '../../hooks/useLayoutMode';
+
+/**
+ * Step-grid geometry.
+ *
+ * On touch the cells take a fixed, finger-sized width and the grid scrolls,
+ * instead of dividing the viewport into 14px slivers nobody can hit. The grid
+ * template and the playhead cursor both read these constants, so the two can
+ * never drift apart — the cursor previously mirrored the template by hand in a
+ * calc() string.
+ */
+const LABEL_COL_W = 96;
+const GRID_GAP = 4;
+const TOUCH_CELL_W = 40;
 
 function cellBg(on: boolean, vel: number) {
   return on
@@ -15,6 +29,9 @@ function cellBg(on: boolean, vel: number) {
 }
 
 export function StepSequencer() {
+  // fixed, finger-sized cells on touch; the grid scrolls instead of shrinking
+  const touchCells = useIsMobile();
+  const land = useLayoutMode() === 'phone-landscape';
   const selectTrack = useStore((s) => s.selectTrack);
   const selectedClipId = useStore((s) => s.selectedClipIds[0] ?? null);
   const selectClip = useStore((s) => s.selectClip);
@@ -22,7 +39,7 @@ export function StepSequencer() {
   const setPatternLength = useStore((s) => s.setPatternLength);
 
   const { pool: drumTracks, active: activeTrack } = useActiveTrack('drum');
-  const [mode, setMode] = useState<'normal' | 'prob'>('normal');
+  const [mode, setMode] = useState<'normal' | 'vel' | 'prob'>('normal');
 
   const patternClips = useMemo(
     () => (activeTrack ? activeTrack.clips.filter((c) => c.kind === 'pattern') : []),
@@ -40,7 +57,7 @@ export function StepSequencer() {
   if (!activeTrack) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No drum track. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="No drum track">Add a drum track from the Song tab, then come back here to program a beat.</HexFrame>
       </div>
     );
   }
@@ -49,9 +66,9 @@ export function StepSequencer() {
     return (
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <HexFrame title={activeTrack.name}>
-          <p>This track has no pattern clip.</p>
+          <p>This track has no beat yet.</p>
           <button className="hud-btn" onClick={() => addClip(activeTrack.id, 0, 4)}>
-            CREATE PATTERN CLIP
+            Create a beat
           </button>
         </HexFrame>
       </div>
@@ -67,15 +84,25 @@ export function StepSequencer() {
           flex: 1,
           minHeight: 0,
           overflow: 'auto',
-          padding: 12,
+          padding: land ? 4 : 12,
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
+          gap: land ? 4 : 12,
         }}
         className="hex-grid-bg"
       >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span className="hud-label">STEP SEQUENCER // TRIAD VEGA</span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: land ? 4 : 8,
+          flexWrap: land ? 'nowrap' : 'wrap',
+          overflowX: land ? 'auto' : undefined,
+          height: land ? 44 : undefined,
+          flex: '0 0 auto',
+        }}
+      >
+        {!land && <span className="hud-label">Drum Sequencer</span>}
         <select className="display" value={activeTrack.id} onChange={(e) => selectTrack(e.target.value)}>
           {drumTracks.map((t) => (
             <option key={t.id} value={t.id}>
@@ -94,9 +121,9 @@ export function StepSequencer() {
           className="hud-btn"
           onClick={() => addClip(activeTrack.id, activeClip.start + activeClip.length, activeClip.length)}
         >
-          + PATTERN
+          + Pattern
         </button>
-        <span className="hud-readout">STEPS</span>
+        {!land && <span className="hud-readout" style={{ textTransform: 'none' }}>Length</span>}
         <select
           className="display"
           value={activeClip.pattern.length}
@@ -108,42 +135,62 @@ export function StepSequencer() {
           <option value={32}>32</option>
           <option value={64}>64</option>
         </select>
-        <div style={{ flex: 1 }} />
+        {!land && <div style={{ flex: 1 }} />}
+        {/* Two bare words side by side gave no clue they were a mode switch. */}
+        {!land && <span className="hud-label">Tapping sets</span>}
         <button
-          className={`hud-btn ${mode === 'normal' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--tight ${mode === 'normal' ? 'is-active' : ''}`}
           onClick={() => setMode('normal')}
           aria-pressed={mode === 'normal'}
-          title="Normal mode — tap toggles, drag sets velocity"
+          title="Tap a square to turn a hit on or off"
         >
-          NORM
+          Hits
         </button>
         <button
-          className={`hud-btn ${mode === 'prob' ? 'is-active' : ''}`}
+          className={`hud-btn hud-btn--tight ${mode === 'vel' ? 'is-active' : ''}`}
+          onClick={() => setMode('vel')}
+          aria-pressed={mode === 'vel'}
+          title="Tap a square to cycle how hard it hits: full, 3/4, half, quarter"
+        >
+          Loudness
+        </button>
+        <button
+          className={`hud-btn hud-btn--tight ${mode === 'prob' ? 'is-active' : ''}`}
           onClick={() => setMode('prob')}
           aria-pressed={mode === 'prob'}
-          title="Probability mode — tap cycles trigger chance (100/75/50/25%)"
+          title="Tap a square to set how often it actually plays: every time, 3 in 4, half, 1 in 4"
         >
-          PROB
+          Chance
         </button>
       </div>
 
-      <HexFrame title={`PATTERN // ${activeClip.name ?? activeClip.id}`}>
+      {/* noclip: .hex-frame carries a clip-path, and clip-path clips
+          DESCENDANTS. That is why every step past the frame edge was
+          amputated — at 16 steps in portrait, scrolled right, not one cell was
+          inside the box and the screen went blank. */}
+      <HexFrame className="hex-frame--noclip">
         <div style={{ position: 'relative' }}>
           <div
             style={{
               display: 'grid',
-              gap: 4,
+              columnGap: GRID_GAP,
+              // 2px rows in landscape is what makes five pads land in 230px.
+              // Do not go lower and do not buy height from the 44px cells.
+              rowGap: land ? 2 : GRID_GAP,
               // wider patterns get a min width per step so cells stay tappable; outer container will scroll
               // 80px label column (fits the pad name + sample-swap dropdown)
-              gridTemplateColumns: `80px repeat(${length}, minmax(${length > 16 ? 22 : 0}px, 1fr))`,
+              gridTemplateColumns: `${LABEL_COL_W}px repeat(${length}, ${
+                touchCells ? `${TOUCH_CELL_W}px` : `minmax(${length > 16 ? 22 : 0}px, 1fr)`
+              })`,
             }}
           >
-            <div />
-            {Array.from({ length }).map((_, i) => (
-              <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 8, opacity: 0.6 }}>
-                {i + 1}
-              </div>
-            ))}
+            {!land && <div />}
+            {!land &&
+              Array.from({ length }).map((_, i) => (
+                <div key={i} className="hud-readout" style={{ textAlign: 'center', fontSize: 11, opacity: 0.6 }}>
+                  {i + 1}
+                </div>
+              ))}
             {DRUM_PADS.map((pad) => (
               <PadRow
                 key={pad}
@@ -156,6 +203,7 @@ export function StepSequencer() {
             ))}
           </div>
           <StepCursor
+            touchCells={touchCells}
             length={length}
             clipStart={activeClip.start}
             clipLength={activeClip.length}
@@ -164,9 +212,9 @@ export function StepSequencer() {
       </HexFrame>
       </div>
       <EditorTip>
-        NORM tap to toggle · drag up/down for velocity · PROB tap to cycle 100/75/50/25% · pad dropdown swaps the
-        voice for any imported sample (◆ marks customised pads) · or drag an audio file straight onto a pad to
-        import + assign
+        Tap a square to turn a hit on or off. Switch &ldquo;Tapping sets&rdquo; to Loudness to set how hard a hit
+        lands, or Chance to make it play only some of the time. Drop an audio file onto a pad to use your own sound
+        there &mdash; ◆ marks a pad you have changed.
       </EditorTip>
     </div>
   );
@@ -177,10 +225,12 @@ const StepCursor = memo(function StepCursor({
   length,
   clipStart,
   clipLength,
+  touchCells,
 }: {
   length: number;
   clipStart: number;
   clipLength: number;
+  touchCells: boolean;
 }) {
   const positionBeats = usePlayhead();
   const localBeat = positionBeats - clipStart;
@@ -193,14 +243,18 @@ const StepCursor = memo(function StepCursor({
   // mirror the grid template: an 80px label column + `length` 1fr tracks
   // separated by 4px gaps (length gaps total, including the one after the
   // label column)
-  const colW = `((100% - 80px - ${length} * 4px) / ${length})`;
+  // Fixed-width cells make this exact; the fluid case still has to mirror the
+  // 1fr template.
+  const colW = touchCells
+    ? `${TOUCH_CELL_W}px`
+    : `((100% - ${LABEL_COL_W}px - ${length} * ${GRID_GAP}px) / ${length})`;
   return (
     <div
       style={{
         position: 'absolute',
         top: 0,
         bottom: 0,
-        left: `calc(80px + ${step + 1} * 4px + ${step} * ${colW})`,
+        left: `calc(${LABEL_COL_W}px + ${step + 1} * ${GRID_GAP}px + ${step} * ${colW})`,
         width: `calc(${colW})`,
         border: '1px solid var(--hud-green)',
         boxShadow: '0 0 8px rgba(0,255,136,0.5)',
@@ -224,7 +278,7 @@ const PadRow = memo(function PadRow({
   trackId: string;
   clipId: string;
   steps: Step[];
-  mode: 'normal' | 'prob';
+  mode: 'normal' | 'vel' | 'prob';
 }) {
   return (
     <>
@@ -314,7 +368,7 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
       <button
         onClick={() => audioEngine.trigger(trackId, pad, 0.9, '8n')}
         className="hud-btn hud-btn--icon"
-        style={{ fontSize: 9, padding: '3px 4px', width: '100%' }}
+        style={{ fontSize: 12, padding: '3px 4px', width: '100%' }}
         title={
           sampleId
             ? 'Custom sample assigned — click to preview · drop an audio file to replace'
@@ -324,26 +378,37 @@ const PadHeader = memo(function PadHeader({ pad, trackId }: { pad: DrumPad; trac
         {DRUM_LABELS[pad]}
         {sampleId && <span style={{ color: 'var(--hud-orange-bright)' }}> ◆</span>}
       </button>
+      {/* Only worth a row when there is something to choose. It used to render
+          permanently disabled under all eight pads, doubling the grid height. */}
+      {samples.length > 0 && (
       <select
         className="display"
         value={sampleId}
         onChange={(e) => setPadSample(trackId, pad, e.target.value || null)}
         title="Swap this pad's voice for a sample"
-        style={{ fontSize: 8, padding: '1px 2px', width: '100%' }}
-        disabled={samples.length === 0}
+        style={{ fontSize: 11, padding: '1px 2px', width: '100%' }}
       >
-        <option value="">SYNTH</option>
+        <option value="">Built-in sound</option>
         {samples.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
           </option>
         ))}
       </select>
+      )}
     </div>
   );
 });
 
 const PROB_CYCLE = [1, 0.75, 0.5, 0.25] as const;
+/** Loudness steps, cycled by tapping in 'vel' mode — the touch replacement for
+ *  a vertical drag the browser now owns. */
+const VEL_CYCLE = [1, 0.75, 0.5, 0.25];
+function nextVelocity(current: number): number {
+  const idx = VEL_CYCLE.findIndex((v) => Math.abs(v - current) < 0.01);
+  return VEL_CYCLE[(idx + 1) % VEL_CYCLE.length];
+}
+
 function nextProbability(current: number): number {
   const idx = PROB_CYCLE.findIndex((v) => Math.abs(v - current) < 0.01);
   return PROB_CYCLE[(idx + 1) % PROB_CYCLE.length];
@@ -368,8 +433,9 @@ const StepCell = memo(function StepCell({
   clipId: string;
   pad: DrumPad;
   index: number;
-  mode: 'normal' | 'prob';
+  mode: 'normal' | 'vel' | 'prob';
 }) {
+  const touchCell = useIsMobile();
   const toggleStep = useStore((s) => s.toggleStep);
   const setStepVelocity = useStore((s) => s.setStepVelocity);
   const setStepProbability = useStore((s) => s.setStepProbability);
@@ -414,6 +480,24 @@ const StepCell = memo(function StepCell({
     if (barRef.current) barRef.current.style.transform = `scaleX(${d.vel})`;
     if (btnRef.current) btnRef.current.style.background = cellBg(true, d.vel);
   }
+  /**
+   * The browser took the gesture over — a vertical pan, which `touch-action:
+   * pan-y` explicitly permits. Put the cell back the way it was and commit
+   * nothing. Wired to pointerup, this turned every swipe over a step into a
+   * toggle or a velocity change.
+   */
+  function cancel(e: React.PointerEvent) {
+    const d = drag.current;
+    drag.current = null;
+    try {
+      btnRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (!d) return;
+    if (barRef.current) barRef.current.style.transform = `scaleX(${d.startVel})`;
+    if (btnRef.current) btnRef.current.style.background = cellBg(on, d.startVel);
+  }
   function up(e: React.PointerEvent) {
     const d = drag.current;
     drag.current = null;
@@ -423,6 +507,8 @@ const StepCell = memo(function StepCell({
       // tap: prob mode cycles probability (on cells only), normal mode toggles
       if (mode === 'prob' && on) {
         setStepProbability(trackId, clipId, pad, index, nextProbability(prob));
+      } else if (mode === 'vel' && on) {
+        setStepVelocity(trackId, clipId, pad, index, nextVelocity(velocity));
       } else {
         toggleStep(trackId, clipId, pad, index);
       }
@@ -437,9 +523,9 @@ const StepCell = memo(function StepCell({
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
-      onPointerCancel={up}
+      onPointerCancel={cancel}
       style={{
-        height: 38,
+        height: touchCell ? 44 : 38,
         background: cellBg(on, velocity),
         border: on
           ? '1px solid var(--hud-orange)'
@@ -447,13 +533,20 @@ const StepCell = memo(function StepCell({
         boxShadow: on ? '0 0 6px rgba(255,106,0,0.5)' : 'none',
         position: 'relative',
         clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
-        touchAction: 'none',
+        // Step cells are ~79% of the working area, so with touchAction 'none'
+        // every one of them was a scroll dead zone: a 90px upward swipe moved
+        // the grid 0px and changed the step's velocity from 0.9 to 1.0. On
+        // touch the browser gets the vertical axis back and loudness moves to
+        // its own tap mode; a mouse keeps drag-for-velocity.
+        touchAction: touchCell ? 'pan-y' : 'none',
       }}
       aria-pressed={on}
       title={
         mode === 'prob'
-          ? 'Tap to cycle trigger probability'
-          : 'Tap to toggle · drag up/down for velocity'
+          ? 'Tap to cycle how often this plays'
+          : mode === 'vel'
+            ? 'Tap to cycle how hard this hits'
+            : 'Tap to turn this hit on or off'
       }
     >
       {on && prob < 1 && (
@@ -462,7 +555,7 @@ const StepCell = memo(function StepCell({
             position: 'absolute',
             top: 2,
             right: 3,
-            fontSize: 8,
+            fontSize: 11,
             lineHeight: 1,
             color: '#fff',
             textShadow: '0 0 3px #000',

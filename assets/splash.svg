@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#ffb066"/>
+      <stop offset="55%" stop-color="#ff6600"/>
+      <stop offset="100%" stop-color="#8a1f00"/>
+    </radialGradient>
+    <radialGradient id="bg" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#120a05"/>
+      <stop offset="60%" stop-color="#070605"/>
+      <stop offset="100%" stop-color="#050505"/>
+    </radialGradient>
+  </defs>
+  <rect width="2732" height="2732" fill="url(#bg)"/>
+  <g transform="translate(1366 1230) scale(4.2)">
+    <polygon points="0,-100 87,-50 87,50 0,100 -87,50 -87,-50" fill="none" stroke="url(#g)" stroke-width="6"/>
+    <polygon points="0,-72 62,-36 62,36 0,72 -62,36 -62,-36" fill="none" stroke="#ff6600" stroke-width="2" opacity="0.8"/>
+    <path d="M0 -62 L56 34 L-56 34 Z" fill="url(#g)"/>
+    <circle cx="-24" cy="52" r="5" fill="#ff6600" opacity="0.85"/>
+    <circle cx="0" cy="56" r="7" fill="url(#g)"/>
+    <circle cx="24" cy="52" r="5" fill="#ff6600" opacity="0.85"/>
+  </g>
+  <text x="1366" y="1720" text-anchor="middle" font-family="Orbitron, Arial, sans-serif" font-weight="900" font-size="150" letter-spacing="24" fill="#ff6600">LOSTBOARD</text>
+  <text x="1366" y="1810" text-anchor="middle" font-family="Consolas, monospace" font-weight="500" font-size="52" letter-spacing="16" fill="#7a3a10">T.R.I.A.D. DAW</text>
+</svg>

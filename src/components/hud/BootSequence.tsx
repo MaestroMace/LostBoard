@@ -1,26 +1,31 @@
 import { useEffect, useState } from 'react';
 
 const STAGES = [
-  '> CHECKING TRIAD SYSTEM ................. OK',
-  '> WAKING WEB AUDIO CONTEXT .............. OK',
-  '> SYNC VEGA / ALTAIR / DENEB ............ OK',
-  '> LOADING SAMPLE BANK / OSC PRESETS ..... OK',
-  '> ROUTING MASTER BUS // LIMITER -1.0dB .. OK',
-  '> HEX FIELD ENGAGED ..................... OK',
-  '> CLEAR FOR LAUNCH ......................',
+  'audio engine',
+  'instruments',
+  'samples',
+  'mixer',
+  'ready',
 ];
 
+/**
+ * Start screen.
+ *
+ * Browsers will not start audio without a user gesture, so the tap is real.
+ * The boot readout is kept because it gives the app its character — what was
+ * wrong before was that it *blocked*: seven lines at 220ms each with the Start
+ * button hidden until they finished, so launch took 2.7s every time. Now the
+ * lines race through in ~200ms and the button is live from the first frame, so
+ * the animation is something you can watch rather than something you wait on.
+ */
 export function BootSequence({ onDone }: { onDone: () => void }) {
+  const [starting, setStarting] = useState(false);
   const [step, setStep] = useState(0);
-  const [done, setDone] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
 
   useEffect(() => {
-    if (step < STAGES.length) {
-      const t = setTimeout(() => setStep(step + 1), 220);
-      return () => clearTimeout(t);
-    }
-    setDone(true);
+    if (step >= STAGES.length) return;
+    const t = setTimeout(() => setStep(step + 1), 45);
+    return () => clearTimeout(t);
   }, [step]);
 
   return (
@@ -28,67 +33,78 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'radial-gradient(circle at 50% 30%, #1a0a00, #050505 70%)',
+        background: 'radial-gradient(circle at 50% 35%, #17110c, #060606 70%)',
         zIndex: 5000,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        gap: 18,
+        gap: 20,
+        textAlign: 'center',
       }}
     >
-      <div className="warning-stripe" style={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
-      <div className="warning-stripe" style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} />
-      <div className="hex-field" style={{ position: 'absolute', inset: 0, opacity: 0.2 }} />
+      <Mark />
 
-      <TriadSeal />
-      <div className="hud-big" style={{ fontSize: 28, letterSpacing: '0.4em' }}>LOSTBOARD</div>
-      <div className="hud-label" style={{ fontSize: 11 }}>T.R.I.A.D. SYSTEM // TACTICAL AUDIO DECK</div>
-
-      <div
-        style={{
-          minWidth: 320,
-          maxWidth: 520,
-          width: '90vw',
-          background: 'rgba(0,0,0,0.7)',
-          border: '1px solid rgba(255,106,0,0.5)',
-          padding: 16,
-          fontFamily: 'var(--font-data)',
-          fontSize: 11,
-          color: 'var(--hud-orange-bright)',
-          lineHeight: 1.6,
-        }}
-      >
-        {STAGES.slice(0, step + 1).map((line, i) => (
-          <div key={i} style={{ opacity: i === step ? 1 : 0.7 }}>{line}</div>
-        ))}
-        {!done && <div className="blink">_</div>}
+      <div>
+        <div className="hud-big" style={{ fontSize: 30, letterSpacing: '0.14em' }}>
+          LostBoard
+        </div>
+        <div style={{ fontSize: 14, color: 'rgba(255,170,90,0.75)', marginTop: 6 }}>
+          Music sketchpad
+        </div>
       </div>
 
-      {done && (
-        <button
-          className="hud-btn hud-btn--green pulse"
-          onClick={() => {
-            setAcknowledged(true);
-            onDone();
-          }}
-          disabled={acknowledged}
-          style={{ minWidth: 220 }}
-        >
-          ACKNOWLEDGE & ENGAGE
-        </button>
-      )}
-      <div className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
-        AUTHORIZATION: DECK COMMANDER
+      {/* Fixed height so the button never shifts as lines land. */}
+      <div
+        style={{
+          width: '90vw',
+          maxWidth: 320,
+          height: 84,
+          padding: '8px 12px',
+          background: 'rgba(0,0,0,0.55)',
+          border: '1px solid rgba(255,106,0,0.35)',
+          fontFamily: 'var(--font-data)',
+          fontSize: 12,
+          lineHeight: 1.5,
+          textAlign: 'left',
+          color: 'rgba(255,170,90,0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        {STAGES.slice(Math.max(0, step - 3), step).map((line, i) => (
+          <div key={line} style={{ opacity: 0.45 + i * 0.18 }}>
+            <span style={{ opacity: 0.5 }}>›</span> {line} <span style={{ color: 'var(--hud-green)' }}>ok</span>
+          </div>
+        ))}
+        {step < STAGES.length && <span className="blink">▌</span>}
+      </div>
+
+      <button
+        className="hud-btn hud-btn--green pulse"
+        onClick={() => {
+          setStarting(true);
+          onDone();
+        }}
+        disabled={starting}
+        style={{ minWidth: 220, minHeight: 52, fontSize: 14, letterSpacing: '0.08em' }}
+      >
+        {starting ? 'Starting…' : 'Start'}
+      </button>
+
+      <div style={{ fontSize: 13, color: 'rgba(255,140,60,0.6)', maxWidth: 300 }}>
+        One tap is needed before the browser will let audio play.
       </div>
     </div>
   );
 }
 
-function TriadSeal() {
+function Mark() {
   return (
-    <svg viewBox="0 0 200 200" width="120" height="120" className="pulse">
+    <svg viewBox="0 0 200 200" width="96" height="96" aria-hidden>
       <defs>
         <radialGradient id="seal" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#ffb347" />
@@ -101,28 +117,8 @@ function TriadSeal() {
         stroke="url(#seal)"
         strokeWidth="3"
       />
-      <polygon
-        points="100,30 162,67 162,133 100,170 38,133 38,67"
-        fill="none"
-        stroke="#ff6600"
-        strokeWidth="1"
-        opacity="0.8"
-      />
-      <path d="M100 32 L154 126 L46 126 Z" fill="url(#seal)" />
-      <circle cx="76" cy="148" r="4" fill="#ff6600" opacity="0.8" />
-      <circle cx="100" cy="150" r="6" fill="url(#seal)" />
-      <circle cx="124" cy="148" r="4" fill="#ff6600" opacity="0.8" />
-      <text
-        x="100"
-        y="116"
-        textAnchor="middle"
-        fontFamily="Orbitron"
-        fontWeight="900"
-        fontSize="20"
-        fill="#0a0a0a"
-      >
-        TRIAD
-      </text>
+      <path d="M100 42 L150 130 L50 130 Z" fill="url(#seal)" />
+      <circle cx="100" cy="152" r="7" fill="url(#seal)" />
     </svg>
   );
 }

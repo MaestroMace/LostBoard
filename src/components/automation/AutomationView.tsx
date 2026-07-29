@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from '../../state/store';
 import { HexFrame } from '../hud/HexFrame';
 import {
@@ -8,13 +8,16 @@ import {
   type AutomationParam,
   type Track,
 } from '../../audio/types';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 const CURVE_MODES: AutomationCurve[] = ['linear', 'exponential', 'hold', 'step'];
-const CURVE_GLYPH: Record<AutomationCurve, string> = {
-  linear: '╱',
-  exponential: '⌒',
-  hold: '⎺',
-  step: '⌐',
+/** What the shape does, not what the code calls it. Kept short — this sits in
+ *  a ~96px column on a phone, and "Hold, then jump" truncated to "Hold, t…". */
+const CURVE_LABEL: Record<AutomationCurve, string> = {
+  linear: 'Slide',
+  exponential: 'Curve',
+  hold: 'Hold',
+  step: 'Jump',
 };
 
 const ALL_PARAMS: AutomationParam[] = [
@@ -49,6 +52,8 @@ export function AutomationView() {
   const tracks = useStore((s) => s.project.tracks);
   const selectedId = useStore((s) => s.selectedTrackId);
   const selectTrack = useStore((s) => s.selectTrack);
+  const land = useLayoutMode() === 'phone-landscape';
+  const [activeParam, setActiveParam] = useState<AutomationParam | null>(null);
 
   const active = useMemo(
     () => tracks.find((t) => t.id === selectedId) ?? tracks[0],
@@ -58,7 +63,7 @@ export function AutomationView() {
   if (!active) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No tracks. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="Nothing here yet">No tracks. Add one from the Song tab.</HexFrame>
       </div>
     );
   }
@@ -72,20 +77,22 @@ export function AutomationView() {
       style={{
         flex: 1,
         minHeight: 0,
-        overflow: 'auto',
-        padding: 12,
+        // landscape must not scroll: the lane fills the region instead
+        overflow: land ? 'hidden' : 'auto',
+        padding: land ? 6 : 12,
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: land ? 6 : 12,
       }}
       className="hex-grid-bg"
     >
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span className="hud-label">AUTOMATION // M.A.G.I. PARAM RAMPS</span>
+        <span className="hud-label">Automate</span>
         <select
           className="display"
           value={active.id}
           onChange={(e) => selectTrack(e.target.value)}
+          aria-label="Track to automate"
         >
           {tracks.map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
@@ -97,13 +104,42 @@ export function AutomationView() {
         )}
       </div>
 
+      {/* The empty state carries no heading: the tab you just pressed says
+          Automation, and this frame holds nothing but the explanation of it. A
+          heading that repeats the tab spends a row of a 336px viewport telling
+          you where you already know you are. */}
       {lanes.length === 0 ? (
-        <HexFrame title="NO AUTOMATION">
-          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 11 }}>
-            No automation lanes on this track yet. Use + ADD LANE above to start automating volume,
-            pan, filter cutoff, or a send.
+        <HexFrame>
+          <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+            Automation makes a control move on its own as the song plays &mdash; a filter opening up
+            over four bars, a fade at the end. Tap <b>Add</b> to pick what should move, then tap the
+            lane to place points.
           </p>
         </HexFrame>
+      ) : land ? (
+        <>
+          {/* One lane at a time. A single lane is ~380px tall and the region is
+              230px, so with two lanes nothing was ever fully on screen. */}
+          {lanes.length > 1 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', overflowX: 'auto', flex: '0 0 auto' }}>
+              {lanes.map((l) => (
+                <button
+                  key={l.param}
+                  className={`hud-tab ${(activeParam ?? lanes[0].param) === l.param ? 'is-active' : ''}`}
+                  aria-pressed={(activeParam ?? lanes[0].param) === l.param}
+                  onClick={() => setActiveParam(l.param)}
+                  style={{ flex: '0 0 auto' }}
+                >
+                  {AUTOMATION_PARAM_META[l.param].label}
+                </button>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const lane = lanes.find((l) => l.param === activeParam) ?? lanes[0];
+            return <LaneEditor key={lane.param} track={active} lane={lane} land />;
+          })()}
+        </>
       ) : (
         lanes.map((lane) => (
           <LaneEditor key={lane.param} track={active} lane={lane} />
@@ -146,8 +182,13 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className="hud-btn hud-btn--green" onClick={() => setOpen((v) => !v)}>
-        + ADD LANE
+      <button
+        className="hud-btn hud-btn--green"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title="Choose a control to automate on this track"
+      >
+        + Add
       </button>
       {open && (
         <div
@@ -155,14 +196,17 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
             position: 'absolute',
             right: 0,
             top: '110%',
-            display: 'flex',
-            flexDirection: 'column',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
             gap: 4,
-            background: 'rgba(0,0,0,0.95)',
+            background: '#0a0705',
             border: '1px solid rgba(255,106,0,0.5)',
             padding: 6,
             zIndex: 10,
-            minWidth: 160,
+            width: 'max-content',
+            maxWidth: 'calc(100vw - 24px)',
+            maxHeight: 'calc(100vh - 120px)',
+            overflowY: 'auto',
           }}
         >
           {unusedParams.map((p) => (
@@ -185,13 +229,41 @@ function AddLaneMenu({ track, unusedParams }: { track: Track; unusedParams: Auto
 
 const LANE_HEIGHT = 100;
 
+/** Midpoint of the widest gap between existing points. Pressing "+ Point"
+ *  twice used to stack two points on the identical pixel, after which neither
+ *  could be dragged off the other. */
+function nextGapBeat(sorted: { beat: number }[], projectBeats: number): number {
+  if (sorted.length === 0) return projectBeats / 2;
+  const edges = [0, ...sorted.map((p) => p.beat), projectBeats];
+  let best = projectBeats / 2;
+  let span = -1;
+  for (let i = 1; i < edges.length; i++) {
+    const d = edges[i] - edges[i - 1];
+    if (d > span) {
+      span = d;
+      best = edges[i - 1] + d / 2;
+    }
+  }
+  return best;
+}
+
+const POINT_ROW: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '20px 64px 76px 1fr 44px',
+  gap: 6,
+  padding: '2px 6px',
+  background: 'rgba(0,0,0,0.4)',
+  border: '1px solid rgba(255,106,0,0.2)',
+  alignItems: 'center',
+};
+
 /**
  * LaneEditor — one parameter's breakpoints, rendered as both a clickable
  * sparkline and a numeric table. Sparkline: x = beat (0..projectBeats),
  * y = value (param's min..max). Click empty area to add a point; drag a
  * point to move; double-click a point to delete it.
  */
-function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
+function LaneEditor({ track, lane, land = false }: { track: Track; lane: AutomationLane; land?: boolean }) {
   const project = useStore((s) => s.project);
   const addAutomationPoint = useStore((s) => s.addAutomationPoint);
   const updateAutomationPoint = useStore((s) => s.updateAutomationPoint);
@@ -216,8 +288,23 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
     return { beat, value };
   }
 
+  /**
+   * Adding a point is a TAP, resolved on pointerup, not a pointerdown.
+   * As a pointerdown handler on a touchAction:'none' surface, every attempt to
+   * scroll the view moved it 0px and wrote a junk point into the project
+   * instead — measured: scrollTop 0 -> 0, points 1 -> 2, on every try.
+   */
+  const tapStart = useRef<{ x: number; y: number; t: number } | null>(null);
   function background(e: React.PointerEvent<SVGSVGElement>) {
     if (e.target !== e.currentTarget) return;
+    tapStart.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }
+  function backgroundUp(e: React.PointerEvent<SVGSVGElement>) {
+    const st = tapStart.current;
+    tapStart.current = null;
+    if (!st || e.target !== e.currentTarget) return;
+    const moved = Math.hypot(e.clientX - st.x, e.clientY - st.y);
+    if (moved > 8 || performance.now() - st.t > 400) return;
     const d = clientToData(e.clientX, e.clientY);
     if (!d) return;
     addAutomationPoint(track.id, lane.param, d.beat, d.value);
@@ -236,6 +323,17 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
   }
   function pointUp() {
     dragging.current = null;
+  }
+  /**
+   * A gesture the browser claimed for panning must leave no state behind.
+   * pointerUp was wired to pointUp alone, which cleared the drag but left
+   * tapStart set from a swipe that never ended — so the next tap measured its
+   * travel from a stale origin and either added a point in the wrong place or
+   * refused to add one at all.
+   */
+  function gestureCancel() {
+    dragging.current = null;
+    tapStart.current = null;
   }
 
   const xFor = (beat: number) => (beat / projectBeats) * 100;
@@ -281,58 +379,84 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
     return segs.join(' ');
   })();
 
-  return (
-    <HexFrame title={`LANE // ${meta.label}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+  const body = (
+      <div
+        style={
+          land
+            // controls as a 44px strip, then graph beside table. As a plain
+            // row the control group became a third column and squeezed both.
+            ? { display: 'grid', gridTemplateRows: 'auto 1fr', gap: 4, flex: 1, minHeight: 0 }
+            : { display: 'flex', flexDirection: 'column', gap: 8 }
+        }
+      >
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="hud-readout--dim hud-readout" style={{ fontSize: 9 }}>
+          <span className="hud-readout--dim hud-readout" style={{ fontSize: 12 }}>
             {meta.min.toFixed(meta.step >= 1 ? 0 : 2)}{meta.unit} … {meta.max.toFixed(meta.step >= 1 ? 0 : 2)}{meta.unit}
           </span>
           <div style={{ flex: 1 }} />
           <button
             className="hud-btn hud-btn--ghost"
-            onClick={() => addAutomationPoint(track.id, lane.param, projectBeats / 2, currentValueFor(track, lane.param))}
+            onClick={() => addAutomationPoint(track.id, lane.param, nextGapBeat(sorted, projectBeats), currentValueFor(track, lane.param))}
+            title="Drop a point in the largest empty stretch"
           >
-            + POINT
+            + Point
           </button>
           <button
             className="hud-btn hud-btn--rec"
             onClick={() => {
-              if (confirm(`Remove the ${meta.label} automation lane?`)) {
+              if (confirm(`Stop automating ${meta.label.toLowerCase()}? The points you placed will be lost.`)) {
                 removeAutomationLane(track.id, lane.param);
               }
             }}
+            title={`Stop automating ${meta.label.toLowerCase()}`}
           >
-            ✕ REMOVE LANE
+            Remove
           </button>
         </div>
 
+        {/* The svg keeps drawing the curve; the draggable points are HTML
+            buttons layered over it. As SVG circles under
+            preserveAspectRatio="none", r=1.4 rendered as a 24.7 x 2.7px
+            target — dragging a point is this view's primary interaction and it
+            was physically impossible. */}
+        <div style={land ? { display: 'flex', flexDirection: 'row', gap: 6, minHeight: 0 } : { display: 'contents' }}>
+        <div style={land ? { position: 'relative', flex: 1, minWidth: 0, minHeight: 0 } : { position: 'relative' }}>
         <svg
           ref={svgRef}
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           width="100%"
-          height={LANE_HEIGHT}
+          height={land ? '100%' : LANE_HEIGHT}
           onPointerDown={background}
           onPointerMove={pointMove}
-          onPointerUp={pointUp}
-          onPointerCancel={pointUp}
+          onPointerUp={(e) => {
+            pointUp();
+            backgroundUp(e);
+          }}
+          onPointerCancel={gestureCancel}
           style={{
             background: 'linear-gradient(180deg, rgba(255,106,0,0.04), rgba(255,106,0,0.10))',
             border: '1px solid rgba(255,106,0,0.35)',
             cursor: 'crosshair',
-            touchAction: 'none',
+            // pan-y so the page can still scroll under a vertical swipe; the
+            // point handles below keep 'none' because dragging one is a real
+            // two-axis gesture.
+            touchAction: 'pan-y',
           }}
         >
           {/* bar gridlines */}
           {Array.from({ length: project.lengthBars + 1 }).map((_, b) => {
             const x = (b * project.numerator * 100) / projectBeats;
-            return <line key={b} x1={x} y1={0} x2={x} y2={100} stroke="rgba(255,106,0,0.15)" strokeWidth={0.2} />;
+            return (
+              <line key={b} x1={x} y1={0} x2={x} y2={100} stroke="rgba(255,106,0,0.15)" strokeWidth={0.2} pointerEvents="none" />
+            );
           })}
           {/* horizontal mid line */}
-          <line x1={0} y1={50} x2={100} y2={50} stroke="rgba(255,106,0,0.18)" strokeWidth={0.2} strokeDasharray="1 1" />
+          {/* decoration only — `background` bails when e.target is not the svg
+              itself, so anything drawn here silently eats taps */}
+          <line x1={0} y1={50} x2={100} y2={50} stroke="rgba(255,106,0,0.18)" strokeWidth={0.2} strokeDasharray="1 1" pointerEvents="none" />
           {sorted.length > 1 && (
-            <path d={pathD} fill="none" stroke="var(--hud-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+            <path d={pathD} fill="none" stroke="var(--hud-orange-bright)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" pointerEvents="none" />
           )}
           {sorted.map((pt) => (
             <circle
@@ -344,36 +468,71 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
               stroke="#000"
               strokeWidth={0.3}
               vectorEffect="non-scaling-stroke"
-              style={{ cursor: 'grab', touchAction: 'none' }}
-              onPointerDown={(e) => pointDown(e, pt.id)}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                removeAutomationPoint(track.id, lane.param, pt.id);
-              }}
+              pointerEvents="none"
             />
           ))}
         </svg>
+        {sorted.map((pt, i) => (
+          <button
+            key={pt.id}
+            aria-label={`Point ${i + 1}: beat ${pt.beat.toFixed(2)}, ${pt.value.toFixed(2)}${meta.unit}`}
+            title="Drag to move · double-tap to delete"
+            onPointerDown={(e) => pointDown(e, pt.id)}
+            onPointerMove={pointMove}
+            onPointerUp={pointUp}
+            onPointerCancel={gestureCancel}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              removeAutomationPoint(track.id, lane.param, pt.id);
+            }}
+            style={{
+              position: 'absolute',
+              left: `${xFor(pt.beat)}%`,
+              top: `${yFor(pt.value)}%`,
+              width: 44,
+              height: 44,
+              marginLeft: -22,
+              marginTop: -22,
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              cursor: 'grab',
+              touchAction: 'none',
+              zIndex: 2,
+            }}
+          />
+        ))}
+        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 180, overflow: 'auto' }}>
+        <div
+          style={
+            land
+              ? { display: 'flex', flexDirection: 'column', gap: 2, flex: '0 0 320px', maxHeight: '100%', overflow: 'auto', overscrollBehavior: 'contain' }
+              : { display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 180, overflow: 'auto' }
+          }
+        >
           {sorted.length === 0 && (
-            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 10 }}>
-              Click anywhere on the lane above to drop a breakpoint.
+            <p className="hud-readout--dim hud-readout" style={{ margin: 0, fontSize: 12 }}>
+              Tap anywhere on the lane above to place a point.
             </p>
+          )}
+          {/* A row of bare number boxes tells you nothing about what it holds;
+              the header names the columns once instead of per row. */}
+          {sorted.length > 0 && (
+            <div style={{ ...POINT_ROW, background: 'transparent', border: 'none', paddingBottom: 0 }}>
+              <span className="hud-label" style={{ fontSize: 11 }}>#</span>
+              <span className="hud-label" style={{ fontSize: 11 }}>Beat</span>
+              <span className="hud-label" style={{ fontSize: 11 }}>{meta.unit ? `Value (${meta.unit})` : 'Value'}</span>
+              <span className="hud-label" style={{ fontSize: 11 }}>Shape</span>
+              <span />
+            </div>
           )}
           {sorted.map((pt, i) => (
             <div
               key={pt.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '60px 1fr 1fr 110px 50px',
-                gap: 6,
-                padding: '2px 6px',
-                background: 'rgba(0,0,0,0.4)',
-                border: '1px solid rgba(255,106,0,0.2)',
-                alignItems: 'center',
-              }}
+              style={POINT_ROW}
             >
-              <span className="hud-value" style={{ fontSize: 10 }}>PT-{String(i + 1).padStart(2, '0')}</span>
+              <span className="hud-value" style={{ fontSize: 12 }}>{i + 1}</span>
               <input
                 className="display"
                 type="number"
@@ -404,12 +563,13 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
                   setAutomationPointCurve(track.id, lane.param, pt.id, e.target.value as AutomationCurve)
                 }
                 disabled={i === 0}
-                title={i === 0 ? 'First point — no curve into it' : 'Curve from previous point'}
+                aria-label={`Shape into point ${i + 1}`}
+                title={i === 0 ? 'Nothing comes before the first point' : 'How the value moves from the point before'}
                 style={{ width: '100%' }}
               >
                 {CURVE_MODES.map((m) => (
                   <option key={m} value={m}>
-                    {CURVE_GLYPH[m]} {m}
+                    {CURVE_LABEL[m]}
                   </option>
                 ))}
               </select>
@@ -423,7 +583,15 @@ function LaneEditor({ track, lane }: { track: Track; lane: AutomationLane }) {
             </div>
           ))}
         </div>
+        </div>
       </div>
-    </HexFrame>
+  );
+
+  // No frame in landscape: 20px of title plus margin and padding, for a
+  // heading the lane chips above already carry.
+  return land ? (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>{body}</div>
+  ) : (
+    <HexFrame title={`${meta.label}`}>{body}</HexFrame>
   );
 }

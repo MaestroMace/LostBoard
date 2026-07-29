@@ -3,8 +3,10 @@ import { HexFrame } from '../hud/HexFrame';
 import { Knob } from '../hud/Knob';
 import { DEFAULT_FX, type FxRack, type Track } from '../../audio/types';
 import { useActiveTrack } from '../../hooks/useActiveTrack';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 export function FxPanel() {
+  const land = useLayoutMode() === 'phone-landscape';
   const selectTrack = useStore((s) => s.selectTrack);
   const updateFx = useStore((s) => s.updateFx);
 
@@ -13,7 +15,7 @@ export function FxPanel() {
   if (!track) {
     return (
       <div style={{ padding: 16 }}>
-        <HexFrame title="N/A">No tracks. Add one from the Arrange view.</HexFrame>
+        <HexFrame title="Nothing here yet">No tracks. Add one from the Song tab.</HexFrame>
       </div>
     );
   }
@@ -26,12 +28,39 @@ export function FxPanel() {
 
   return (
     <div
-      style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+        padding: land ? 6 : 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: land ? 6 : 12,
+      }}
       className="hex-grid-bg"
     >
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className="hud-label">FX RACK // SIGNAL CONDITIONING</span>
-        <select className="display" value={track.id} onChange={(e) => selectTrack(e.target.value)}>
+      {/* Sticky: when the rack is bypassed it is pointerEvents:none, so
+          scrolling away from this toggle was a dead end with no way back. */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center',
+          flexWrap: land ? 'nowrap' : 'wrap',
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
+          background: '#0a0705',
+          flex: '0 0 auto',
+        }}
+      >
+        <span className="hud-label">Track</span>
+        <select
+          className="display"
+          value={track.id}
+          onChange={(e) => selectTrack(e.target.value)}
+          aria-label="Track to edit effects for"
+        >
           {tracks.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
@@ -43,27 +72,42 @@ export function FxPanel() {
           className={`hud-btn ${fx.enabled ? 'is-active' : ''}`}
           aria-pressed={fx.enabled}
           onClick={() => patch({ enabled: !fx.enabled })}
+          title="Bypass every effect on this track without losing the settings"
         >
-          {fx.enabled ? 'RACK ONLINE' : 'RACK BYPASSED'}
+          {fx.enabled ? 'Effects on' : 'Effects bypassed'}
         </button>
-        <button className="hud-btn hud-btn--ghost" onClick={() => patch({ ...DEFAULT_FX })}>
-          RESET
+        <button
+          className="hud-btn hud-btn--ghost"
+          onClick={() => patch({ ...DEFAULT_FX })}
+          title="Return every effect on this track to its default setting"
+        >
+          Reset
         </button>
       </div>
 
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 12,
+          // Landscape lays the rack out as one scrollable strip: as a wrapping
+          // grid the fifth card (Ducking) started at y=334 in a region ending
+          // at 336, so it was a 2px hairline below an undiscoverable fold.
+          ...(land
+            ? { display: 'flex', flexWrap: 'nowrap' as const, overflowX: 'auto' as const, gap: 8 }
+            : {
+                display: 'grid',
+                // 180 rather than 240: at 240 a 411px-wide phone got one card
+                // per row, so four two-knob effects became four full screens.
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 12,
+              }),
+          alignItems: 'flex-start',
           opacity: fx.enabled ? 1 : 0.4,
           pointerEvents: fx.enabled ? 'auto' : 'none',
         }}
       >
-        <HexFrame title="EQ // 3-BAND">
+        <HexFrame title="Tone" style={land ? { flex: '0 0 auto' } : undefined}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
             <Knob
-              label="LOW"
+              label="Low"
               value={fx.eqLow}
               min={-24}
               max={24}
@@ -72,7 +116,7 @@ export function FxPanel() {
               onChange={(v) => patch({ eqLow: v })}
             />
             <Knob
-              label="MID"
+              label="Mid"
               value={fx.eqMid}
               min={-24}
               max={24}
@@ -81,7 +125,7 @@ export function FxPanel() {
               onChange={(v) => patch({ eqMid: v })}
             />
             <Knob
-              label="HIGH"
+              label="High"
               value={fx.eqHigh}
               min={-24}
               max={24}
@@ -92,18 +136,15 @@ export function FxPanel() {
           </div>
         </HexFrame>
 
-        <HexFrame title="COMPRESSOR" variant={fx.compOn ? 'orange' : 'soft'}>
-          <button
-            className={`hud-btn ${fx.compOn ? 'is-active' : ''}`}
-            aria-pressed={fx.compOn}
-            onClick={() => patch({ compOn: !fx.compOn })}
-            style={{ width: '100%', marginBottom: 8 }}
-          >
-            {fx.compOn ? 'ENGAGED' : 'OFF'}
-          </button>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        <HexFrame
+          title="Compressor"
+          style={land ? { flex: '0 0 auto' } : undefined}
+          variant={fx.compOn ? 'orange' : 'soft'}
+          action={<SectionToggle on={fx.compOn} label="Compressor" onToggle={() => patch({ compOn: !fx.compOn })} />}
+        >
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around', opacity: fx.compOn ? 1 : 0.45 }}>
             <Knob
-              label="THRESH"
+              label="Threshold"
               value={fx.compThreshold}
               min={-60}
               max={0}
@@ -112,7 +153,7 @@ export function FxPanel() {
               onChange={(v) => patch({ compThreshold: v })}
             />
             <Knob
-              label="RATIO"
+              label="Ratio"
               value={fx.compRatio}
               min={1}
               max={20}
@@ -123,18 +164,15 @@ export function FxPanel() {
           </div>
         </HexFrame>
 
-        <HexFrame title="CHORUS" variant={fx.chorusOn ? 'orange' : 'soft'}>
-          <button
-            className={`hud-btn ${fx.chorusOn ? 'is-active' : ''}`}
-            aria-pressed={fx.chorusOn}
-            onClick={() => patch({ chorusOn: !fx.chorusOn })}
-            style={{ width: '100%', marginBottom: 8 }}
-          >
-            {fx.chorusOn ? 'ENGAGED' : 'OFF'}
-          </button>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        <HexFrame
+          title="Chorus"
+          style={land ? { flex: '0 0 auto' } : undefined}
+          variant={fx.chorusOn ? 'orange' : 'soft'}
+          action={<SectionToggle on={fx.chorusOn} label="Chorus" onToggle={() => patch({ chorusOn: !fx.chorusOn })} />}
+        >
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around', opacity: fx.chorusOn ? 1 : 0.45 }}>
             <Knob
-              label="DEPTH"
+              label="Depth"
               value={fx.chorusDepth}
               min={0}
               max={1}
@@ -145,18 +183,17 @@ export function FxPanel() {
           </div>
         </HexFrame>
 
-        <HexFrame title="BITCRUSHER" variant={fx.bitcrushOn ? 'orange' : 'soft'}>
-          <button
-            className={`hud-btn ${fx.bitcrushOn ? 'is-active' : ''}`}
-            aria-pressed={fx.bitcrushOn}
-            onClick={() => patch({ bitcrushOn: !fx.bitcrushOn })}
-            style={{ width: '100%', marginBottom: 8 }}
-          >
-            {fx.bitcrushOn ? 'ENGAGED' : 'OFF'}
-          </button>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        <HexFrame
+          title="Bit crusher"
+          style={land ? { flex: '0 0 auto' } : undefined}
+          variant={fx.bitcrushOn ? 'orange' : 'soft'}
+          action={
+            <SectionToggle on={fx.bitcrushOn} label="Bit crusher" onToggle={() => patch({ bitcrushOn: !fx.bitcrushOn })} />
+          }
+        >
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around', opacity: fx.bitcrushOn ? 1 : 0.45 }}>
             <Knob
-              label="BITS"
+              label="Bits"
               value={fx.bitcrush}
               min={1}
               max={16}
@@ -170,18 +207,29 @@ export function FxPanel() {
         <SidechainPanel track={track} fx={fx} onPatch={patch} />
       </div>
 
-      <HexFrame title="SIGNAL PATH" variant="green">
-        <div className="hud-readout" style={{ fontSize: 10, lineHeight: 1.8 }}>
-          INSTRUMENT &rarr; EQ-3 &rarr; COMP &rarr; CHORUS &rarr; CRUSH &rarr; SIDECHAIN &rarr; CHANNEL &rarr; MASTER
-          BUS
-          <br />
-          REVERB / DELAY SENDS TAP POST-CHANNEL. RACK STATUS:{' '}
-          <span style={{ color: fx.enabled ? 'var(--hud-green)' : 'var(--hud-red)' }}>
-            {fx.enabled ? 'ONLINE' : 'BYPASSED'}
-          </span>
-        </div>
-      </HexFrame>
+      {/* One line, in the order sound actually travels. Dropped in landscape,
+          where it rendered ~285px below a 336px viewport — it has never been
+          on screen there, and the tooltips carry the same information. */}
+      <div className="hud-readout--dim hud-readout" style={{ fontSize: 12, lineHeight: 1.6, display: land ? 'none' : undefined }}>
+        Sound passes through these in order: tone &rarr; compressor &rarr; chorus &rarr; bit crusher &rarr; ducking
+        &rarr; track volume &rarr; master. Reverb and delay sends are taken after the track volume.
+      </div>
     </div>
+  );
+}
+
+/** Compact on/off pinned to a section heading. */
+function SectionToggle({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      className={`hud-btn hud-btn--tight ${on ? 'is-active' : ''}`}
+      aria-pressed={on}
+      aria-label={`${label} ${on ? 'on' : 'off'}`}
+      onClick={onToggle}
+      style={{ flex: '0 0 auto' }}
+    >
+      {on ? 'On' : 'Off'}
+    </button>
   );
 }
 
@@ -207,17 +255,18 @@ function SidechainPanel({
   const active = !!fx.sidechainSourceId && (fx.sidechainDepth ?? 0) > 0;
 
   return (
-    <HexFrame title="SIDECHAIN" variant={active ? 'orange' : 'soft'}>
+    <HexFrame title="Ducking" variant={active ? 'orange' : 'soft'}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        <span className="hud-readout" style={{ fontSize: 9 }}>SOURCE</span>
+        <span className="hud-label">Duck under</span>
         <select
           className="display"
           value={fx.sidechainSourceId ?? ''}
           onChange={(e) => onPatch({ sidechainSourceId: e.target.value || undefined })}
-          style={{ flex: 1, fontSize: 10 }}
-          title="Track whose envelope ducks this one"
+          style={{ flex: 1, fontSize: 12 }}
+          aria-label="Track that ducks this one"
+          title="Turn this track down whenever the chosen track plays — the usual kick-and-bass pump"
         >
-          <option value="">OFF</option>
+          <option value="">Nothing</option>
           {candidates.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
@@ -225,9 +274,9 @@ function SidechainPanel({
           ))}
         </select>
       </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around', opacity: active ? 1 : 0.45 }}>
         <Knob
-          label="DEPTH"
+          label="Amount"
           value={fx.sidechainDepth ?? 0}
           min={0}
           max={1}
@@ -236,7 +285,7 @@ function SidechainPanel({
           onChange={(v) => onPatch({ sidechainDepth: v })}
         />
         <Knob
-          label="ATK"
+          label="Attack"
           value={fx.sidechainAttack ?? 0.005}
           min={0.001}
           max={0.05}
@@ -245,7 +294,7 @@ function SidechainPanel({
           onChange={(v) => onPatch({ sidechainAttack: v })}
         />
         <Knob
-          label="REL"
+          label="Release"
           value={fx.sidechainRelease ?? 0.15}
           min={0.01}
           max={0.5}

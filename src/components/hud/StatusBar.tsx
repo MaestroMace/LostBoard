@@ -2,23 +2,22 @@ import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { shallow } from 'zustand/shallow';
 import { useStore } from '../../state/store';
 import { usePlayhead } from '../../state/transportClock';
-import { useIsMobile } from '../../hooks/useIsMobile';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 import { Scope } from './Scope';
 import { getMidiSnapshot, subscribeMidi } from '../../audio/midiInput';
 import { audioEngine } from '../../audio/engine';
 
-/** Flavor lines that get mixed into the live telemetry rotation. */
 /**
- * Ticker filler lines. Mostly turned into actual tips (the ticker is prime
- * real estate for teaching the UI) with a couple of atmospheric lines kept
- * for flavor.
+ * Ticker lines mixed into the live readout rotation. All four are tips now —
+ * the ticker is the one place in the app that can teach the UI without costing
+ * layout, so atmosphere is a waste of it.
  */
-const FLAVOR = [
-  'TIP — DOUBLE-CLICK A TIMELINE LANE TO ADD A CLIP',
-  'TIP — PRESS ? FOR THE FULL KEYBOARD / GESTURE LIST',
-  'TIP — ARM A SYNTH TRACK (●) TO RECORD MIDI',
-  'TIP — DOUBLE-CLICK A CLIP TO OPEN ITS EDITOR',
-  'HEX FIELD STABLE — ALL DECKS READY',
+const TIPS = [
+  'Tip: drag on an empty lane to draw a clip',
+  'Tip: tap a track name to open its settings',
+  'Tip: arm a track to record MIDI into it',
+  // Touch opens a clip on a single tap; only a mouse needs the double.
+  'Tip: tap a clip to edit its notes',
 ];
 
 export function StatusBar() {
@@ -36,9 +35,14 @@ export function StatusBar() {
   const bouncing = useStore((s) => s.bouncing);
   const recording = micRecording || bouncing;
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
-  const isMobile = useIsMobile();
+  const mode = useLayoutMode();
 
-  if (isMobile) {
+  // Landscape gives up the whole bar: at 411px tall a dedicated header row is
+  // ~9% of the screen for information the transport row has space to carry.
+  if (mode === 'phone-landscape') return null;
+
+  // Portrait keeps a compact bar of its own — it has the height to spare.
+  if (mode !== 'desktop') {
     return (
       <div
         style={{
@@ -50,20 +54,21 @@ export function StatusBar() {
           background: 'linear-gradient(180deg, rgba(255,106,0,0.18), rgba(0,0,0,0.85))',
           borderBottom: '1px solid rgba(255,106,0,0.5)',
           contain: 'layout style',
+          flex: '0 0 auto',
         }}
       >
-        <TriadMark />
+        <AppMark size={28} />
         <span
           className="hud-value"
-          style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          style={{ fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
         >
           {name}
         </span>
-        <Indicator label="PL" on={playing} color="green" />
-        <Indicator label="REC" on={recording} color="red" />
+        <Indicator label="Play" on={playing} color="green" />
+        <Indicator label="Rec" on={recording} color="red" />
         {midi.connected && <Indicator label="MIDI" on color="green" />}
         <PositionReadout numerator={numerator} />
-        <div className="display" style={{ fontSize: 10 }}>
+        <div className="display" style={{ fontSize: 12 }}>
           <span style={{ color: 'var(--hud-orange-bright)' }}>{bpm.toFixed(0)}</span>
         </div>
       </div>
@@ -85,32 +90,32 @@ export function StatusBar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flexShrink: 1 }}>
-        <TriadMark />
+        <AppMark />
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, minWidth: 0 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>T.R.I.A.D. SYSTEM</span>
+          
           {/* one line + ellipsis — long project names used to wrap to 3 lines
               and shove the bar taller at medium widths */}
           <span
             className="hud-value"
-            style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}
-            title={`LOSTBOARD // ${name}`}
+            style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}
+            title={`${name}`}
           >
-            LOSTBOARD // {name}
+            {name}
           </span>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Indicator label="PLAY" on={playing} color="green" />
-        <Indicator label="REC" on={recording} color="red" />
+        <Indicator label="Play" on={playing} color="green" />
+        <Indicator label="Rec" on={recording} color="red" />
         <MidiIndicator midi={midi} />
         <PositionReadout numerator={numerator} />
-        <div className="display" style={{ fontSize: 11 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>BPM</span>
+        <div className="display" style={{ fontSize: 13 }}>
+          <span className="hud-label" style={{ fontSize: 11 }}>BPM</span>
           <span style={{ color: 'var(--hud-orange-bright)' }}>{bpm.toFixed(1)}</span>
         </div>
-        <div className="display" style={{ fontSize: 11 }}>
-          <span className="hud-label" style={{ fontSize: 8 }}>SIG</span>
+        <div className="display" style={{ fontSize: 13 }}>
+          <span className="hud-label" style={{ fontSize: 11 }}>SIG</span>
           <span>
             {numerator}/{denominator}
           </span>
@@ -130,7 +135,7 @@ export function StatusBar() {
 }
 
 /** Leaf: only this re-renders as the playhead moves. */
-const PositionReadout = memo(function PositionReadout({ numerator }: { numerator: number }) {
+export const PositionReadout = memo(function PositionReadout({ numerator }: { numerator: number }) {
   const positionBeats = usePlayhead();
   const bar = Math.floor(positionBeats / numerator) + 1;
   const beat = Math.floor(positionBeats % numerator) + 1;
@@ -160,11 +165,11 @@ function HudClock() {
   );
 }
 
-function Indicator({ label, on, color }: { label: string; on: boolean; color: 'green' | 'red' | 'amber' }) {
+export function Indicator({ label, on, color }: { label: string; on: boolean; color: 'green' | 'red' | 'amber' }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       <span className={`led ${color} ${on ? 'on' : ''}`} />
-      <span className="hud-label" style={{ fontSize: 7 }}>{label}</span>
+      <span className="hud-label" style={{ fontSize: 11 }}>{label}</span>
     </div>
   );
 }
@@ -177,17 +182,17 @@ function MidiIndicator({ midi }: { midi: { supported: boolean; connected: boolea
       title={midi.connected ? `MIDI: ${midi.device}` : 'No MIDI device connected'}
     >
       <span className={`led ${midi.connected ? 'green' : 'amber'} ${midi.connected ? 'on' : ''}`} />
-      <span className="hud-label" style={{ fontSize: 7 }}>
-        {midi.connected ? (midi.device.slice(0, 10).toUpperCase() || 'MIDI') : 'MIDI'}
+      <span className="hud-label" style={{ fontSize: 11 }}>
+        {midi.connected ? midi.device.slice(0, 10) || 'MIDI' : 'MIDI'}
       </span>
     </div>
   );
 }
 
-function TriadMark() {
+export function AppMark({ size = 28 }: { size?: number }) {
   return (
-    <div style={{ width: 28, height: 28, position: 'relative' }}>
-      <svg viewBox="0 0 100 100" width="28" height="28">
+    <div style={{ width: size, height: size, position: 'relative', flex: '0 0 auto' }}>
+      <svg viewBox="0 0 100 100" width={size} height={size}>
         <polygon
           points="50,4 92,28 92,72 50,96 8,72 8,28"
           fill="none"
@@ -221,7 +226,7 @@ function Ticker() {
   const midiClockIn = useStore((s) => s.midiClockIn);
   const bpm = useStore((s) => s.project.bpm);
   const midi = useSyncExternalStore(subscribeMidi, getMidiSnapshot, getMidiSnapshot);
-  const [msg, setMsg] = useState('TRIAD SYSTEM ONLINE');
+  const [msg, setMsg] = useState('Ready');
 
   useEffect(() => {
     const sample = () => {
@@ -229,23 +234,22 @@ function Ticker() {
       // Live engine telemetry first — pulled fresh so each cycle is current.
       if (audioEngine.isInited()) {
         const peak = audioEngine.getMasterLevel();
-        lines.push(`MASTER ${peak > -60 ? peak.toFixed(1) + ' dB' : '—∞ dB'}`);
+        lines.push(`Output ${peak > -60 ? peak.toFixed(1) + ' dB' : 'silent'}`);
       } else {
-        lines.push('ENGINE WARMING UP');
+        lines.push('Starting audio…');
       }
-      lines.push(`TRANSPORT ${playing ? 'ROLLING' : 'HALTED'} @ ${bpm.toFixed(1)} BPM`);
-      lines.push(`MODE ${sessionMode ? 'SESSION' : 'ARRANGEMENT'}`);
-      lines.push(`TRACKS ${String(trackCount).padStart(2, '0')} / CLIPS ${String(clipCount).padStart(3, '0')}`);
-      if (automationLanes > 0) lines.push(`AUTO LANES ${automationLanes}`);
-      if (tempoEvents > 0) lines.push(`TEMPO MAP ${tempoEvents} EV`);
-      if (micRecording) lines.push('MIC RECORDING — ARMED');
-      if (midiClockOut) lines.push('MIDI CLOCK OUT ACTIVE');
-      if (midiClockIn) lines.push('MIDI CLOCK IN — TRANSPORT SLAVED');
+      lines.push(`${playing ? 'Playing' : 'Stopped'} at ${bpm.toFixed(1)} BPM`);
+      lines.push(sessionMode ? 'Playing launched loops' : 'Playing the timeline');
+      lines.push(`${trackCount} track${trackCount === 1 ? '' : 's'}, ${clipCount} clip${clipCount === 1 ? '' : 's'}`);
+      if (automationLanes > 0) lines.push(`${automationLanes} thing${automationLanes === 1 ? '' : 's'} automated`);
+      if (tempoEvents > 0) lines.push(`${tempoEvents} tempo change${tempoEvents === 1 ? '' : 's'}`);
+      if (micRecording) lines.push('Microphone armed');
+      if (midiClockOut) lines.push('Sending MIDI clock');
+      if (midiClockIn) lines.push('Following an outside MIDI clock');
       if (midi.supported) {
-        lines.push(midi.connected ? `MIDI IN: ${midi.device.toUpperCase()}` : 'MIDI BUS IDLE');
+        lines.push(midi.connected ? `MIDI keyboard: ${midi.device}` : 'No MIDI keyboard connected');
       }
-      // Sprinkle in flavor every few cycles.
-      lines.push(FLAVOR[Math.floor(Math.random() * FLAVOR.length)]);
+      lines.push(TIPS[Math.floor(Math.random() * TIPS.length)]);
       return lines;
     };
     let i = 0;
